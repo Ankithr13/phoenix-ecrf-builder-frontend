@@ -85,7 +85,9 @@ BUILD.md             the full original specification
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push and pull request to `main`.
+`.github/workflows/ecrf-ci.yml` runs on every push and pull request to
+`spark-test` or `main`, and can also be started by hand from the Actions
+tab.
 
 ```
 lint ─┐

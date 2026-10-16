@@ -1,4 +1,4 @@
-name: CI
+name: eCRF CI
 
 # Three stages. Linting and testing run in parallel because neither depends
 # on the other; the build waits for both, so a package is only ever produced
@@ -8,11 +8,15 @@ name: CI
 #         ├─► build
 #   test ─┘
 
+# This project lives on the spark-test branch of the BU Spark repository,
+# so that branch is a trigger alongside main. The file is named ecrf-ci.yml
+# rather than ci.yml because the repository already has a ci.yml belonging
+# to another project, and GitHub identifies a workflow by its path.
 on:
   push:
-    branches: [main]
+    branches: [main, spark-test]
   pull_request:
-    branches: [main]
+    branches: [main, spark-test]
   workflow_dispatch:
 
 jobs:
