@@ -41,3 +41,6 @@ docs/architecture.png
 jigar_resume.pdf
 *resume*.pdf
 *_resume.*
+
+# local only, never published: second 75 page protocol kept for demos
+test_protocols/test_protocol4.pdf
