@@ -89,6 +89,9 @@ BUILD.md             the full original specification
 `spark-test` or `main`, and can also be started by hand from the Actions
 tab.
 
+[CI_README.md](CI_README.md) covers the pipeline on its own: the tool, the
+jobs, how to trigger a run and the problems hit setting it up.
+
 ```
 lint ─┐
       ├─► build
