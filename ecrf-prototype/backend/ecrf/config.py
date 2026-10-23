@@ -42,6 +42,7 @@ class Config:
 
     database_url: str
     data_dir: Path
+    upload_dir: Path
 
 
 def load() -> Config:
@@ -56,6 +57,9 @@ def load() -> Config:
         quote_match_threshold=int(os.getenv("QUOTE_MATCH_THRESHOLD", "90")),
         database_url=os.getenv("DATABASE_URL", f"sqlite:///{ROOT / 'ecrf.db'}"),
         data_dir=Path(os.getenv("ECRF_DATA_DIR", ROOT / "data")),
+        # Separate from data_dir so tests can upload into a temporary folder
+        # without losing the bundled sample and library that live in data/.
+        upload_dir=Path(os.getenv("ECRF_UPLOAD_DIR", ROOT / "data" / "uploads")),
     )
 
 

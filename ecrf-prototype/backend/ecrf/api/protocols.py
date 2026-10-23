@@ -17,7 +17,7 @@ from ecrf.storage.models import ECRFVersion, Protocol
 
 router = APIRouter(prefix="/api/protocols", tags=["protocols"])
 
-UPLOAD_DIR = config.data_dir / "uploads"
+UPLOAD_DIR = config.upload_dir
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -81,6 +81,16 @@ async def upload(file: UploadFile = File(...), x_user: str | None = Header(None)
         dest.unlink(missing_ok=True)
         raise HTTPException(422, str(e)) from e
 
+    # The same document uploaded twice must not become two protocols that
+    # drift apart under review. Match on the hash of the normalised text, so
+    # a renamed file still counts as the same protocol.
+    existing = s.scalars(select(Protocol).where(Protocol.text_hash == doc.hash)).first()
+    if existing:
+        if dest.name != existing.filename:
+            dest.unlink(missing_ok=True)
+        return {"id": existing.id, "name": existing.name, "pages": existing.pages,
+                "tokens_estimate": existing.tokens_estimate, "already_loaded": True}
+
     name = Path(file.filename).stem.replace("_", " ")
     p = Protocol(
         name=name, filename=file.filename, text_hash=doc.hash, normalised=doc.text,
@@ -119,12 +129,32 @@ def load_sample(x_user: str | None = Header(None), s: Session = Depends(db.get_s
 
 # ------------------------------------------------------------- extract
 
+def _reviewed(v: ECRFVersion) -> bool:
+    """Has a human touched this version? A review always writes a version
+    whose note is not the extraction note, and approval is only ever set by
+    a person."""
+    if not (v.note or "").startswith("initial extraction"):
+        return True
+    return any(f.get("status") == "approved"
+               for form in v.content.get("forms", []) for f in form.get("fields", []))
+
+
 @router.post("/{protocol_id}/extract")
-def extract(protocol_id: int, backend: str | None = None,
+def extract(protocol_id: int, backend: str | None = None, force: bool = False,
             x_user: str | None = Header(None), s: Session = Depends(db.get_session)):
     p = s.get(Protocol, protocol_id)
     if not p:
         raise HTTPException(404, "protocol not found")
+    latest = db.latest_version(s, protocol_id)
+    if latest and not force and _reviewed(latest):
+        # Extraction writes a fresh draft with every status reset, so running
+        # it on a reviewed protocol throws the review away. That happened
+        # once for real before this check existed.
+        raise HTTPException(
+            409, f"Version {latest.version} of this protocol has been reviewed. Extracting "
+                 f"again would start a new draft and none of the approvals or edits would "
+                 f"carry over. Add ?force=true to do it anyway; the reviewed version is "
+                 f"kept and a new version is created.")
     doc = _doc_from_protocol(p)
     pdf_path = UPLOAD_DIR / p.filename
     if not pdf_path.exists():

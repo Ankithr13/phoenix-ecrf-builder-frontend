@@ -15,6 +15,7 @@ dependencies = [
     "pyyaml>=6.0",
     "openai>=1.54",
     "python-dotenv>=1.0",
+    "alembic>=1.13",
 ]
 
 [project.optional-dependencies]

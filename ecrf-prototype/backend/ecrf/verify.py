@@ -26,6 +26,19 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
+# Section selection labels each chunk it sends the model as
+# "[Section 7.3] Title". Models copy that label into the quote, and since
+# it is our label rather than protocol text, the quote then fails to match
+# by a few points and a good field is thrown away. Six of six rejections on
+# one stored protocol were exactly this.
+_SECTION_LABEL = re.compile(r"^\s*\[section[^\]]*\]\s*", re.IGNORECASE)
+
+
+def clean_quote(quote: str) -> str:
+    """Remove a leading context label that was never part of the protocol."""
+    return _SECTION_LABEL.sub("", quote, count=1)
+
+
 def locate(quote: str, text: str) -> tuple[Verdict, float, int]:
     """Return (verdict, score, offset). Offset is -1 when not found.
 
@@ -75,14 +88,19 @@ def section_contains(doc: Document, section_number: str, offset: int) -> bool | 
 
 
 def check_field(field: FieldDef, doc: Document, threshold: int) -> FieldDef:
+    field.source.quote = clean_quote(field.source.quote)
     verdict, score, off = locate(field.source.quote, doc.text)
+    # The score is rounded BEFORE the comparison, so the number the reviewer
+    # sees is the number the decision was made on. Comparing the raw value
+    # let a field scoring 89.96 be rejected and then displayed as 90.0%.
+    score = round(score, 1)
     # The threshold applies to every field, however it matched. Exempting
     # verbatim hits would mean the one route that skips the check is also
     # the one nobody looks at.
     if score < threshold:
         verdict = "rejected"
     field.verdict = verdict
-    field.match_score = round(score, 1)
+    field.match_score = score
     field.section_ok = section_contains(doc, field.source.section, off) if verdict != "rejected" else None
     if verdict == "rejected":
         field.status = "rejected"

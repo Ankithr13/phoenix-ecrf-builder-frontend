@@ -1,8 +1,7 @@
-"""End to end against the mock backend. No network, no key, no GPU."""
+"""End to end against the mock backend. No network, no key, no GPU.
+conftest.py sets the backend and a temporary database before this imports."""
 
 import os
-
-os.environ["ECRF_BACKEND"] = "mock"
 
 from fastapi.testclient import TestClient
 

@@ -4,17 +4,13 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ecrf.config import config
-from ecrf.storage.models import Base, ECRFVersion, Protocol
+from ecrf.storage.models import ECRFVersion, Protocol
 
 _engine = create_engine(
     config.database_url,
     connect_args={"check_same_thread": False} if config.database_url.startswith("sqlite") else {},
 )
 SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
-
-
-def init_db() -> None:
-    Base.metadata.create_all(_engine)
 
 
 @contextmanager
