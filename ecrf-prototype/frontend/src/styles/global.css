@@ -652,3 +652,9 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 .filters .input { width: auto; min-width: 150px; }
 .table th.chk, .table td.chk { width: 32px; padding-right: 0; }
 .table .strong { color: var(--ink); }
+
+/* ------------------------------------------------------------ stage 4 */
+.visit-list { list-style: none; display: flex; flex-direction: column; gap: var(--s-2); }
+.visit-row { display: flex; align-items: center; gap: var(--s-3); }
+.visit-row .input { flex: 1; }
+.visit-num { width: 20px; text-align: right; }

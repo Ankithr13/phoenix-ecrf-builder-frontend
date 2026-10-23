@@ -40,6 +40,20 @@ class Config:
     # against the answer key. Single most consequential number here.
     quote_match_threshold: int
 
+    # Cost controls. Output is capped so a runaway answer cannot bill ten
+    # dollars; reasoning tokens bill as output, so effort is sent only when
+    # set. Prices are per million tokens and WILL go stale; they are the
+    # gpt-5.1 list prices as of October 2026.
+    max_output_tokens: int
+    reasoning_effort: str
+    provider_cache: bool
+    price_input_per_m: float
+    price_cached_input_per_m: float
+    price_output_per_m: float
+    # per_visit: one call per visit. per_form: one call per assessment form
+    # and the forms are expanded onto visits in code (fewer, shorter calls).
+    extract_strategy: str
+
     database_url: str
     data_dir: Path
     upload_dir: Path
@@ -61,6 +75,13 @@ def load() -> Config:
         context_mode=os.getenv("ECRF_CONTEXT", "auto"),
         context_token_limit=int(os.getenv("ECRF_CONTEXT_TOKEN_LIMIT", "60000")),
         quote_match_threshold=int(os.getenv("QUOTE_MATCH_THRESHOLD", "90")),
+        max_output_tokens=int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "16000")),
+        reasoning_effort=os.getenv("LLM_REASONING_EFFORT", "none"),
+        provider_cache=os.getenv("LLM_PROVIDER_CACHE", "true").lower() == "true",
+        price_input_per_m=float(os.getenv("PRICE_INPUT_PER_M", "1.25")),
+        price_cached_input_per_m=float(os.getenv("PRICE_CACHED_INPUT_PER_M", "0.125")),
+        price_output_per_m=float(os.getenv("PRICE_OUTPUT_PER_M", "10")),
+        extract_strategy=os.getenv("EXTRACT_STRATEGY", "per_visit"),
         database_url=os.getenv("DATABASE_URL", f"sqlite:///{ROOT / 'ecrf.db'}"),
         data_dir=Path(os.getenv("ECRF_DATA_DIR", ROOT / "data")),
         # Separate from data_dir so tests can upload into a temporary folder

@@ -16,7 +16,9 @@ from ecrf import cdash, ingest, pipeline
 from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
 from ecrf.config import config
-from ecrf.schema import DraftECRF, Status
+from ecrf.extract import get_extractor
+from ecrf.extract.base import Usage
+from ecrf.schema import DraftECRF, ExtractionPlan, Status
 from ecrf.storage import db
 from ecrf.storage.models import ECRFVersion, Protocol, utcnow
 
@@ -61,6 +63,7 @@ def list_protocols(cu: CurrentUser = Depends(require("protocol.view")),
             "latest_version": v.version if v else None,
             "state": v.state if v else None,
             "summary": (v.content.get("summary") if v else None),
+            "plan": _plan_response(p) if p.extraction_plan else None,
         })
     return out
 
@@ -158,11 +161,7 @@ def _reviewed(v: ECRFVersion) -> bool:
                for form in v.content.get("forms", []) for f in form.get("fields", []))
 
 
-@router.post("/{protocol_id}/extract")
-def extract(protocol_id: int, backend: str | None = None, force: bool = False,
-            cu: CurrentUser = Depends(require("protocol.extract")),
-            s: Session = Depends(db.get_session)):
-    p = scope.protocol_or_404(s, cu, protocol_id)
+def _guard_extract(s: Session, protocol_id: int, force: bool) -> None:
     latest = db.latest_version(s, protocol_id)
     if latest and latest.state == "locked":
         raise HTTPException(409, LOCKED)
@@ -175,13 +174,113 @@ def extract(protocol_id: int, backend: str | None = None, force: bool = False,
                  f"again would start a new draft and none of the approvals or edits would "
                  f"carry over. Add ?force=true to do it anyway; the reviewed version is "
                  f"kept and a new version is created.")
+
+
+def _plan_response(p: Protocol) -> dict:
+    plan = p.extraction_plan or {}
+    return {"visits": plan.get("visits", []), "forms": plan.get("forms", []),
+            "confirmed": bool(plan.get("confirmed")), "usage": plan.get("usage"),
+            "strategy": config.extract_strategy,
+            "estimated_calls": pipeline.estimated_calls(
+                ExtractionPlan(visits=plan.get("visits", []), forms=plan.get("forms", []))) if plan else 0}
+
+
+@router.post("/{protocol_id}/extract")
+def extract(protocol_id: int, backend: str | None = None, force: bool = False,
+            cu: CurrentUser = Depends(require("protocol.extract")),
+            s: Session = Depends(db.get_session)):
+    """Both passes in one go, no human step. Kept for the mock and tests;
+    the two-step route below is what the UI uses."""
+    p = scope.protocol_or_404(s, cu, protocol_id)
+    _guard_extract(s, protocol_id, force)
     doc = _doc_from_protocol(p)
-    pdf_path = UPLOAD_DIR / p.filename
-    if not pdf_path.exists():
-        pdf_path = config.data_dir / "sample" / p.filename
     try:
-        draft = pipeline.run(str(pdf_path), protocol_id, backend=backend, doc=doc, log=lambda *_: None)
+        draft = pipeline.run(str(UPLOAD_DIR / p.filename), protocol_id, backend=backend,
+                             doc=doc, force=force)
     except Exception as e:  # surface provider errors plainly
+        raise HTTPException(502, f"extraction failed: {type(e).__name__}: {e}") from e
+    v = db.save_version(s, p, draft.model_dump(), cu.user.email, note="initial extraction")
+    s.commit()
+    return {"version": v.version, "summary": draft.summary}
+
+
+# ------------------------------------------------- two-step extraction
+
+@router.post("/{protocol_id}/extract/visits")
+def extract_visits(protocol_id: int, backend: str | None = None, force: bool = False,
+                   cu: CurrentUser = Depends(require("protocol.extract")),
+                   s: Session = Depends(db.get_session)):
+    """Pass one only. The proposed visit list is stored on the protocol for
+    a person to correct before any per-visit call is paid for."""
+    p = scope.protocol_or_404(s, cu, protocol_id)
+    _guard_extract(s, protocol_id, force)
+    doc = _doc_from_protocol(p)
+    ex = get_extractor(backend)
+    ex.begin_run(doc.hash, force=force)
+    try:
+        plan = pipeline.plan(doc, ex)
+    except Exception as e:
+        raise HTTPException(502, f"extraction failed: {type(e).__name__}: {e}") from e
+    p.extraction_plan = {**plan.model_dump(), "confirmed": False, "usage": ex.usage.summary(),
+                         "backend": ex.name, "model": ex.model}
+    s.commit()
+    return _plan_response(p)
+
+
+class VisitsRequest(BaseModel):
+    visits: list[str]
+
+
+@router.get("/{protocol_id}/visits")
+def get_visits(protocol_id: int, cu: CurrentUser = Depends(require("protocol.view")),
+               s: Session = Depends(db.get_session)):
+    return _plan_response(scope.protocol_or_404(s, cu, protocol_id))
+
+
+@router.put("/{protocol_id}/visits")
+def put_visits(protocol_id: int, body: VisitsRequest,
+               cu: CurrentUser = Depends(require("protocol.extract")),
+               s: Session = Depends(db.get_session)):
+    """Save the corrected visit list. Forms keep only the visits that still
+    exist; a form left with none is dropped."""
+    p = scope.protocol_or_404(s, cu, protocol_id)
+    _guard_extract(s, protocol_id, force=True)
+    visits = [v.strip() for v in body.visits if v.strip()]
+    if len(set(visits)) != len(visits):
+        raise HTTPException(422, "visit names must be unique")
+    if not visits:
+        raise HTTPException(422, "at least one visit is needed")
+    plan = dict(p.extraction_plan or {})
+    forms = []
+    for f in plan.get("forms", []):
+        kept = [v for v in f.get("visits", []) if v in visits]
+        if kept:
+            forms.append({"name": f["name"], "visits": kept})
+    plan.update({"visits": visits, "forms": forms, "confirmed": True})
+    p.extraction_plan = plan
+    s.commit()
+    return _plan_response(p)
+
+
+@router.post("/{protocol_id}/extract/fields")
+def extract_fields(protocol_id: int, backend: str | None = None, force: bool = False,
+                   cu: CurrentUser = Depends(require("protocol.extract")),
+                   s: Session = Depends(db.get_session)):
+    """Pass two on the confirmed visit list, then verification, enrichment
+    and a new version. Usage from pass one is folded into the summary so
+    calls = visits + 1 still reads correctly."""
+    p = scope.protocol_or_404(s, cu, protocol_id)
+    _guard_extract(s, protocol_id, force)
+    if not p.extraction_plan or not p.extraction_plan.get("visits"):
+        raise HTTPException(409, "Extract the visits first")
+    plan = ExtractionPlan(visits=p.extraction_plan["visits"], forms=p.extraction_plan.get("forms", []))
+    doc = _doc_from_protocol(p)
+    ex = get_extractor(backend)
+    ex.begin_run(doc.hash, force=force)
+    pass_one = Usage.from_summary(p.extraction_plan.get("usage") or {})
+    try:
+        draft = pipeline.run_fields(doc, plan, ex, protocol_id, pass_one_usage=pass_one)
+    except Exception as e:
         raise HTTPException(502, f"extraction failed: {type(e).__name__}: {e}") from e
     v = db.save_version(s, p, draft.model_dump(), cu.user.email, note="initial extraction")
     s.commit()
@@ -197,7 +296,8 @@ def get_draft(protocol_id: int,
     p = scope.protocol_or_404(s, cu, protocol_id)
     v = db.latest_version(s, protocol_id)
     if not v:
-        return {"protocol": {"id": p.id, "name": p.name}, "version": None, "draft": None}
+        return {"protocol": {"id": p.id, "name": p.name}, "version": None, "draft": None,
+                "plan": _plan_response(p) if p.extraction_plan else None}
     draft = DraftECRF.model_validate(v.content)
     sugg = {f.visit: cdash.suggestions(f) for f in draft.forms}
     return {

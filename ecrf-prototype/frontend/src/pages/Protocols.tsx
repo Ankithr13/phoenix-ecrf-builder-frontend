@@ -9,7 +9,6 @@ export default function Protocols() {
   const [items, setItems] = useState<ProtocolListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);       // "sample" | "upload"
-  const [extracting, setExtracting] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -40,13 +39,6 @@ export default function Protocols() {
     try { await api.upload(f); await refresh(); }
     catch (err) { setError((err as Error).message); }
     finally { setBusy(null); if (fileRef.current) fileRef.current.value = ""; }
-  };
-
-  const extract = async (id: number) => {
-    setExtracting(id); setError(null);
-    try { await api.extract(id); await refresh(); }
-    catch (e) { setError((e as Error).message); }
-    finally { setExtracting(null); }
   };
 
   return (
@@ -91,11 +83,17 @@ export default function Protocols() {
                 </div>
               </div>
               {p.latest_version === null ? (
-                can("protocol.extract") && <button type="button" className="btn btn-primary" onClick={() => extract(p.id)} disabled={extracting !== null}>
-                  {extracting === p.id ? "Extracting…" : "Extract"}
-                </button>
+                can("protocol.extract") && <Link className="btn btn-primary" to={`/sponsor/p/${p.id}/visits`}>
+                  {p.plan && p.plan.visits.length ? "Continue extraction" : "Extract"}
+                </Link>
               ) : (
                 <div className="row row-wrap">
+                  {p.summary && p.summary.est_cost_usd !== undefined && (
+                    <span className="mono xs muted">
+                      {p.summary.llm_calls_made} call{p.summary.llm_calls_made === 1 ? "" : "s"}
+                      {p.summary.llm_calls_from_cache ? ` + ${p.summary.llm_calls_from_cache} from cache` : ""} · ${p.summary.est_cost_usd.toFixed(4)}
+                    </span>
+                  )}
                   {p.summary && (
                     <>
                       <span className="pill chip-teal">{p.summary.fields_kept} kept</span>

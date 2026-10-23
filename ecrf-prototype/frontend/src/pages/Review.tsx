@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { DraftResponse, FieldChange, FieldDef, VersionRow } from "../api/types";
 import FieldCard from "../components/FieldCard";
@@ -19,7 +19,6 @@ export default function Review() {
   const [changes, setChanges] = useState<Record<string, FieldChange>>({});
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [extracting, setExtracting] = useState(false);
   const [section, setSection] = useState<{ loading: boolean; data: SectionView | null; error: string | null } | null>(null);
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
   const [locking, setLocking] = useState(false);
@@ -40,13 +39,6 @@ export default function Review() {
   const loadVersions = async () => {
     try { setVersions(await api.versions(id)); }
     catch (e) { setError((e as Error).message); }
-  };
-
-  const extract = async () => {
-    setExtracting(true); setError(null);
-    try { await api.extract(id); await load(); }
-    catch (e) { setError((e as Error).message); }
-    finally { setExtracting(false); }
   };
 
   const onChange = (visit: string, name: string, change: Partial<FieldChange>) => {
@@ -111,9 +103,7 @@ export default function Review() {
         <div className="card">
           <p className="strong">Not extracted yet</p>
           <p className="muted small mt-2">Run the extraction pipeline to produce a draft eCRF for review.</p>
-          <button type="button" className="btn btn-primary mt-4" onClick={extract} disabled={extracting}>
-            {extracting ? "Extracting…" : "Extract"}
-          </button>
+          {can("protocol.extract") && <Link className="btn btn-primary mt-4" to={`/sponsor/p/${id}/visits`}>Find visits and extract</Link>}
         </div>
         {error && <p className="error mt-3">{error}</p>}
       </div>
@@ -137,6 +127,9 @@ export default function Review() {
         <div className="row row-wrap row-between">
           <div className="mono small muted">
             v{resp.version} · {draft.backend} · {draft.model} · hash {resp.protocol.hash} · threshold {s.threshold}
+            {s.est_cost_usd !== undefined && (
+              <> · {s.llm_calls_made} call{s.llm_calls_made === 1 ? "" : "s"}{s.llm_calls_from_cache ? ` + ${s.llm_calls_from_cache} cached` : ""} · ${s.est_cost_usd.toFixed(4)}{s.strategy ? ` · ${s.strategy}` : ""}</>
+            )}
           </div>
           {!locked && can("form.lock") && (
             <div className="row">

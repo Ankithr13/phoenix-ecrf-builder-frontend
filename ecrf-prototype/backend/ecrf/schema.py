@@ -59,9 +59,31 @@ class VisitForm(BaseModel):
 
 
 class VisitList(BaseModel):
-    """Output of extraction pass one."""
+    """Output of extraction pass one, per_visit strategy."""
 
     visits: list[str]
+
+
+class FormPlan(BaseModel):
+    """One assessment form and the visits it is collected at."""
+
+    name: str
+    visits: list[str]
+
+
+class ExtractionPlan(BaseModel):
+    """Output of pass one. per_visit fills only visits; per_form also fills
+    forms, which is the schedule of assessments as a form x visit matrix."""
+
+    visits: list[str]
+    forms: list[FormPlan] = []
+
+
+class FormFields(BaseModel):
+    """Output of a per_form pass-two call: one form's fields, written once."""
+
+    form: str
+    fields: list[FieldDef]
 
 
 class Rejection(BaseModel):
@@ -131,4 +153,34 @@ def model_visits_schema() -> dict:
         "type": "object",
         "properties": {"visits": {"type": "array", "items": {"type": "string"}}},
         "required": ["visits"],
+    }
+
+
+def model_plan_schema() -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "visits": {"type": "array", "items": {"type": "string"}},
+            "forms": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "visits": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["name", "visits"],
+                },
+            },
+        },
+        "required": ["visits", "forms"],
+    }
+
+
+def model_form_schema() -> dict:
+    schema = model_field_schema()
+    return {
+        "type": "object",
+        "properties": {"form": {"type": "string"}, "fields": schema["properties"]["fields"]},
+        "required": ["form", "fields"],
     }

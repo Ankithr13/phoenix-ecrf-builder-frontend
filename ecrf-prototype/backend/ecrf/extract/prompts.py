@@ -15,7 +15,12 @@ or request id in the system instruction kills every cache hit silently.
 
 import json
 
-from ecrf.schema import model_field_schema, model_visits_schema
+from ecrf.schema import (
+    model_field_schema,
+    model_form_schema,
+    model_plan_schema,
+    model_visits_schema,
+)
 
 SYSTEM = """\
 You extract electronic case report form (eCRF) field definitions from
@@ -68,5 +73,43 @@ def fields_messages(protocol_text: str, visit: str, visits: list[str]) -> list[d
             f"\"{visit}\" visit only. Include validation ranges, units and "
             f"repeat counts only when the protocol states them. "
             f"Respond with JSON matching this schema:\n{schema}"
+        )},
+    ]
+
+
+# ---------------------------------------------------------------- per_form
+# Same prefix as above (system, then protocol), so the provider cache is
+# shared between strategies and between pass one and pass two.
+
+def plan_messages(protocol_text: str) -> list[dict]:
+    schema = json.dumps(model_plan_schema())
+    return [
+        {"role": "system", "content": SYSTEM},
+        {"role": "user", "content": (
+            f"PROTOCOL:\n\n{protocol_text}\n\n"
+            "TASK: First list the study visits in the order they occur, using "
+            "the names the protocol uses. Then list the assessment forms the "
+            "protocol collects (for example Vital Signs, Haematology, ECG, "
+            "Informed Consent, Adverse Events) and, for each form, the visits "
+            "at which it is collected, taken from the schedule of assessments. "
+            "Use each visit name exactly as it appears in your visit list. "
+            f"Respond with JSON matching this schema:\n{schema}"
+        )},
+    ]
+
+
+def form_fields_messages(protocol_text: str, form: str, form_visits: list[str],
+                         visits: list[str]) -> list[dict]:
+    schema = json.dumps(model_form_schema())
+    return [
+        {"role": "system", "content": SYSTEM},
+        {"role": "user", "content": (
+            f"PROTOCOL:\n\n{protocol_text}\n\n"
+            f"STUDY VISITS: {', '.join(visits)}\n\n"
+            f"TASK: List every data field on the \"{form}\" form, which is "
+            f"collected at: {', '.join(form_visits)}. Define each field once; "
+            f"it will be reused at every visit where the form is collected. "
+            f"Include validation ranges, units and repeat counts only when the "
+            f"protocol states them. Respond with JSON matching this schema:\n{schema}"
         )},
     ]

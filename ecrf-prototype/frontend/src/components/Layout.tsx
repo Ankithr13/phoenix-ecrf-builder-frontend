@@ -52,6 +52,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               {id && (
                 <div className="nav-group">
                   <div className="nav-group-label">protocol {id}</div>
+                  <NavLink to={`/sponsor/p/${id}/visits`}>Visits</NavLink>
                   <NavLink to={`/sponsor/p/${id}/review`}>Review</NavLink>
                   <NavLink to={`/sponsor/p/${id}/sites`}>Sites</NavLink>
                   <NavLink to={`/sponsor/p/${id}/data`}>Data review</NavLink>

@@ -56,6 +56,35 @@ export interface Summary {
   flagged: number;
   threshold: number;
   seconds: number;
+  // stage 4, present on new extractions
+  strategy?: string;
+  forms?: number;
+  llm_calls_made?: number;
+  llm_calls_from_cache?: number;
+  input_tokens?: number;
+  cached_input_tokens?: number;
+  output_tokens?: number;
+  reasoning_tokens?: number;
+  est_cost_usd?: number;
+}
+
+export interface PlanUsage {
+  llm_calls_made: number;
+  llm_calls_from_cache: number;
+  input_tokens: number;
+  cached_input_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  est_cost_usd: number;
+}
+
+export interface Plan {
+  visits: string[];
+  forms: { name: string; visits: string[] }[];
+  confirmed: boolean;
+  usage: PlanUsage | null;
+  strategy: string;
+  estimated_calls: number;
 }
 
 export interface DraftECRF {
@@ -88,6 +117,7 @@ export interface ProtocolListItem {
   latest_version: number | null;
   state: "draft" | "locked" | null;
   summary: Summary | null;
+  plan: Plan | null;
 }
 
 export interface DraftResponse {
@@ -102,6 +132,7 @@ export interface DraftResponse {
   locked_by?: string | null;
   locked_at?: string | null;
   lock_blockers?: { draft: number; flagged: number };
+  plan?: Plan | null;
 }
 
 export interface VersionRow {

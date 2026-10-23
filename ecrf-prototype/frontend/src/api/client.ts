@@ -3,7 +3,7 @@
    same-origin and travels with every request. */
 
 import type {
-  DashboardResponse, DataRow, DraftResponse, FieldChange, Health, HistoryRow, Me,
+  DashboardResponse, DataRow, DraftResponse, FieldChange, Health, HistoryRow, Me, Plan,
   ProtocolListItem, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
 } from "./types";
 
@@ -55,6 +55,12 @@ export const api = {
   },
   extract: (id: number, force = false) =>
     req<{ version: number }>(`/api/protocols/${id}/extract${force ? "?force=true" : ""}`, { method: "POST" }),
+  extractVisits: (id: number, force = false) =>
+    req<Plan>(`/api/protocols/${id}/extract/visits${force ? "?force=true" : ""}`, { method: "POST" }),
+  visits: (id: number) => req<Plan>(`/api/protocols/${id}/visits`),
+  saveVisits: (id: number, visits: string[]) => req<Plan>(`/api/protocols/${id}/visits`, { method: "PUT", body: JSON.stringify({ visits }) }),
+  extractFields: (id: number, force = false) =>
+    req<{ version: number }>(`/api/protocols/${id}/extract/fields${force ? "?force=true" : ""}`, { method: "POST" }),
   draft: (id: number) => req<DraftResponse>(`/api/protocols/${id}/draft`),
   versions: (id: number) => req<VersionRow[]>(`/api/protocols/${id}/versions`),
   section: (id: number, n: string) => req<{ number: string; title: string; page: number; text: string }>(`/api/protocols/${id}/section/${encodeURIComponent(n)}`),

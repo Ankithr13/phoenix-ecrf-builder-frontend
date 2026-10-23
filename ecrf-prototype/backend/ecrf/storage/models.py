@@ -87,6 +87,26 @@ class Protocol(Base):
     tokens_estimate: Mapped[int] = mapped_column(Integer)
     uploaded_by: Mapped[str] = mapped_column(String(100))
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # Pass one's answer, {visits, forms, usage}, kept so a person can
+    # correct the visit list before the per-visit calls are paid for.
+    extraction_plan: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class LLMCall(Base):
+    """One row per distinct request ever sent to a model. The key is the
+    sha256 of everything that could change the answer, so an identical
+    request is answered from here and costs nothing."""
+
+    __tablename__ = "llm_call"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), unique=True)
+    model: Mapped[str] = mapped_column(String(200))
+    request_json: Mapped[dict] = mapped_column(JSON)
+    response_text: Mapped[str] = mapped_column(Text)
+    usage_json: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    hits: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class ECRFVersion(Base):
