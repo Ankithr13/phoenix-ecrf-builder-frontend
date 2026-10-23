@@ -6,6 +6,7 @@ interface Props {
   field: FieldDef;
   onChange: (change: Partial<FieldChange>) => void;
   onShowSection: (section: string) => void;
+  readOnly?: boolean;
 }
 
 function metaLine(f: FieldDef): string {
@@ -24,7 +25,7 @@ function numOrNull(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export default function FieldCard({ field, onChange, onShowSection }: Props) {
+export default function FieldCard({ field, onChange, onShowSection, readOnly = false }: Props) {
   const [min, setMin] = useState(field.min === null ? "" : String(field.min));
   const [max, setMax] = useState(field.max === null ? "" : String(field.max));
 
@@ -76,7 +77,7 @@ export default function FieldCard({ field, onChange, onShowSection }: Props) {
         </div>
       )}
 
-      <div className="field-controls">
+      {!readOnly && <div className="field-controls">
         <label className="ctl">
           min
           <input
@@ -103,7 +104,7 @@ export default function FieldCard({ field, onChange, onShowSection }: Props) {
         <button type="button" className="btn btn-teal btn-sm" onClick={() => onChange({ status: "approved" })}>Approve</button>
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => onChange({ status: "flagged" })}>Flag</button>
         <button type="button" className="btn btn-danger btn-sm" onClick={() => onChange({ status: "rejected" })}>Reject</button>
-      </div>
+      </div>}
     </div>
   );
 }

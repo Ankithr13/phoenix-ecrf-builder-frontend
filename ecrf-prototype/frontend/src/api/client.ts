@@ -3,8 +3,8 @@
    same-origin and travels with every request. */
 
 import type {
-  DashboardResponse, DraftResponse, FieldChange, Health, Me,
-  ProtocolListItem, Reading, StudyListItem, VersionRow,
+  DashboardResponse, DataRow, DraftResponse, FieldChange, Health, HistoryRow, Me,
+  ProtocolListItem, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
 } from "./types";
 
 export class ApiError extends Error {
@@ -61,7 +61,23 @@ export const api = {
   review: (id: number, changes: FieldChange[], note?: string, action: "save" | "approve_all_remaining" = "save") =>
     req<{ version: number; applied: number }>(`/api/protocols/${id}/review`, post({ changes, note, action })),
 
+  lock: (id: number) => req<{ version: number; state: string; locked_by: string }>(`/api/protocols/${id}/lock`, { method: "POST" }),
+
+  sites: (id: number) => req<SiteRow[]>(`/api/protocols/${id}/sites`),
+  assignSite: (id: number, site_org_id: number) => req<{ assigned: boolean }>(`/api/protocols/${id}/sites`, post({ site_org_id })),
+  unassignSite: (id: number, site_org_id: number) => req<{ assigned: boolean }>(`/api/protocols/${id}/sites/${site_org_id}`, { method: "DELETE" }),
+
   studies: () => req<StudyListItem[]>("/api/studies"),
+  subjects: (id: number) => req<SubjectRow[]>(`/api/studies/${id}/subjects`),
+  createSubject: (id: number) => req<SubjectRow>(`/api/studies/${id}/subjects`, { method: "POST" }),
+
+  dataRows: (id: number, filters: { site?: string; visit?: string; status?: string } = {}) => {
+    const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => !!v) as [string, string][]);
+    return req<DataRow[]>(`/api/protocols/${id}/data${q.toString() ? `?${q}` : ""}`);
+  },
+  approveData: (id: number, observation_ids: number[]) =>
+    req<{ approved: number }>(`/api/protocols/${id}/data/approve`, post({ observation_ids })),
+  history: (id: number, observationId: number) => req<HistoryRow[]>(`/api/protocols/${id}/data/${observationId}/history`),
 
   validate: (protocol_id: number, subject_id: string, visit: string, readings: Reading[]) =>
     req<{ ok: boolean; errors: Record<string, string> }>("/api/data/validate", post({ protocol_id, subject_id, visit, readings })),

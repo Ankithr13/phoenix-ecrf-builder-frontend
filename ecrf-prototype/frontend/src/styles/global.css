@@ -632,3 +632,23 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 @media (max-width: 480px) {
   .login-card { padding: var(--s-5); }
 }
+
+/* ------------------------------------------------------------ stage 3 */
+.lock-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: baseline;
+  background: var(--teal-bg);
+  color: var(--teal-ink);
+  border: 1px solid rgba(31, 122, 107, 0.25);
+  border-radius: var(--radius);
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--text-sm);
+  margin-bottom: var(--s-5);
+}
+.site-row { padding: var(--s-2) 0; gap: var(--s-3); }
+.site-row + .site-row { border-top: 1px solid var(--line); }
+.filters .input { width: auto; min-width: 150px; }
+.table th.chk, .table td.chk { width: 32px; padding-right: 0; }
+.table .strong { color: var(--ink); }

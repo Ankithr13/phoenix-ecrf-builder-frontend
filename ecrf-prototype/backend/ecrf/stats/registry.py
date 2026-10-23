@@ -47,7 +47,10 @@ def available() -> list[dict]:
 
 
 def load_frame(s: Session, protocol_id: int) -> pd.DataFrame:
-    rows = s.scalars(select(Observation).where(Observation.protocol_id == protocol_id)).all()
+    """Approved rows only. A value the sponsor has not approved is not data
+    yet, and the independent script applies the same rule in its own SQL."""
+    rows = s.scalars(select(Observation).where(Observation.protocol_id == protocol_id,
+                                                Observation.status == "approved")).all()
     return pd.DataFrame([{
         "subject_id": r.subject_id, "visit": r.visit, "field_name": r.field_name,
         "repeat_num": r.repeat_num, "value_num": r.value_num, "value_text": r.value_text,

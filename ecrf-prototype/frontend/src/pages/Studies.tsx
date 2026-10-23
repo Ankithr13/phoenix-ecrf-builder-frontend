@@ -6,7 +6,7 @@ import { useAuth } from "../auth/useAuth";
 
 /* The site portal's home: studies this site has been assigned to. A study
    appears here only once the sponsor has locked the form and assigned the
-   site, which arrives in stage 3; until then the list is honest and empty. */
+   site, so everything listed is ready for data entry. */
 export default function Studies() {
   const { me } = useAuth();
   const [items, setItems] = useState<StudyListItem[] | null>(null);
@@ -34,12 +34,15 @@ export default function Studies() {
       )}
       {items && items.map((s) => (
         <div className="card card-hover" key={s.id}>
-          <div className="row row-between">
+          <div className="row row-between row-wrap">
             <div>
               <div className="strong">{s.name}</div>
-              <div className="muted small">{s.pages} pages</div>
+              <div className="muted small mt-2">
+                {s.visits.length} visits · {s.subjects} patient{s.subjects === 1 ? "" : "s"} at this site
+                {s.locked_at && <> · form locked {new Date(s.locked_at).toLocaleDateString()}</>}
+              </div>
             </div>
-            <Link className="btn btn-primary btn-sm" to={`/site/s/${s.id}/data`}>Enter data</Link>
+            <Link className="btn btn-primary btn-sm" to={`/site/s/${s.id}/patients`}>Patients</Link>
           </div>
         </div>
       ))}

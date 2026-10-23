@@ -18,7 +18,7 @@ from ecrf.auth.permissions import CurrentUser, require
 from ecrf.config import config
 from ecrf.schema import DraftECRF, Status
 from ecrf.storage import db
-from ecrf.storage.models import ECRFVersion, Protocol
+from ecrf.storage.models import ECRFVersion, Protocol, utcnow
 
 router = APIRouter(prefix="/api/protocols", tags=["protocols"])
 
@@ -59,6 +59,7 @@ def list_protocols(cu: CurrentUser = Depends(require("protocol.view")),
             "tokens_estimate": p.tokens_estimate, "uploaded_by": p.uploaded_by,
             "uploaded_at": p.uploaded_at.isoformat(),
             "latest_version": v.version if v else None,
+            "state": v.state if v else None,
             "summary": (v.content.get("summary") if v else None),
         })
     return out
@@ -134,6 +135,19 @@ def load_sample(cu: CurrentUser = Depends(require("protocol.upload")),
 
 # ------------------------------------------------------------- extract
 
+LOCKED = ("Form is locked. Changing a locked form is out of scope for this sprint; "
+          "a later sprint will add versioned amendments.")
+
+
+def _lock_blockers(content: dict) -> dict[str, int]:
+    counts = {"draft": 0, "flagged": 0}
+    for form in content.get("forms", []):
+        for f in form.get("fields", []):
+            if f.get("status") in counts:
+                counts[f["status"]] += 1
+    return counts
+
+
 def _reviewed(v: ECRFVersion) -> bool:
     """Has a human touched this version? A review always writes a version
     whose note is not the extraction note, and approval is only ever set by
@@ -150,6 +164,8 @@ def extract(protocol_id: int, backend: str | None = None, force: bool = False,
             s: Session = Depends(db.get_session)):
     p = scope.protocol_or_404(s, cu, protocol_id)
     latest = db.latest_version(s, protocol_id)
+    if latest and latest.state == "locked":
+        raise HTTPException(409, LOCKED)
     if latest and not force and _reviewed(latest):
         # Extraction writes a fresh draft with every status reset, so running
         # it on a reviewed protocol throws the review away. That happened
@@ -189,6 +205,9 @@ def get_draft(protocol_id: int,
                      "tokens_estimate": p.tokens_estimate, "hash": p.text_hash[:12]},
         "version": v.version, "created_by": v.created_by, "created_at": v.created_at.isoformat(),
         "note": v.note, "draft": draft.model_dump(), "library_suggestions": sugg,
+        "state": v.state, "locked_by": v.locked_by,
+        "locked_at": v.locked_at.isoformat() if v.locked_at else None,
+        "lock_blockers": _lock_blockers(v.content),
     }
 
 
@@ -245,6 +264,8 @@ def review(protocol_id: int, body: ReviewRequest,
     v = db.latest_version(s, protocol_id)
     if not v:
         raise HTTPException(404, "no draft to review")
+    if v.state == "locked":
+        raise HTTPException(409, LOCKED)
     draft = DraftECRF.model_validate(v.content)
 
     by_key = {(f.visit, fld.name): fld for f in draft.forms for fld in f.fields}
@@ -271,3 +292,28 @@ def review(protocol_id: int, body: ReviewRequest,
                          note=body.note or f"review: {applied} change(s)")
     s.commit()
     return {"version": nv.version, "applied": applied}
+
+
+# ---------------------------------------------------------------- lock
+
+@router.post("/{protocol_id}/lock")
+def lock(protocol_id: int, cu: CurrentUser = Depends(require("form.lock")),
+         s: Session = Depends(db.get_session)):
+    """Freeze the latest version. Allowed only once every field has been
+    approved or rejected; sites only ever see a locked form."""
+    scope.protocol_or_404(s, cu, protocol_id)
+    v = db.latest_version(s, protocol_id)
+    if not v:
+        raise HTTPException(404, "no draft to lock")
+    if v.state == "locked":
+        return {"version": v.version, "state": "locked", "locked_by": v.locked_by,
+                "locked_at": v.locked_at.isoformat() if v.locked_at else None}
+    left = _lock_blockers(v.content)
+    if left["draft"] or left["flagged"]:
+        raise HTTPException(
+            409, f"{left['draft']} draft and {left['flagged']} flagged field(s) still need a "
+                 f"decision before the form can be locked")
+    v.state, v.locked_by, v.locked_at = "locked", cu.user.email, utcnow()
+    s.commit()
+    return {"version": v.version, "state": "locked", "locked_by": v.locked_by,
+            "locked_at": v.locked_at.isoformat()}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { DraftResponse, FieldDef, Reading } from "../api/types";
 import { useAuth } from "../auth/useAuth";
@@ -38,18 +38,17 @@ function parseServerErrors(message: string): Record<string, string> | null {
 }
 
 export default function DataEntry() {
-  const id = Number(useParams().id);
-  const { can } = useAuth();
+  const { id: idParam, subject: subjectParam } = useParams();
+  const id = Number(idParam);
+  const subject = subjectParam ?? "";
+  const { me } = useAuth();
   const [resp, setResp] = useState<DraftResponse | null>(null);
   const [visit, setVisit] = useState("");
-  const [subject, setSubject] = useState("PHX-021");
   const [values, setValues] = useState<Values>({});
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const [seedMessage, setSeedMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -65,7 +64,9 @@ export default function DataEntry() {
 
   const fields = useMemo(() => {
     const form = resp?.draft?.forms.find((f) => f.visit === visit);
-    return (form?.fields ?? []).filter((f) => f.status === "approved" || f.status === "draft");
+    // A locked form only carries approved and rejected fields; only the
+    // approved ones are collected.
+    return (form?.fields ?? []).filter((f) => f.status === "approved");
   }, [resp, visit]);
 
   const set = (k: string, v: string | boolean) => {
@@ -112,14 +113,14 @@ export default function DataEntry() {
     }
     setSaving(true);
     try {
-      const check = await api.validate(id, subject.trim(), visit, readings());
+      const check = await api.validate(id, subject, visit, readings());
       if (!check.ok) {
         setServerErrors(check.errors);
         setMessage({ kind: "error", text: "The server rejected some readings." });
         return;
       }
-      const r = await api.enter(id, subject.trim(), visit, readings());
-      setMessage({ kind: "ok", text: `${r.saved} readings saved for ${subject.trim()} at ${visit}.` });
+      const r = await api.enter(id, subject, visit, readings());
+      setMessage({ kind: "ok", text: `${r.saved} readings saved for ${subject} at ${visit}.` });
     } catch (e) {
       const errs = parseServerErrors((e as Error).message);
       if (errs) { setServerErrors(errs); setMessage({ kind: "error", text: "The server rejected some readings." }); }
@@ -129,25 +130,13 @@ export default function DataEntry() {
     }
   };
 
-  const seed = async () => {
-    setSeeding(true); setSeedMessage(null);
-    try {
-      const r = await api.seed(id);
-      setSeedMessage(r.already ? "already seeded" : `${r.seeded} readings added`);
-    } catch (e) {
-      setSeedMessage((e as Error).message);
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   if (!resp) return <div className="page">{message ? <p className="error">{message.text}</p> : <p className="muted">Loading…</p>}</div>;
 
   if (!resp.draft) {
     return (
       <div className="page">
         <h1 className="page-title">Data entry</h1>
-        <div className="card"><p className="strong">Not extracted yet</p><p className="muted small mt-2">Extract and review the protocol before entering data.</p></div>
+        <div className="card"><p className="strong">Form not available</p><p className="muted small mt-2">The sponsor has not locked this form yet.</p></div>
       </div>
     );
   }
@@ -160,27 +149,22 @@ export default function DataEntry() {
       </div>
 
       <div className="card">
-        <div className="row row-between row-top row-wrap">
-          <div className="row row-wrap grow">
+        <div className="row row-wrap row-between">
+          <div className="row row-wrap">
+            <div>
+              <div className="label">Patient</div>
+              <div className="mono strong">{subject}</div>
+            </div>
             <div>
               <label className="label" htmlFor="visit">Visit</label>
               <select id="visit" className="input" value={visit} onChange={(e) => changeVisit(e.target.value)}>
                 {resp.draft.forms.map((f) => <option key={f.visit} value={f.visit}>{f.visit}</option>)}
               </select>
             </div>
-            <div>
-              <label className="label" htmlFor="subject">Subject id</label>
-              <input id="subject" className="input input-mono" value={subject} onChange={(e) => setSubject(e.target.value)} />
-            </div>
           </div>
-          {can("data.seed") && (
-            <div>
-              <button type="button" className="btn btn-secondary" onClick={seed} disabled={seeding}>
-                {seeding ? "Seeding…" : "Seed 20 synthetic subjects"}
-              </button>
-              {seedMessage && <div className="mono xs muted mt-2">{seedMessage}</div>}
-            </div>
-          )}
+          <div className="small muted">
+            {me?.org.name} · <Link className="inline" to={`/site/s/${id}/patients`}>all patients</Link>
+          </div>
         </div>
       </div>
 

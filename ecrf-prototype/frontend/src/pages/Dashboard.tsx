@@ -94,7 +94,7 @@ export default function Dashboard() {
 
       <div className="grid-3">
         <Stat label="Subjects" value={d.data.subjects} sub="with at least one reading" />
-        <Stat label="Readings" value={d.data.readings.toLocaleString()} sub="synthetic observations" />
+        <Stat label="Approved readings" value={d.data.readings.toLocaleString()} sub={`${d.data.readings.toLocaleString()} approved of ${d.data.entered_total.toLocaleString()} entered`} />
         <Stat label="Fields kept" value={s.fields_kept} sub={`of ${s.fields_generated} generated`} />
       </div>
 

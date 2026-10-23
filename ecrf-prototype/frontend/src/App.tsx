@@ -5,9 +5,12 @@ import type { OrgType } from "./api/types";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import DataEntry from "./pages/DataEntry";
+import DataReview from "./pages/DataReview";
 import Login from "./pages/Login";
+import Patients from "./pages/Patients";
 import Protocols from "./pages/Protocols";
 import Review from "./pages/Review";
+import Sites from "./pages/Sites";
 import Studies from "./pages/Studies";
 
 const HOME: Record<OrgType, string> = { sponsor: "/sponsor", site: "/site" };
@@ -52,17 +55,20 @@ export default function App() {
           <Route element={<Portal type="sponsor" />}>
             <Route path="/sponsor" element={<Protocols />} />
             <Route path="/sponsor/p/:id/review" element={<Review />} />
+            <Route path="/sponsor/p/:id/sites" element={<Sites />} />
+            <Route path="/sponsor/p/:id/data" element={<DataReview />} />
             <Route path="/sponsor/p/:id/dashboard" element={<Dashboard />} />
           </Route>
 
           <Route element={<Portal type="site" />}>
             <Route path="/site" element={<Studies />} />
-            <Route path="/site/s/:id/data" element={<DataEntry />} />
+            <Route path="/site/s/:id/patients" element={<Patients />} />
+            <Route path="/site/s/:id/patients/:subject" element={<DataEntry />} />
           </Route>
 
           <Route path="/review/:id" element={<Legacy to={(id) => `/sponsor/p/${id}/review`} />} />
           <Route path="/dashboard/:id" element={<Legacy to={(id) => `/sponsor/p/${id}/dashboard`} />} />
-          <Route path="/data/:id" element={<Legacy to={(id) => `/site/s/${id}/data`} />} />
+          <Route path="/data/:id" element={<Legacy to={(id) => `/site/s/${id}/patients`} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

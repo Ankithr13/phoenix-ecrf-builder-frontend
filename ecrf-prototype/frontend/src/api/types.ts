@@ -86,6 +86,7 @@ export interface ProtocolListItem {
   uploaded_by: string;
   uploaded_at: string;
   latest_version: number | null;
+  state: "draft" | "locked" | null;
   summary: Summary | null;
 }
 
@@ -97,6 +98,10 @@ export interface DraftResponse {
   note?: string | null;
   draft: DraftECRF | null;
   library_suggestions?: Record<string, LibrarySuggestion[]>;
+  state?: "draft" | "locked";
+  locked_by?: string | null;
+  locked_at?: string | null;
+  lock_blockers?: { draft: number; flagged: number };
 }
 
 export interface VersionRow {
@@ -144,7 +149,8 @@ export interface DashboardResponse {
     backend: string;
     model: string;
   } | null;
-  data: { subjects: number; readings: number };
+  // readings counts approved rows only; entered_total counts every row
+  data: { subjects: number; readings: number; entered_total: number };
   stats: StatResult[];
 }
 
@@ -162,6 +168,51 @@ export interface StudyListItem {
   id: number;
   name: string;
   pages: number;
+  locked_at: string | null;
+  visits: string[];
+  subjects: number;
+}
+
+export interface SiteRow {
+  org_id: number;
+  name: string;
+  code: string;
+  assigned: boolean;
+}
+
+export interface SubjectRow {
+  id: number;
+  code: string;
+  site: string | null;
+  site_name: string | null;
+  created_by: string;
+  created_at: string;
+  readings: number;
+}
+
+export type ObservationStatus = "entered" | "approved" | "queried";
+
+export interface DataRow {
+  id: number;
+  site: string | null;
+  subject: string;
+  visit: string;
+  field: string;
+  repeat: number;
+  value: string | null;
+  status: ObservationStatus;
+  entered_by: string;
+  entered_at: string;
+  updated_at: string | null;
+  approved_by: string | null;
+}
+
+export interface HistoryRow {
+  old_value: string | null;
+  new_value: string | null;
+  changed_by: string;
+  changed_at: string;
+  reason: string | null;
 }
 
 export interface Health {

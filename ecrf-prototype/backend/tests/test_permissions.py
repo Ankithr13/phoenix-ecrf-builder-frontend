@@ -32,6 +32,15 @@ MATRIX = [
     ("GET", "/api/dashboard/{id}", None, 200, 200, 403, 401),
     ("POST", "/api/dashboard/{id}/unsupported?name=x", None, 403, 403, 403, 401),
     ("GET", "/api/studies", None, 403, 403, 200, 401),
+    # stage 3. The sample is extracted but not locked, so an approver's lock
+    # and site assignment are refused on state, not on role.
+    ("POST", "/api/protocols/{id}/lock", None, 403, 409, 403, 401),
+    ("GET", "/api/protocols/{id}/sites", None, 200, 200, 403, 401),
+    ("POST", "/api/protocols/{id}/sites", {"site_org_id": 1}, 403, 409, 403, 401),
+    ("GET", "/api/protocols/{id}/data", None, 200, 200, 404, 401),
+    ("POST", "/api/protocols/{id}/data/approve", {"observation_ids": []}, 403, 200, 403, 401),
+    ("GET", "/api/studies/{id}/subjects", None, 200, 200, 404, 401),
+    ("POST", "/api/studies/{id}/subjects", None, 403, 403, 404, 401),
     ("GET", "/api/auth/me", None, 200, 200, 200, 401),
 ]
 

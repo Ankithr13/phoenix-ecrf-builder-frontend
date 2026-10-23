@@ -59,3 +59,10 @@ def save_version(s: Session, protocol: Protocol, content: dict, created_by: str,
     s.add(v)
     s.flush()
     return v
+
+
+def locked_version(s: Session, protocol_id: int) -> ECRFVersion | None:
+    """The locked version, if the protocol is locked. Review and extraction
+    refuse once a version is locked, so it is always also the latest."""
+    v = latest_version(s, protocol_id)
+    return v if v and v.state == "locked" else None

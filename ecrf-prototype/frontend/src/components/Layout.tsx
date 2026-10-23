@@ -53,6 +53,8 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <div className="nav-group">
                   <div className="nav-group-label">protocol {id}</div>
                   <NavLink to={`/sponsor/p/${id}/review`}>Review</NavLink>
+                  <NavLink to={`/sponsor/p/${id}/sites`}>Sites</NavLink>
+                  <NavLink to={`/sponsor/p/${id}/data`}>Data review</NavLink>
                   <NavLink to={`/sponsor/p/${id}/dashboard`}>Dashboard</NavLink>
                 </div>
               )}
@@ -63,7 +65,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               {id && (
                 <div className="nav-group">
                   <div className="nav-group-label">study {id}</div>
-                  <NavLink to={`/site/s/${id}/data`}>Data entry</NavLink>
+                  <NavLink to={`/site/s/${id}/patients`}>Patients</NavLink>
                 </div>
               )}
             </>

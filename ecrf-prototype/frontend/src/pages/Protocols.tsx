@@ -82,7 +82,10 @@ export default function Protocols() {
           <div className="card card-hover" key={p.id} style={{ marginTop: 0 }}>
             <div className="row row-between row-top">
               <div className="grow">
-                <div className="strong">{p.name}</div>
+                <div className="row">
+                  <span className="strong">{p.name}</span>
+                  {p.state === "locked" && <span className="pill chip-teal">locked</span>}
+                </div>
                 <div className="mono small muted mt-2">
                   {p.pages} pages · ~{p.tokens_estimate.toLocaleString()} tokens · by {p.uploaded_by}
                 </div>
@@ -102,6 +105,7 @@ export default function Protocols() {
                   )}
                   <span className="pill">v{p.latest_version}</span>
                   <Link className="btn btn-secondary btn-sm" to={`/sponsor/p/${p.id}/review`}>Review</Link>
+                  <Link className="btn btn-secondary btn-sm" to={`/sponsor/p/${p.id}/data`}>Data</Link>
                   <Link className="btn btn-secondary btn-sm" to={`/sponsor/p/${p.id}/dashboard`}>Dashboard</Link>
                 </div>
               )}

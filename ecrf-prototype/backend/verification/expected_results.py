@@ -1,7 +1,8 @@
 """Independently computed expected results.
 
 DO NOT import anything from ecrf/. Different code path on purpose. Reads
-the observation table with raw SQL and computes by hand.
+the observation table with raw SQL and computes by hand. Only rows the
+sponsor has approved count, the same rule the app applies.
 
 Run directly:  python verification/expected_results.py [protocol_id]
 Imported by:   ecrf/api/dashboard.py, which compares these against the app.
@@ -24,7 +25,8 @@ def mean_change_systolic(database_url: str, protocol_id: int) -> float:
     con = _connect(database_url)
     rows = con.execute(
         "SELECT subject_id, visit, value_num FROM observation "
-        "WHERE protocol_id=? AND field_name='Systolic Blood Pressure' AND value_num IS NOT NULL",
+        "WHERE protocol_id=? AND status='approved' "
+        "AND field_name='Systolic Blood Pressure' AND value_num IS NOT NULL",
         (protocol_id,),
     ).fetchall()
     con.close()
@@ -48,7 +50,7 @@ def subjects_per_visit(database_url: str, protocol_id: int) -> dict[str, int]:
     con = _connect(database_url)
     rows = con.execute(
         "SELECT visit, COUNT(DISTINCT subject_id) FROM observation "
-        "WHERE protocol_id=? GROUP BY visit", (protocol_id,),
+        "WHERE protocol_id=? AND status='approved' GROUP BY visit", (protocol_id,),
     ).fetchall()
     con.close()
     return dict(rows)
@@ -58,7 +60,8 @@ def percent_missing(database_url: str, protocol_id: int) -> float:
     con = _connect(database_url)
     rows = con.execute(
         "SELECT DISTINCT subject_id, visit, field_name FROM observation "
-        "WHERE protocol_id=? AND (value_num IS NOT NULL OR value_text IS NOT NULL)",
+        "WHERE protocol_id=? AND status='approved' "
+        "AND (value_num IS NOT NULL OR value_text IS NOT NULL)",
         (protocol_id,),
     ).fetchall()
     con.close()

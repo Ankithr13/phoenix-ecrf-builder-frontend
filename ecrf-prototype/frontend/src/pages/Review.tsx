@@ -22,6 +22,7 @@ export default function Review() {
   const [extracting, setExtracting] = useState(false);
   const [section, setSection] = useState<{ loading: boolean; data: SectionView | null; error: string | null } | null>(null);
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
+  const [locking, setLocking] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -68,6 +69,13 @@ export default function Review() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const lock = async () => {
+    setLocking(true); setError(null);
+    try { await api.lock(id); await load(); if (versions) await loadVersions(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setLocking(false); }
   };
 
   const showSection = async (n: string) => {
@@ -118,15 +126,45 @@ export default function Review() {
 
   const s = draft.summary;
   const sugg = resp.library_suggestions ?? {};
+  const locked = resp.state === "locked";
+  const blockers = resp.lock_blockers ?? { draft: 0, flagged: 0 };
+  const left = blockers.draft + blockers.flagged;
 
   return (
     <div className="page">
       <div className="page-head">
         <h1 className="page-title">{resp.protocol.name}</h1>
-        <div className="mono small muted">
-          v{resp.version} · {draft.backend} · {draft.model} · hash {resp.protocol.hash} · threshold {s.threshold}
+        <div className="row row-wrap row-between">
+          <div className="mono small muted">
+            v{resp.version} · {draft.backend} · {draft.model} · hash {resp.protocol.hash} · threshold {s.threshold}
+          </div>
+          {!locked && can("form.lock") && (
+            <div className="row">
+              {left > 0 && (
+                <span className="small muted">
+                  {blockers.draft > 0 && `${blockers.draft} draft`}
+                  {blockers.draft > 0 && blockers.flagged > 0 && ", "}
+                  {blockers.flagged > 0 && `${blockers.flagged} flagged`} still need a decision
+                </span>
+              )}
+              <button
+                type="button" className="btn btn-teal btn-sm" onClick={lock}
+                disabled={locking || left > 0 || pending > 0}
+                title={pending > 0 ? "Save your pending changes first" : left > 0 ? "Every field must be approved or rejected first" : "Freeze this version for sites"}
+              >
+                {locking ? "Locking…" : "Lock form"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {locked && (
+        <div className="lock-banner">
+          <span className="strong">Locked</span>
+          <span>by {resp.locked_by}{resp.locked_at && <> on {new Date(resp.locked_at).toLocaleString()}</>}. This version is frozen; sites enter data against it and nothing here can change.</span>
+        </div>
+      )}
 
       <div className="grid-3">
         <Stat label="Fields kept" value={s.fields_kept} sub={`of ${s.fields_generated} generated across ${s.visits} visits`} />
@@ -183,6 +221,7 @@ export default function Review() {
                 field={merged(f, form.visit)}
                 onChange={(c) => onChange(form.visit, f.name, c)}
                 onShowSection={showSection}
+                readOnly={locked}
               />
             ))}
 
@@ -224,7 +263,7 @@ export default function Review() {
 
       {error && <p className="error mt-3">{error}</p>}
 
-      {can("form.edit") && <div className="sticky-bar">
+      {can("form.edit") && !locked && <div className="sticky-bar">
         <span className="small muted">
           <span className="mono">{pending}</span> pending change{pending === 1 ? "" : "s"}
         </span>

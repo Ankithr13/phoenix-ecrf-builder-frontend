@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ecrf.auth import scope
@@ -15,6 +16,7 @@ from ecrf.config import config
 from ecrf.schema import DraftECRF
 from ecrf.stats import registry
 from ecrf.storage import db
+from ecrf.storage.models import Observation
 
 # The verification package deliberately lives outside ecrf/ and imports
 # nothing from it. We import it here only to compare.
@@ -97,9 +99,12 @@ def dashboard(protocol_id: int, cu: CurrentUser = Depends(require("stats.view"))
         readings = len(df)
     else:
         subjects, readings = 0, 0
+    entered_total = s.scalar(select(func.count(Observation.id))
+                             .where(Observation.protocol_id == protocol_id)) or 0
 
     return {"protocol": {"id": p.id, "name": p.name}, "extraction": extraction,
-            "data": {"subjects": subjects, "readings": readings}, "stats": stats}
+            "data": {"subjects": subjects, "readings": readings, "entered_total": entered_total},
+            "stats": stats}
 
 
 @router.post("/{protocol_id}/unsupported")
