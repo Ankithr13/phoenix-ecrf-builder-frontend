@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useAuth } from "../auth/useAuth";
 import { api } from "../api/client";
 import type { DashboardResponse, StatResult } from "../api/types";
 import Badge from "../components/Badge";
@@ -28,6 +29,8 @@ export default function Dashboard() {
   const id = Number(useParams().id);
   const [d, setD] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [seeding, setSeeding] = useState(false);
+  const { can } = useAuth();
 
   const load = useCallback(async () => {
     try { setD(await api.dashboard(id)); setError(null); }
@@ -35,6 +38,17 @@ export default function Dashboard() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const seed = async () => {
+    setSeeding(true);
+    try { await api.seed(id); await load(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setSeeding(false); }
+  };
+
+  const noData = can("data.seed")
+    ? <button type="button" className="btn btn-secondary btn-sm" onClick={seed} disabled={seeding}>{seeding ? "Seeding…" : "Seed 20 synthetic subjects"}</button>
+    : <p className="muted small">No data entered yet</p>;
 
   // The "unsupported analysis" demo panel was removed from this page: it
   // asked the reviewer to type an analysis name purely to watch the server
@@ -53,7 +67,7 @@ export default function Dashboard() {
         <div className="card">
           <p className="strong">Extract first</p>
           <p className="muted small mt-2">
-            The dashboard reads the latest eCRF version. <Link className="inline" to={`/review/${id}`}>Go to Review</Link> to run extraction.
+            The dashboard reads the latest eCRF version. <Link className="inline" to={`/sponsor/p/${id}/review`}>Go to Review</Link> to run extraction.
           </p>
         </div>
       </div>
@@ -110,7 +124,7 @@ export default function Dashboard() {
           <div className="section-title">Subjects per visit</div>
           {hasData
             ? <BarChart data={perVisit} color="var(--ink-2)" />
-            : <p className="muted small">Seed data on the <Link className="inline" to={`/data/${id}`}>Data entry</Link> page</p>}
+            : noData}
         </div>
         <div className="card" style={{ marginTop: 0 }}>
           <div className="section-title">Independently verified</div>
@@ -135,7 +149,7 @@ export default function Dashboard() {
               </tbody>
             </table>
           ) : (
-            <p className="muted small">Seed data on the <Link className="inline" to={`/data/${id}`}>Data entry</Link> page</p>
+            <p className="muted small">Synthetic data is needed before the comparison can run.</p>
           )}
         </div>
       </div>

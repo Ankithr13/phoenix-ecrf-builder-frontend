@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { DraftResponse, FieldDef, Reading } from "../api/types";
+import { useAuth } from "../auth/useAuth";
 
 type Values = Record<string, string | boolean>;
 
@@ -38,6 +39,7 @@ function parseServerErrors(message: string): Record<string, string> | null {
 
 export default function DataEntry() {
   const id = Number(useParams().id);
+  const { can } = useAuth();
   const [resp, setResp] = useState<DraftResponse | null>(null);
   const [visit, setVisit] = useState("");
   const [subject, setSubject] = useState("PHX-021");
@@ -171,12 +173,14 @@ export default function DataEntry() {
               <input id="subject" className="input input-mono" value={subject} onChange={(e) => setSubject(e.target.value)} />
             </div>
           </div>
-          <div>
-            <button type="button" className="btn btn-secondary" onClick={seed} disabled={seeding}>
-              {seeding ? "Seeding…" : "Seed 20 synthetic subjects"}
-            </button>
-            {seedMessage && <div className="mono xs muted mt-2">{seedMessage}</div>}
-          </div>
+          {can("data.seed") && (
+            <div>
+              <button type="button" className="btn btn-secondary" onClick={seed} disabled={seeding}>
+                {seeding ? "Seeding…" : "Seed 20 synthetic subjects"}
+              </button>
+              {seedMessage && <div className="mono xs muted mt-2">{seedMessage}</div>}
+            </div>
+          )}
         </div>
       </div>
 

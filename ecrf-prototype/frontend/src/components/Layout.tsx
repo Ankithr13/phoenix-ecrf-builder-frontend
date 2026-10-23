@@ -2,11 +2,17 @@ import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import type { Health } from "../api/types";
+import { useAuth } from "../auth/useAuth";
 
-const ID_IN_PATH = /^\/(review|data|dashboard)\/(\d+)/;
+const ID_IN_PATH = /^\/(sponsor\/p|site\/s)\/(\d+)/;
+
+const ROLE_LABEL: Record<string, string> = {
+  builder: "Builder", approver: "Approver", site_staff: "Site staff",
+};
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
+  const { me, signOut } = useAuth();
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState(false);
 
@@ -16,6 +22,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   const m = pathname.match(ID_IN_PATH);
   const id = m ? m[2] : null;
+  const sponsor = me?.org.type === "sponsor";
   const pillState = health ? "" : healthError ? " offline" : " pending";
 
   return (
@@ -28,15 +35,38 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="brand-name">eCRF Builder</div>
         </div>
 
-        <nav className="nav" aria-label="Main">
-          <NavLink to="/" end>Protocols</NavLink>
-          {id && (
-            <div className="nav-group">
-              <div className="nav-group-label">protocol {id}</div>
-              <NavLink to={`/review/${id}`}>Review</NavLink>
-              <NavLink to={`/data/${id}`}>Data entry</NavLink>
-              <NavLink to={`/dashboard/${id}`}>Dashboard</NavLink>
+        {me && (
+          <div className="identity">
+            <div className="identity-org">{me.org.name}</div>
+            <div className="identity-user">
+              {me.user.name} <span className="muted-2">· {ROLE_LABEL[me.role] ?? me.role}</span>
             </div>
+            <button type="button" className="btn-link identity-out" onClick={signOut}>Sign out</button>
+          </div>
+        )}
+
+        <nav className="nav" aria-label="Main">
+          {sponsor ? (
+            <>
+              <NavLink to="/sponsor" end>Protocols</NavLink>
+              {id && (
+                <div className="nav-group">
+                  <div className="nav-group-label">protocol {id}</div>
+                  <NavLink to={`/sponsor/p/${id}/review`}>Review</NavLink>
+                  <NavLink to={`/sponsor/p/${id}/dashboard`}>Dashboard</NavLink>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <NavLink to="/site" end>Studies</NavLink>
+              {id && (
+                <div className="nav-group">
+                  <div className="nav-group-label">study {id}</div>
+                  <NavLink to={`/site/s/${id}/data`}>Data entry</NavLink>
+                </div>
+              )}
+            </>
           )}
         </nav>
 

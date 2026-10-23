@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ecrf import __version__
-from ecrf.api import dashboard, data, protocols
+from ecrf.api import auth, dashboard, data, protocols, studies
 from ecrf.config import config
 from ecrf.storage import db, migrate
 
@@ -34,7 +34,9 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(protocols.router)
+app.include_router(studies.router)
 app.include_router(data.router)
 app.include_router(dashboard.router)
 

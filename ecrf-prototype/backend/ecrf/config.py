@@ -44,6 +44,12 @@ class Config:
     data_dir: Path
     upload_dir: Path
 
+    # Sessions. The cookie is httpOnly and SameSite=Lax; Secure is off by
+    # default because dev runs on plain http through the Vite proxy.
+    session_hours: int
+    cookie_secure: bool
+    demo_password: str
+
 
 def load() -> Config:
     return Config(
@@ -60,6 +66,9 @@ def load() -> Config:
         # Separate from data_dir so tests can upload into a temporary folder
         # without losing the bundled sample and library that live in data/.
         upload_dir=Path(os.getenv("ECRF_UPLOAD_DIR", ROOT / "data" / "uploads")),
+        session_hours=int(os.getenv("SESSION_HOURS", "12")),
+        cookie_secure=os.getenv("COOKIE_SECURE", "false").lower() == "true",
+        demo_password=os.getenv("DEMO_PASSWORD", "demo1234"),
     )
 
 

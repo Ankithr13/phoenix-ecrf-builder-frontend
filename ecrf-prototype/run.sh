@@ -2,7 +2,7 @@
 # One command to run the whole prototype.
 #   ./run.sh            backend + frontend, mock backend
 #   ./run.sh backend    backend only
-#   ./run.sh test       backend tests
+#   ./run.sh test       backend tests, against a temporary database
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -19,10 +19,19 @@ pip install -q -e ".[dev]"
 [ -f data/sample/PHX-401-201_protocol.pdf ] || python data/sample/make_sample_protocol.py
 
 if [ "${1:-}" = "test" ]; then
-  rm -f ecrf.db
+  # tests/conftest.py points DATABASE_URL at a temporary file, so the dev
+  # database is never touched. An earlier version deleted ecrf.db here and
+  # a running server then kept writing to the deleted inode.
   python -m pytest -q
   exit 0
 fi
+
+# The schema is owned by Alembic. The server refuses to start if this has
+# not been run, so it runs every time.
+alembic upgrade head
+# Demo accounts, created only when the user table is empty. Prints the
+# password the first time.
+python scripts/seed_demo.py --if-empty
 
 uvicorn ecrf.api.app:app --port 8000 --reload &
 BACK=$!

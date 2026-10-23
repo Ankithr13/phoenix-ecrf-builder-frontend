@@ -3,9 +3,8 @@ conftest.py sets the backend and a temporary database before this imports."""
 
 import os
 
-from fastapi.testclient import TestClient
+from conftest import BUILDER, login
 
-from ecrf.api.app import app
 from ecrf.ingest import load
 from ecrf.verify import locate
 
@@ -29,9 +28,10 @@ def test_exact_and_fuzzy_and_rejected():
     assert score < 90
 
 
-def test_full_flow():
-    c = TestClient(app)
-    with c:
+def test_full_flow(client, demo_accounts):
+    c = client
+    login(c, BUILDER)
+    if True:
         pid = c.post("/api/protocols/sample").json()["id"]
         summary = c.post(f"/api/protocols/{pid}/extract").json()["summary"]
         assert summary["rejected"] == 1 and summary["approximate"] == 1 and summary["flagged"] == 1
@@ -47,10 +47,11 @@ def test_full_flow():
                          "status": "approved", "max": 220}]})
         assert r.json()["version"] == 2
 
+        # Entering data is a site's job; a sponsor account is refused outright.
         r = c.post("/api/data/validate", json={
             "protocol_id": pid, "subject_id": "S1", "visit": "Week 4",
             "readings": [{"field_name": "Systolic Blood Pressure", "value": 1420}]})
-        assert not r.json()["ok"]
+        assert r.status_code == 403
 
         c.post(f"/api/data/seed/{pid}")
         dash = c.get(f"/api/dashboard/{pid}").json()

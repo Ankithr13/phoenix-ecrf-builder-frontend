@@ -1,8 +1,7 @@
 """The grounding check at its edges."""
 
-from fastapi.testclient import TestClient
+from conftest import BUILDER, login
 
-from ecrf.api.app import app
 from ecrf.ingest import Document
 from ecrf.schema import FieldDef, Source
 from ecrf.verify import check_field, clean_quote, locate
@@ -41,9 +40,10 @@ def test_locate_still_measures_verbatim_hits():
     assert v == "exact" and score == 100.0 and off > 0
 
 
-def test_reextraction_is_refused_after_review_unless_forced():
-    c = TestClient(app)
-    with c:
+def test_reextraction_is_refused_after_review_unless_forced(client, demo_accounts):
+    c = client
+    login(c, BUILDER)
+    if True:
         pid = c.post("/api/protocols/sample").json()["id"]
         assert c.post(f"/api/protocols/{pid}/extract").status_code == 200
         # A second extraction with no review in between is fine.
@@ -58,12 +58,13 @@ def test_reextraction_is_refused_after_review_unless_forced():
         assert [v["version"] for v in c.get(f"/api/protocols/{pid}/versions").json()] == [1, 2, 3, 4]
 
 
-def test_duplicate_upload_returns_the_existing_protocol():
-    c = TestClient(app)
+def test_duplicate_upload_returns_the_existing_protocol(client, demo_accounts):
+    c = client
+    login(c, BUILDER)
     sample = "data/sample/PHX-401-201_protocol.pdf"
     import os
     path = os.path.join(os.path.dirname(__file__), "..", sample)
-    with c:
+    if True:
         with open(path, "rb") as f:
             a = c.post("/api/protocols/upload", files={"file": ("first.pdf", f, "application/pdf")}).json()
         with open(path, "rb") as f:

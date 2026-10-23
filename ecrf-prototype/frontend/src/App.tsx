@@ -1,20 +1,71 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-router-dom";
+import AuthProvider from "./auth/AuthProvider";
+import { useAuth } from "./auth/useAuth";
+import type { OrgType } from "./api/types";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import DataEntry from "./pages/DataEntry";
+import Login from "./pages/Login";
 import Protocols from "./pages/Protocols";
 import Review from "./pages/Review";
+import Studies from "./pages/Studies";
+
+const HOME: Record<OrgType, string> = { sponsor: "/sponsor", site: "/site" };
+
+/* Everything below /login needs a session. While /me is still loading we
+   render nothing rather than flash the login page at a signed-in user. */
+function RequireAuth() {
+  const { me, loading } = useAuth();
+  const { pathname, search } = useLocation();
+  if (loading) return null;
+  if (!me) return <Navigate to={`/login?next=${encodeURIComponent(pathname + search)}`} replace />;
+  return <Outlet />;
+}
+
+/* Each portal belongs to one organisation type. Opening the other one
+   sends you to your own home instead of showing an empty page. */
+function Portal({ type }: { type: OrgType }) {
+  const { me } = useAuth();
+  if (me && me.org.type !== type) return <Navigate to={HOME[me.org.type]} replace />;
+  return <Layout><Outlet /></Layout>;
+}
+
+function Home() {
+  const { me } = useAuth();
+  return <Navigate to={me ? HOME[me.org.type] : "/login"} replace />;
+}
+
+/* Old bookmarks from before the portals existed. */
+function Legacy({ to }: { to: (id: string) => string }) {
+  const { id = "" } = useParams();
+  return <Navigate to={to(id)} replace />;
+}
 
 export default function App() {
   return (
-    <Layout>
+    <AuthProvider>
       <Routes>
-        <Route path="/" element={<Protocols />} />
-        <Route path="/review/:id" element={<Review />} />
-        <Route path="/data/:id" element={<DataEntry />} />
-        <Route path="/dashboard/:id" element={<Dashboard />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/login" element={<Login />} />
+        <Route element={<RequireAuth />}>
+          <Route path="/" element={<Home />} />
+
+          <Route element={<Portal type="sponsor" />}>
+            <Route path="/sponsor" element={<Protocols />} />
+            <Route path="/sponsor/p/:id/review" element={<Review />} />
+            <Route path="/sponsor/p/:id/dashboard" element={<Dashboard />} />
+          </Route>
+
+          <Route element={<Portal type="site" />}>
+            <Route path="/site" element={<Studies />} />
+            <Route path="/site/s/:id/data" element={<DataEntry />} />
+          </Route>
+
+          <Route path="/review/:id" element={<Legacy to={(id) => `/sponsor/p/${id}/review`} />} />
+          <Route path="/dashboard/:id" element={<Legacy to={(id) => `/sponsor/p/${id}/dashboard`} />} />
+          <Route path="/data/:id" element={<Legacy to={(id) => `/site/s/${id}/data`} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Routes>
-    </Layout>
+    </AuthProvider>
   );
 }

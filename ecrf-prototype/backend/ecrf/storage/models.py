@@ -14,9 +14,62 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
+def utcnow() -> datetime:
+    """Naive UTC. SQLite drops the timezone on the way in, so comparing a
+    stored value against an aware datetime raises; everything is naive UTC
+    on both sides instead."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 class Base(DeclarativeBase):
     pass
 
+
+# ------------------------------------------------------------ identity
+
+class Organisation(Base):
+    """A sponsor builds and approves forms; a site enters data for its own
+    patients. The type decides which roles its users may hold and which
+    portal they land in."""
+
+    __tablename__ = "organisation"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    type: Mapped[str] = mapped_column(String(20))            # sponsor | site
+    code: Mapped[str] = mapped_column(String(10), unique=True)  # BGH, used in subject codes
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class User(Base):
+    __tablename__ = "user"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True)   # stored lowercased
+    name: Mapped[str] = mapped_column(String(200))
+    password_hash: Mapped[str] = mapped_column(String(300))
+    org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
+    role: Mapped[str] = mapped_column(String(30))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class UserSession(Base):
+    """Server-side session. Only the sha256 of the cookie token is stored,
+    so a copy of the database cannot be replayed as a login."""
+
+    __tablename__ = "session"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+# ------------------------------------------------------------ protocols
 
 class Protocol(Base):
     """A protocol document, with the normalised text we extract from."""
@@ -24,6 +77,7 @@ class Protocol(Base):
     __tablename__ = "protocol"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
     name: Mapped[str] = mapped_column(String(200))
     filename: Mapped[str] = mapped_column(String(300))
     text_hash: Mapped[str] = mapped_column(String(64))
@@ -32,7 +86,7 @@ class Protocol(Base):
     pages: Mapped[int] = mapped_column(Integer)
     tokens_estimate: Mapped[int] = mapped_column(Integer)
     uploaded_by: Mapped[str] = mapped_column(String(100))
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class ECRFVersion(Base):
@@ -54,7 +108,7 @@ class ECRFVersion(Base):
     version: Mapped[int] = mapped_column(Integer)
     content: Mapped[dict] = mapped_column(JSON)         # DraftECRF as dict
     created_by: Mapped[str] = mapped_column(String(100))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
@@ -79,4 +133,4 @@ class Observation(Base):
     value_text: Mapped[str | None] = mapped_column(String(500), nullable=True)
     synthetic: Mapped[bool] = mapped_column(Boolean, default=True)
     entered_by: Mapped[str] = mapped_column(String(100))
-    entered_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    entered_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

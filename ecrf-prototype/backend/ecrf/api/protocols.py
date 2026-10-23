@@ -1,15 +1,20 @@
-"""Protocol upload, extraction, draft review, approval."""
+"""Protocol upload, extraction, draft review, approval.
+
+Every route needs a signed-in user. What they may do comes from the one
+permission table; what they may see comes from the scope helpers."""
 
 import shutil
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ecrf import cdash, ingest, pipeline
+from ecrf.auth import scope
+from ecrf.auth.permissions import CurrentUser, require
 from ecrf.config import config
 from ecrf.schema import DraftECRF, Status
 from ecrf.storage import db
@@ -19,13 +24,6 @@ router = APIRouter(prefix="/api/protocols", tags=["protocols"])
 
 UPLOAD_DIR = config.upload_dir
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _user(x_user: str | None) -> str:
-    """Stand-in for Phoenix auth. The architecture draft notes the backend
-    must know who uploaded, edited or approved. For the prototype the
-    frontend sends an X-User header."""
-    return x_user or "demo-user"
 
 
 def _doc_from_protocol(p: Protocol) -> ingest.Document:
@@ -50,8 +48,9 @@ def _doc_from_protocol(p: Protocol) -> ingest.Document:
 # ----------------------------------------------------------------- list
 
 @router.get("")
-def list_protocols(s: Session = Depends(db.get_session)):
-    rows = s.scalars(select(Protocol).order_by(Protocol.uploaded_at.desc())).all()
+def list_protocols(cu: CurrentUser = Depends(require("protocol.view")),
+                   s: Session = Depends(db.get_session)):
+    rows = s.scalars(scope.visible_protocols(cu).order_by(Protocol.uploaded_at.desc())).all()
     out = []
     for p in rows:
         v = db.latest_version(s, p.id)
@@ -68,7 +67,8 @@ def list_protocols(s: Session = Depends(db.get_session)):
 # --------------------------------------------------------------- upload
 
 @router.post("/upload")
-async def upload(file: UploadFile = File(...), x_user: str | None = Header(None),
+async def upload(file: UploadFile = File(...),
+                 cu: CurrentUser = Depends(require("protocol.upload")),
                  s: Session = Depends(db.get_session)):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF protocols are supported in the prototype")
@@ -84,7 +84,8 @@ async def upload(file: UploadFile = File(...), x_user: str | None = Header(None)
     # The same document uploaded twice must not become two protocols that
     # drift apart under review. Match on the hash of the normalised text, so
     # a renamed file still counts as the same protocol.
-    existing = s.scalars(select(Protocol).where(Protocol.text_hash == doc.hash)).first()
+    existing = s.scalars(select(Protocol).where(
+        Protocol.text_hash == doc.hash, Protocol.org_id == cu.org.id)).first()
     if existing:
         if dest.name != existing.filename:
             dest.unlink(missing_ok=True)
@@ -96,7 +97,8 @@ async def upload(file: UploadFile = File(...), x_user: str | None = Header(None)
         name=name, filename=file.filename, text_hash=doc.hash, normalised=doc.text,
         sections=[{"number": x.number, "title": x.title, "page": x.page_start,
                    "start": x.start, "end": x.end} for x in doc.sections],
-        pages=doc.pages, tokens_estimate=doc.tokens_estimate, uploaded_by=_user(x_user),
+        pages=doc.pages, tokens_estimate=doc.tokens_estimate,
+        uploaded_by=cu.user.email, org_id=cu.org.id,
     )
     s.add(p)
     s.commit()
@@ -106,12 +108,14 @@ async def upload(file: UploadFile = File(...), x_user: str | None = Header(None)
 
 
 @router.post("/sample")
-def load_sample(x_user: str | None = Header(None), s: Session = Depends(db.get_session)):
+def load_sample(cu: CurrentUser = Depends(require("protocol.upload")),
+                s: Session = Depends(db.get_session)):
     """Load the bundled synthetic protocol without a file picker."""
     src = config.data_dir / "sample" / "PHX-401-201_protocol.pdf"
     if not src.exists():
         raise HTTPException(500, "sample protocol missing; run data/sample/make_sample_protocol.py")
-    existing = s.scalars(select(Protocol).where(Protocol.filename == src.name)).first()
+    existing = s.scalars(select(Protocol).where(
+        Protocol.filename == src.name, Protocol.org_id == cu.org.id)).first()
     if existing:
         return {"id": existing.id, "name": existing.name, "already_loaded": True}
     doc = ingest.load(str(src))
@@ -120,7 +124,8 @@ def load_sample(x_user: str | None = Header(None), s: Session = Depends(db.get_s
         normalised=doc.text,
         sections=[{"number": x.number, "title": x.title, "page": x.page_start,
                    "start": x.start, "end": x.end} for x in doc.sections],
-        pages=doc.pages, tokens_estimate=doc.tokens_estimate, uploaded_by=_user(x_user),
+        pages=doc.pages, tokens_estimate=doc.tokens_estimate,
+        uploaded_by=cu.user.email, org_id=cu.org.id,
     )
     s.add(p)
     s.commit()
@@ -141,10 +146,9 @@ def _reviewed(v: ECRFVersion) -> bool:
 
 @router.post("/{protocol_id}/extract")
 def extract(protocol_id: int, backend: str | None = None, force: bool = False,
-            x_user: str | None = Header(None), s: Session = Depends(db.get_session)):
-    p = s.get(Protocol, protocol_id)
-    if not p:
-        raise HTTPException(404, "protocol not found")
+            cu: CurrentUser = Depends(require("protocol.extract")),
+            s: Session = Depends(db.get_session)):
+    p = scope.protocol_or_404(s, cu, protocol_id)
     latest = db.latest_version(s, protocol_id)
     if latest and not force and _reviewed(latest):
         # Extraction writes a fresh draft with every status reset, so running
@@ -163,7 +167,7 @@ def extract(protocol_id: int, backend: str | None = None, force: bool = False,
         draft = pipeline.run(str(pdf_path), protocol_id, backend=backend, doc=doc, log=lambda *_: None)
     except Exception as e:  # surface provider errors plainly
         raise HTTPException(502, f"extraction failed: {type(e).__name__}: {e}") from e
-    v = db.save_version(s, p, draft.model_dump(), _user(x_user), note="initial extraction")
+    v = db.save_version(s, p, draft.model_dump(), cu.user.email, note="initial extraction")
     s.commit()
     return {"version": v.version, "summary": draft.summary}
 
@@ -171,10 +175,10 @@ def extract(protocol_id: int, backend: str | None = None, force: bool = False,
 # --------------------------------------------------------------- draft
 
 @router.get("/{protocol_id}/draft")
-def get_draft(protocol_id: int, s: Session = Depends(db.get_session)):
-    p = s.get(Protocol, protocol_id)
-    if not p:
-        raise HTTPException(404, "protocol not found")
+def get_draft(protocol_id: int,
+              cu: CurrentUser = Depends(require("protocol.view", "study.view")),
+              s: Session = Depends(db.get_session)):
+    p = scope.protocol_or_404(s, cu, protocol_id)
     v = db.latest_version(s, protocol_id)
     if not v:
         return {"protocol": {"id": p.id, "name": p.name}, "version": None, "draft": None}
@@ -189,7 +193,10 @@ def get_draft(protocol_id: int, s: Session = Depends(db.get_session)):
 
 
 @router.get("/{protocol_id}/versions")
-def versions(protocol_id: int, s: Session = Depends(db.get_session)):
+def versions(protocol_id: int,
+             cu: CurrentUser = Depends(require("protocol.view", "study.view")),
+             s: Session = Depends(db.get_session)):
+    scope.protocol_or_404(s, cu, protocol_id)
     rows = s.scalars(select(ECRFVersion).where(ECRFVersion.protocol_id == protocol_id)
                      .order_by(ECRFVersion.version)).all()
     return [{"version": r.version, "created_by": r.created_by,
@@ -198,11 +205,11 @@ def versions(protocol_id: int, s: Session = Depends(db.get_session)):
 
 
 @router.get("/{protocol_id}/section/{number}")
-def section_text(protocol_id: int, number: str, s: Session = Depends(db.get_session)):
+def section_text(protocol_id: int, number: str,
+                 cu: CurrentUser = Depends(require("protocol.view", "study.view")),
+                 s: Session = Depends(db.get_session)):
     """Lets the reviewer read the cited section without opening the PDF."""
-    p = s.get(Protocol, protocol_id)
-    if not p:
-        raise HTTPException(404, "protocol not found")
+    p = scope.protocol_or_404(s, cu, protocol_id)
     for sec in p.sections:
         if sec["number"] == number:
             return {"number": number, "title": sec["title"], "page": sec["page"],
@@ -230,12 +237,13 @@ class ReviewRequest(BaseModel):
 
 
 @router.post("/{protocol_id}/review")
-def review(protocol_id: int, body: ReviewRequest, x_user: str | None = Header(None),
+def review(protocol_id: int, body: ReviewRequest,
+           cu: CurrentUser = Depends(require("form.edit")),
            s: Session = Depends(db.get_session)):
     """Apply reviewer edits and write a NEW version. Never updates in place."""
-    p = s.get(Protocol, protocol_id)
+    p = scope.protocol_or_404(s, cu, protocol_id)
     v = db.latest_version(s, protocol_id)
-    if not p or not v:
+    if not v:
         raise HTTPException(404, "no draft to review")
     draft = DraftECRF.model_validate(v.content)
 
@@ -259,6 +267,7 @@ def review(protocol_id: int, body: ReviewRequest, x_user: str | None = Header(No
                 fld.status = "approved"
 
     draft.version = v.version + 1
-    nv = db.save_version(s, p, draft.model_dump(), _user(x_user), note=body.note or f"review: {applied} change(s)")
+    nv = db.save_version(s, p, draft.model_dump(), cu.user.email,
+                         note=body.note or f"review: {applied} change(s)")
     s.commit()
     return {"version": nv.version, "applied": applied}

@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type { DraftResponse, FieldChange, FieldDef, VersionRow } from "../api/types";
 import FieldCard from "../components/FieldCard";
 import Stat from "../components/Stat";
+import { useAuth } from "../auth/useAuth";
 
 type SectionView = { number: string; title: string; page: number; text: string };
 
@@ -11,6 +12,7 @@ const key = (visit: string, name: string) => `${visit}\u0000${name}`;
 
 export default function Review() {
   const id = Number(useParams().id);
+  const { can } = useAuth();
   const [resp, setResp] = useState<DraftResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null);
@@ -222,7 +224,7 @@ export default function Review() {
 
       {error && <p className="error mt-3">{error}</p>}
 
-      <div className="sticky-bar">
+      {can("form.edit") && <div className="sticky-bar">
         <span className="small muted">
           <span className="mono">{pending}</span> pending change{pending === 1 ? "" : "s"}
         </span>
@@ -238,7 +240,7 @@ export default function Review() {
         <button type="button" className="btn btn-secondary" onClick={() => save("approve_all_remaining")} disabled={saving}>
           Approve all remaining
         </button>
-      </div>
+      </div>}
 
       {section && (
         <aside className="side-panel" aria-label="Protocol section">

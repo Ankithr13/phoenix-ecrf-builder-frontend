@@ -148,6 +148,22 @@ export interface DashboardResponse {
   stats: StatResult[];
 }
 
+export type OrgType = "sponsor" | "site";
+export type Role = "builder" | "approver" | "site_staff";
+
+export interface Me {
+  user: { id: number; name: string; email: string };
+  org: { id: number; name: string; type: OrgType; code: string };
+  role: Role;
+  permissions: string[];
+}
+
+export interface StudyListItem {
+  id: number;
+  name: string;
+  pages: number;
+}
+
 export interface Health {
   ok: boolean;
   version: string;

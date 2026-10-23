@@ -9,11 +9,12 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ecrf.auth import scope
+from ecrf.auth.permissions import CurrentUser, require
 from ecrf.config import config
 from ecrf.schema import DraftECRF
 from ecrf.stats import registry
 from ecrf.storage import db
-from ecrf.storage.models import Protocol
 
 # The verification package deliberately lives outside ecrf/ and imports
 # nothing from it. We import it here only to compare.
@@ -53,15 +54,14 @@ def _close(a, b) -> bool:
 
 
 @router.get("/calculations")
-def calculations():
+def calculations(cu: CurrentUser = Depends(require("stats.view"))):
     return registry.available()
 
 
 @router.get("/{protocol_id}")
-def dashboard(protocol_id: int, s: Session = Depends(db.get_session)):
-    p = s.get(Protocol, protocol_id)
-    if not p:
-        raise HTTPException(404, "protocol not found")
+def dashboard(protocol_id: int, cu: CurrentUser = Depends(require("stats.view")),
+              s: Session = Depends(db.get_session)):
+    p = scope.protocol_or_404(s, cu, protocol_id)
 
     # --- extraction summary from the latest version (real data) ---
     v = db.latest_version(s, protocol_id)
@@ -103,7 +103,7 @@ def dashboard(protocol_id: int, s: Session = Depends(db.get_session)):
 
 
 @router.post("/{protocol_id}/unsupported")
-def unsupported(protocol_id: int, name: str):
+def unsupported(protocol_id: int, name: str, cu: CurrentUser = Depends(require("stats.view"))):
     """Exists only to demonstrate the refusal. Anything not in the
     registry is rejected, never approximated."""
     try:

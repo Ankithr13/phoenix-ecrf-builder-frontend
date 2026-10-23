@@ -5,15 +5,17 @@ for immediate feedback; this one is the guarantee. Both read the same
 approved field definition, so there is one source of truth.
 """
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ecrf.auth import scope
+from ecrf.auth.permissions import CurrentUser, require
 from ecrf.schema import DraftECRF, FieldDef
 from ecrf.stats import seed as seed_mod
 from ecrf.storage import db
-from ecrf.storage.models import Observation, Protocol
+from ecrf.storage.models import Observation
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
@@ -64,8 +66,7 @@ def validate(field: FieldDef, value) -> str | None:
     return None
 
 
-@router.post("/validate")
-def validate_only(body: EntryRequest, s: Session = Depends(db.get_session)):
+def _check(s: Session, body: EntryRequest) -> dict:
     fields = _approved_fields(s, body.protocol_id, body.visit)
     errors = {}
     for r in body.readings:
@@ -79,10 +80,18 @@ def validate_only(body: EntryRequest, s: Session = Depends(db.get_session)):
     return {"ok": not errors, "errors": errors}
 
 
+@router.post("/validate")
+def validate_only(body: EntryRequest, cu: CurrentUser = Depends(require("data.enter")),
+                  s: Session = Depends(db.get_session)):
+    scope.protocol_or_404(s, cu, body.protocol_id)
+    return _check(s, body)
+
+
 @router.post("/enter")
-def enter(body: EntryRequest, x_user: str | None = Header(None),
+def enter(body: EntryRequest, cu: CurrentUser = Depends(require("data.enter")),
           s: Session = Depends(db.get_session)):
-    check = validate_only(body, s)
+    scope.protocol_or_404(s, cu, body.protocol_id)
+    check = _check(s, body)
     if not check["ok"]:
         raise HTTPException(422, {"errors": check["errors"]})
     fields = _approved_fields(s, body.protocol_id, body.visit)
@@ -102,17 +111,17 @@ def enter(body: EntryRequest, x_user: str | None = Header(None),
             s.add(Observation(protocol_id=body.protocol_id, subject_id=body.subject_id,
                               visit=body.visit, field_name=r.field_name, repeat_num=r.repeat_num,
                               value_num=num, value_text=text, synthetic=True,
-                              entered_by=x_user or "demo-user"))
+                              entered_by=cu.user.email))
         saved += 1
     s.commit()
     return {"saved": saved}
 
 
 @router.post("/seed/{protocol_id}")
-def seed(protocol_id: int, s: Session = Depends(db.get_session)):
+def seed(protocol_id: int, cu: CurrentUser = Depends(require("data.seed")),
+         s: Session = Depends(db.get_session)):
     """Load synthetic observations for the dashboard demo."""
-    if not s.get(Protocol, protocol_id):
-        raise HTTPException(404, "protocol not found")
+    scope.protocol_or_404(s, cu, protocol_id)
     existing = s.scalars(select(Observation).where(Observation.protocol_id == protocol_id)).first()
     if existing:
         return {"seeded": 0, "already": True}
@@ -122,7 +131,9 @@ def seed(protocol_id: int, s: Session = Depends(db.get_session)):
 
 
 @router.get("/{protocol_id}/subjects")
-def subjects(protocol_id: int, s: Session = Depends(db.get_session)):
+def subjects(protocol_id: int, cu: CurrentUser = Depends(require("data.view")),
+             s: Session = Depends(db.get_session)):
+    scope.protocol_or_404(s, cu, protocol_id)
     rows = s.execute(
         select(Observation.subject_id, Observation.visit)
         .where(Observation.protocol_id == protocol_id).distinct()

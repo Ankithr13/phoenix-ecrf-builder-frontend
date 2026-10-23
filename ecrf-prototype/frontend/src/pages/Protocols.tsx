@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type { ProtocolListItem } from "../api/types";
+import { useAuth } from "../auth/useAuth";
 
 export default function Protocols() {
+  const { can } = useAuth();
   const [items, setItems] = useState<ProtocolListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);       // "sample" | "upload"
@@ -53,13 +55,17 @@ export default function Protocols() {
 
       <div className="card">
         <div className="row row-top">
-          <button type="button" className="btn btn-primary" onClick={loadSample} disabled={busy !== null}>
-            {busy === "sample" ? "Loading…" : "Load sample protocol"}
-          </button>
-          <label className="drop">
-            <input ref={fileRef} type="file" accept="application/pdf,.pdf" onChange={upload} disabled={busy !== null} />
-            {busy === "upload" ? "Uploading…" : "Upload a protocol PDF"}
-          </label>
+          {can("protocol.upload") && (
+            <>
+              <button type="button" className="btn btn-primary" onClick={loadSample} disabled={busy !== null}>
+                {busy === "sample" ? "Loading…" : "Load sample protocol"}
+              </button>
+              <label className="drop">
+                <input ref={fileRef} type="file" accept="application/pdf,.pdf" onChange={upload} disabled={busy !== null} />
+                {busy === "upload" ? "Uploading…" : "Upload a protocol PDF"}
+              </label>
+            </>
+          )}
         </div>
         <p className="muted small mt-3">
           Public protocols: run <span className="mono">backend/scripts/fetch_ctgov_protocol.py</span>
@@ -82,7 +88,7 @@ export default function Protocols() {
                 </div>
               </div>
               {p.latest_version === null ? (
-                <button type="button" className="btn btn-primary" onClick={() => extract(p.id)} disabled={extracting !== null}>
+                can("protocol.extract") && <button type="button" className="btn btn-primary" onClick={() => extract(p.id)} disabled={extracting !== null}>
                   {extracting === p.id ? "Extracting…" : "Extract"}
                 </button>
               ) : (
@@ -95,9 +101,8 @@ export default function Protocols() {
                     </>
                   )}
                   <span className="pill">v{p.latest_version}</span>
-                  <Link className="btn btn-secondary btn-sm" to={`/review/${p.id}`}>Review</Link>
-                  <Link className="btn btn-secondary btn-sm" to={`/data/${p.id}`}>Data entry</Link>
-                  <Link className="btn btn-secondary btn-sm" to={`/dashboard/${p.id}`}>Dashboard</Link>
+                  <Link className="btn btn-secondary btn-sm" to={`/sponsor/p/${p.id}/review`}>Review</Link>
+                  <Link className="btn btn-secondary btn-sm" to={`/sponsor/p/${p.id}/dashboard`}>Dashboard</Link>
                 </div>
               )}
             </div>
