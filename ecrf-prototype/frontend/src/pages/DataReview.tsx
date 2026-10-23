@@ -21,6 +21,7 @@ export default function DataReview() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [asking, setAsking] = useState<{ id: number; text: string } | null>(null);
 
   const load = useCallback(async () => {
     try { setRows(await api.dataRows(id)); setError(null); }
@@ -52,6 +53,18 @@ export default function DataReview() {
       const r = await api.approveData(id, Array.from(selected));
       setMessage(`${r.approved} value${r.approved === 1 ? "" : "s"} approved`);
       setSelected(new Set());
+      await load();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const raise_ = async () => {
+    if (!asking || !asking.text.trim()) return;
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await api.raiseQuery(asking.id, asking.text.trim());
+      setMessage("Query raised; the site will see it in its portal");
+      setAsking(null);
       await load();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
@@ -119,7 +132,7 @@ export default function DataReview() {
                 {can("data.approve") && (
                   <th className="chk"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all awaiting review" /></th>
                 )}
-                <th>Site</th><th>Subject</th><th>Visit</th><th>Field</th><th className="num">Value</th><th>Status</th><th>Entered by</th>
+                <th>Site</th><th>Subject</th><th>Visit</th><th>Field</th><th className="num">Value</th><th>Status</th><th>Entered by</th>{can("query.raise") && <th />}
               </tr>
             </thead>
             <tbody>
@@ -139,11 +152,32 @@ export default function DataReview() {
                   <td className="num mono">{r.value ?? "—"}</td>
                   <td><span className={`pill ${STATUS_CHIP[r.status]}`}>{r.status === "entered" ? "awaiting review" : r.status}</span></td>
                   <td className="small muted">{r.entered_by}</td>
+                  {can("query.raise") && (
+                    <td className="num">
+                      {r.status !== "queried" && (
+                        <button type="button" className="btn-link" onClick={() => setAsking({ id: r.id, text: "" })}>Raise query</button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
-              {shown.length === 0 && <tr><td colSpan={8} className="muted small">No rows match these filters.</td></tr>}
+              {shown.length === 0 && <tr><td colSpan={9} className="muted small">No rows match these filters.</td></tr>}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {asking && (
+        <div className="card card-amber mt-4">
+          <div className="section-title">Raise a query</div>
+          {(() => { const r = rows?.find((x) => x.id === asking.id); return r ? (
+            <p className="small mb-3"><span className="mono">{r.subject}</span> · {r.visit} · <span className="strong">{r.field}</span> = <span className="mono">{r.value ?? "—"}</span></p>
+          ) : null; })()}
+          <div className="row row-wrap">
+            <input className="input grow" placeholder="What should the site check or explain?" value={asking.text} onChange={(e) => setAsking({ ...asking, text: e.target.value })} autoFocus />
+            <button type="button" className="btn btn-primary btn-sm" onClick={raise_} disabled={busy || !asking.text.trim()}>Send to site</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAsking(null)}>Cancel</button>
+          </div>
         </div>
       )}
 

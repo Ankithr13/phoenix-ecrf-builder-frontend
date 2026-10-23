@@ -41,6 +41,11 @@ MATRIX = [
     ("POST", "/api/protocols/{id}/data/approve", {"observation_ids": []}, 403, 200, 403, 401),
     ("GET", "/api/studies/{id}/subjects", None, 200, 200, 404, 401),
     ("POST", "/api/studies/{id}/subjects", None, 403, 403, 404, 401),
+    # stage 5
+    ("GET", "/api/queries", None, 200, 200, 200, 401),
+    ("POST", "/api/data/999999/queries", {"text": "why"}, 404, 404, 403, 401),
+    ("POST", "/api/queries/999999/answer", {"text": "because"}, 403, 403, 404, 401),
+    ("POST", "/api/queries/999999/close", None, 404, 404, 403, 401),
     ("GET", "/api/auth/me", None, 200, 200, 200, 401),
 ]
 

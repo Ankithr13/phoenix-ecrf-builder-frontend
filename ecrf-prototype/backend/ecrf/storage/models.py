@@ -211,3 +211,23 @@ class ObservationHistory(Base):
     changed_by: Mapped[str] = mapped_column(String(100))
     changed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class Query(Base):
+    """A sponsor's question about one entered value. The site answers, with
+    a corrected value if needed; the sponsor closes it, which sends the
+    value back to 'entered' so it is approved again on purpose."""
+
+    __tablename__ = "query"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    observation_id: Mapped[int] = mapped_column(ForeignKey("observation.id"))
+    raised_by: Mapped[str] = mapped_column(String(100))
+    raised_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    text: Mapped[str] = mapped_column(String(1000))
+    status: Mapped[str] = mapped_column(String(20), default="open", server_default="open")  # open | answered | closed
+    answer_text: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    answered_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

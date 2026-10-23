@@ -254,3 +254,28 @@ export interface Health {
   context_mode: string;
   quote_match_threshold: number;
 }
+
+export type QueryStatus = "open" | "answered" | "closed";
+
+export interface QueryRow {
+  id: number;
+  observation_id: number;
+  protocol_id: number;
+  protocol_name: string | null;
+  site: string | null;
+  subject: string;
+  visit: string;
+  field: string;
+  repeat: number;
+  value: string | null;
+  observation_status: ObservationStatus;
+  status: QueryStatus;
+  text: string;
+  raised_by: string;
+  raised_at: string;
+  answer_text: string | null;
+  answered_by: string | null;
+  answered_at: string | null;
+  closed_by: string | null;
+  closed_at: string | null;
+}

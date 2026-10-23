@@ -9,6 +9,7 @@ import DataReview from "./pages/DataReview";
 import Login from "./pages/Login";
 import Patients from "./pages/Patients";
 import Protocols from "./pages/Protocols";
+import Queries from "./pages/Queries";
 import Review from "./pages/Review";
 import Sites from "./pages/Sites";
 import Studies from "./pages/Studies";
@@ -55,6 +56,7 @@ export default function App() {
 
           <Route element={<Portal type="sponsor" />}>
             <Route path="/sponsor" element={<Protocols />} />
+            <Route path="/sponsor/queries" element={<Queries />} />
             <Route path="/sponsor/p/:id/visits" element={<Visits />} />
             <Route path="/sponsor/p/:id/review" element={<Review />} />
             <Route path="/sponsor/p/:id/sites" element={<Sites />} />
@@ -64,6 +66,7 @@ export default function App() {
 
           <Route element={<Portal type="site" />}>
             <Route path="/site" element={<Studies />} />
+            <Route path="/site/queries" element={<Queries />} />
             <Route path="/site/s/:id/patients" element={<Patients />} />
             <Route path="/site/s/:id/patients/:subject" element={<DataEntry />} />
           </Route>

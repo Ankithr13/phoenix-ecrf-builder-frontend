@@ -4,7 +4,7 @@
 
 import type {
   DashboardResponse, DataRow, DraftResponse, FieldChange, Health, HistoryRow, Me, Plan,
-  ProtocolListItem, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
+  ProtocolListItem, QueryRow, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
 } from "./types";
 
 export class ApiError extends Error {
@@ -92,4 +92,10 @@ export const api = {
   seed: (id: number) => req<{ seeded: number; already: boolean }>(`/api/data/seed/${id}`, { method: "POST" }),
 
   dashboard: (id: number) => req<DashboardResponse>(`/api/dashboard/${id}`),
+
+  queries: (status?: string) => req<QueryRow[]>(`/api/queries${status ? `?status=${status}` : ""}`),
+  raiseQuery: (observationId: number, text: string) => req<QueryRow>(`/api/data/${observationId}/queries`, post({ text })),
+  answerQuery: (queryId: number, text: string, new_value?: string) =>
+    req<QueryRow>(`/api/queries/${queryId}/answer`, post({ text, new_value: new_value === undefined || new_value === "" ? null : new_value })),
+  closeQuery: (queryId: number) => req<QueryRow>(`/api/queries/${queryId}/close`, { method: "POST" }),
 };
