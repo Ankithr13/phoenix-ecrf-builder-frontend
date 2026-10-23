@@ -29,6 +29,8 @@ export interface FieldDef {
   section_ok: boolean | null;
   cdash: string | null;
   domain: string | null;
+  // what the CDASH library filled in because the protocol was silent
+  suggested: string[];
 }
 
 export interface VisitForm {

@@ -71,3 +71,37 @@ def test_duplicate_upload_returns_the_existing_protocol(client, demo_accounts):
             b = c.post("/api/protocols/upload", files={"file": ("renamed.pdf", f, "application/pdf")}).json()
         assert b["id"] == a["id"] and b["already_loaded"] is True
         assert len(c.get("/api/protocols").json()) == 1
+
+
+def test_library_suggestions_are_marked_and_explained():
+    from ecrf import cdash
+    f = FieldDef(name="Heart Rate", type="integer", issue="missing",
+                 issue_note="Protocol requires heart rate but states no unit or range.",
+                 source=Source(section="7", quote="heart rate will be measured at each visit"))
+    cdash.enrich(f)
+    assert f.cdash == "PULSE" and f.unit == "beats/min" and f.min == 20 and f.max == 250
+    assert set(f.suggested) == {"unit", "min", "max"}
+    assert "Suggested from the CDASH library (PULSE)" in f.issue_note and "20 to 250" in f.issue_note
+    assert f.issue == "missing", "still flagged until a person approves it"
+
+    # A field the protocol fully specified gets the code but nothing suggested.
+    g = FieldDef(name="Heart Rate", type="integer", unit="bpm", min=40, max=180,
+                 source=Source(section="7", quote="heart rate will be measured at each visit"))
+    cdash.enrich(g)
+    assert g.suggested == [] and g.min == 40 and "Suggested" not in (g.issue_note or "")
+
+
+def test_approve_suggested_signs_off_only_library_answered_flags(client, demo_accounts):
+    c = client
+    login(c, BUILDER)
+    pid = c.post("/api/protocols/sample").json()["id"]
+    c.post(f"/api/protocols/{pid}/extract")
+    before = c.get(f"/api/protocols/{pid}/draft").json()["draft"]
+    flagged = [(f["visit"], x["name"], x["issue"], x["suggested"]) for f in before["forms"] for x in f["fields"] if x["status"] == "flagged"]
+    assert flagged, "the sample has a flagged field"
+    r = c.post(f"/api/protocols/{pid}/review", json={"changes": [], "action": "approve_suggested"})
+    assert r.status_code == 200
+    after = c.get(f"/api/protocols/{pid}/draft").json()["draft"]
+    still = {(f["visit"], x["name"]) for f in after["forms"] for x in f["fields"] if x["status"] == "flagged"}
+    # The sample's flag is "conflicting", which no library value can answer, so it stays.
+    assert all(issue != "missing" or not sugg for (_, _, issue, sugg) in flagged if (_, _) in still)

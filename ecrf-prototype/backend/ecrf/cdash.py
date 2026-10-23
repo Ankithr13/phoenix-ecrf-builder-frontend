@@ -47,21 +47,50 @@ def match(name: str, min_score: int = 85) -> tuple[str, dict] | None:
     return None
 
 
+def _fmt(v: float) -> str:
+    return str(int(v)) if float(v).is_integer() else str(v)
+
+
 def enrich(field: FieldDef) -> FieldDef:
+    """Attach the code and fill gaps from the library. Two kinds of range
+    exist in the library: min/max transcribed from the client document, and
+    suggest_min/suggest_max, wide plausibility limits added for fields the
+    client document leaves open. Both are recorded in field.suggested so the
+    reviewer can see what the protocol did not say."""
     hit = match(field.name)
     if not hit:
         return field
     dom, entry = hit
     field.cdash = entry.get("cdash")
     field.domain = dom
+    filled: list[str] = []
     if field.unit is None and entry.get("unit"):
         field.unit = entry["unit"]
-    if field.min is None and entry.get("min") is not None:
-        field.min = entry["min"]
-    if field.max is None and entry.get("max") is not None:
-        field.max = entry["max"]
+        filled.append("unit")
+    lo = entry.get("min", entry.get("suggest_min"))
+    hi = entry.get("max", entry.get("suggest_max"))
+    if field.min is None and lo is not None:
+        field.min = lo
+        filled.append("min")
+    if field.max is None and hi is not None:
+        field.max = hi
+        filled.append("max")
     if field.choices is None and entry.get("choices"):
         field.choices = entry["choices"]
+        filled.append("choices")
+    field.suggested = filled
+    if filled and field.issue == "missing":
+        parts = []
+        if "min" in filled or "max" in filled:
+            parts.append(f"range {_fmt(field.min) if field.min is not None else '…'}"
+                         f" to {_fmt(field.max) if field.max is not None else '…'}")
+        if "unit" in filled:
+            parts.append(f"unit {field.unit}")
+        if "choices" in filled:
+            parts.append("choices " + " / ".join(field.choices or []))
+        field.issue_note = ((field.issue_note or "").rstrip() + " Suggested from the CDASH library "
+                            f"({field.cdash}): {', '.join(parts)}. The protocol does not state this; "
+                            "approve to accept the suggestion or edit it first.").strip()
     return field
 
 

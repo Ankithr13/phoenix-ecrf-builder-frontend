@@ -50,7 +50,14 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
         <span className="grow" />
         <Badge kind={field.status} />
       </div>
-      <div className="field-meta">{metaLine(field)}</div>
+      <div className="field-meta">
+        {metaLine(field)}
+        {field.suggested && field.suggested.length > 0 && (
+          <span className="pill chip-brand suggested" title={`${field.suggested.join(", ")} filled in from the CDASH library, not stated by the protocol`}>
+            {field.suggested.join(" · ")} suggested by library
+          </span>
+        )}
+      </div>
 
       <div className={`quote quote-${field.verdict}`}>
         <div className="quote-text">"{field.source.quote}"</div>

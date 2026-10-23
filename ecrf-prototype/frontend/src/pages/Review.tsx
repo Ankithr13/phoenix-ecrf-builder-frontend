@@ -48,7 +48,7 @@ export default function Review() {
     });
   };
 
-  const save = async (action: "save" | "approve_all_remaining") => {
+  const save = async (action: "save" | "approve_all_remaining" | "approve_suggested") => {
     setSaving(true); setError(null);
     try {
       await api.review(id, Object.values(changes), note.trim() || undefined, action);
@@ -117,6 +117,8 @@ export default function Review() {
   const s = draft.summary;
   const sugg = resp.library_suggestions ?? {};
   const locked = resp.state === "locked";
+  const suggestedCount = draft.forms.reduce(
+    (n, f) => n + f.fields.filter((x) => x.status === "flagged" && x.issue === "missing" && x.suggested?.length).length, 0);
   const blockers = resp.lock_blockers ?? { draft: 0, flagged: 0 };
   const left = blockers.draft + blockers.flagged;
 
@@ -269,6 +271,14 @@ export default function Review() {
         <button type="button" className="btn btn-primary" onClick={() => save("save")} disabled={saving || pending === 0}>
           {saving ? "Saving…" : "Save review"}
         </button>
+        {suggestedCount > 0 && (
+          <button
+            type="button" className="btn btn-secondary" onClick={() => save("approve_suggested")} disabled={saving}
+            title="Flagged only because the protocol gave no unit, range or choices and the CDASH library has a standard one. Approving accepts the library's values."
+          >
+            Accept {suggestedCount} library suggestion{suggestedCount === 1 ? "" : "s"}
+          </button>
+        )}
         <button type="button" className="btn btn-secondary" onClick={() => save("approve_all_remaining")} disabled={saving}>
           Approve all remaining
         </button>

@@ -50,6 +50,11 @@ class FieldDef(BaseModel):
     section_ok: bool | None = None
     cdash: str | None = None
     domain: str | None = None
+    # Attributes the CDASH library filled in because the protocol was
+    # silent: any of "unit", "min", "max", "choices". A suggestion, never a
+    # fact about the protocol; the field stays flagged until a person
+    # approves it.
+    suggested: list[str] = []
 
 
 class VisitForm(BaseModel):

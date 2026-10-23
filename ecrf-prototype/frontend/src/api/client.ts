@@ -64,7 +64,7 @@ export const api = {
   draft: (id: number) => req<DraftResponse>(`/api/protocols/${id}/draft`),
   versions: (id: number) => req<VersionRow[]>(`/api/protocols/${id}/versions`),
   section: (id: number, n: string) => req<{ number: string; title: string; page: number; text: string }>(`/api/protocols/${id}/section/${encodeURIComponent(n)}`),
-  review: (id: number, changes: FieldChange[], note?: string, action: "save" | "approve_all_remaining" = "save") =>
+  review: (id: number, changes: FieldChange[], note?: string, action: "save" | "approve_all_remaining" | "approve_suggested" = "save") =>
     req<{ version: number; applied: number }>(`/api/protocols/${id}/review`, post({ changes, note, action })),
 
   lock: (id: number) => req<{ version: number; state: string; locked_by: string }>(`/api/protocols/${id}/lock`, { method: "POST" }),

@@ -20,6 +20,12 @@
 # Enrichment is deterministic and never adds fields the model did not
 # produce. It attaches codes and fills missing type/unit/range/choices.
 #
+# min/max come from the client document. suggest_min/suggest_max are wide
+# plausibility limits added by us for fields the client document leaves
+# open (labs have lab-specific normal ranges); they only ever fill a gap,
+# are recorded on the field as suggested, and the field stays flagged
+# until a reviewer approves it.
+#
 # Not yet carried over from the client document (no sample protocol
 # needs them yet): MH, CM, IE, DS, EX/DA, DV, PR, HO, CE, SD modules.
 
@@ -107,6 +113,8 @@ domains:
         aliases: [Body Temperature, Temp]
         type: decimal
         unit: C
+        suggest_min: 30
+        suggest_max: 45
       - name: Oxygen Saturation
         cdash: OXYSAT
         aliases: [SpO2, Pulse Oximetry, O2 Saturation]
@@ -227,6 +235,8 @@ domains:
         aliases: [FPG, Fasting Glucose, Glucose, Plasma Glucose]
         type: decimal
         unit: mg/dL
+        suggest_min: 20
+        suggest_max: 800
       # HbA1c is not in the CRF-LIB-001 panels. Kept because the sample
       # protocol collects it; code is the CDISC LBTESTCD. Confirm with client.
       - name: HbA1c
@@ -234,66 +244,92 @@ domains:
         aliases: [Glycated Haemoglobin, Glycated Hemoglobin, A1c, Hemoglobin A1c]
         type: decimal
         unit: "%"
+        suggest_min: 3
+        suggest_max: 20
       - name: Hemoglobin
         cdash: HGB
         aliases: [Haemoglobin, Hb]
         type: decimal
         unit: g/dL
+        suggest_min: 3
+        suggest_max: 25
       - name: Hematocrit
         cdash: HCT
         aliases: [Haematocrit]
         type: decimal
         unit: "%"
+        suggest_min: 10
+        suggest_max: 70
       - name: White Blood Cell Count
         cdash: WBC
         aliases: [WBC, Leukocytes]
         type: decimal
         unit: 10^3/uL
+        suggest_min: 0.1
+        suggest_max: 100
       - name: Platelet Count
         cdash: PLAT
         aliases: [Platelets]
         type: decimal
         unit: 10^3/uL
+        suggest_min: 5
+        suggest_max: 2000
       - name: Sodium
         cdash: SODIUM
         aliases: [Na]
         type: decimal
         unit: mEq/L
+        suggest_min: 100
+        suggest_max: 180
       - name: Potassium
         cdash: K
         aliases: [K]
         type: decimal
         unit: mEq/L
+        suggest_min: 1.5
+        suggest_max: 9
       - name: Creatinine
         cdash: CREAT
         aliases: [Serum Creatinine]
         type: decimal
         unit: mg/dL
+        suggest_min: 0.1
+        suggest_max: 20
       - name: eGFR
         cdash: EGFR
         aliases: [Estimated GFR, Estimated Glomerular Filtration Rate]
         type: decimal
         unit: mL/min/1.73m2
+        suggest_min: 1
+        suggest_max: 200
       - name: ALT
         cdash: ALT
         aliases: [Alanine Aminotransferase, SGPT]
         type: decimal
         unit: U/L
+        suggest_min: 0
+        suggest_max: 5000
       - name: AST
         cdash: AST
         aliases: [Aspartate Aminotransferase, SGOT]
         type: decimal
         unit: U/L
+        suggest_min: 0
+        suggest_max: 5000
       - name: Alkaline Phosphatase
         cdash: ALP
         aliases: [ALP]
         type: decimal
         unit: U/L
+        suggest_min: 0
+        suggest_max: 3000
       - name: Total Bilirubin
         cdash: BILI
         aliases: [Bilirubin]
         type: decimal
         unit: mg/dL
+        suggest_min: 0
+        suggest_max: 50
       - name: Serum Pregnancy Test
         cdash: HCG
         aliases: [Beta-hCG, Pregnancy Test, Serum beta-hCG]

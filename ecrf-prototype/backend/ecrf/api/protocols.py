@@ -352,7 +352,7 @@ class FieldChange(BaseModel):
 class ReviewRequest(BaseModel):
     changes: list[FieldChange]
     note: str | None = None
-    action: Literal["save", "approve_all_remaining"] = "save"
+    action: Literal["save", "approve_all_remaining", "approve_suggested"] = "save"
 
 
 @router.post("/{protocol_id}/review")
@@ -386,6 +386,14 @@ def review(protocol_id: int, body: ReviewRequest,
         for fld in by_key.values():
             if fld.status == "draft":
                 fld.status = "approved"
+    if body.action == "approve_suggested":
+        # Flagged only because the protocol was silent on something the
+        # library has a standard answer for. One click is still a sign-off:
+        # the reviewer chose to accept the library's values.
+        for fld in by_key.values():
+            if fld.status == "flagged" and fld.issue == "missing" and fld.suggested:
+                fld.status, fld.issue = "approved", "none"
+                applied += 1
 
     draft.version = v.version + 1
     nv = db.save_version(s, p, draft.model_dump(), cu.user.email,

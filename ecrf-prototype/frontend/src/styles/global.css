@@ -680,3 +680,4 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 .query-answer { background: var(--teal-bg); color: var(--teal-ink); }
 .query-value { width: 220px; }
 @media (max-width: 860px) { .query-value { width: 100%; } }
+.field-meta .suggested { margin-left: var(--s-2); vertical-align: middle; }
