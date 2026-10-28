@@ -22,6 +22,10 @@ export default function Review() {
   const [section, setSection] = useState<{ loading: boolean; data: SectionView | null; error: string | null } | null>(null);
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
   const [locking, setLocking] = useState(false);
+  const [fStatus, setFStatus] = useState<"all" | "needs" | "draft" | "flagged" | "approved" | "rejected">("all");
+  const [fIssue, setFIssue] = useState<string>("");
+  const [fSuggest, setFSuggest] = useState<"" | "library" | "heuristic" | "none">("");
+  const [fText, setFText] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -48,10 +52,10 @@ export default function Review() {
     });
   };
 
-  const save = async (action: "save" | "approve_all_remaining" | "approve_suggested") => {
+  const save = async (action: "save" | "approve_all_remaining" | "approve_suggested", includeGuesses = false) => {
     setSaving(true); setError(null);
     try {
-      await api.review(id, Object.values(changes), note.trim() || undefined, action);
+      await api.review(id, Object.values(changes), note.trim() || undefined, action, includeGuesses);
       setChanges({});
       setNote("");
       await load();
@@ -117,8 +121,26 @@ export default function Review() {
   const s = draft.summary;
   const sugg = resp.library_suggestions ?? {};
   const locked = resp.state === "locked";
-  const suggestedCount = draft.forms.reduce(
-    (n, f) => n + f.fields.filter((x) => x.status === "flagged" && x.issue === "missing" && x.suggested?.length).length, 0);
+  const pendingSuggested = (from: "library" | "heuristic") => draft.forms.reduce(
+    (n, f) => n + f.fields.filter((x) => x.status === "flagged" && x.issue === "missing" && x.suggested?.length && x.suggested_from === from).length, 0);
+  const suggestedCount = pendingSuggested("library");
+  const guessedCount = pendingSuggested("heuristic");
+
+  // The filter bar works on the active visit's fields, after pending
+  // local edits are merged in, so a field you just approved moves out of
+  // "needs a decision" immediately.
+  const matches = (f: FieldDef): boolean => {
+    const st = f.status;
+    if (fStatus === "needs" && st !== "draft" && st !== "flagged") return false;
+    if (fStatus !== "all" && fStatus !== "needs" && st !== fStatus) return false;
+    if (fIssue && f.issue !== fIssue) return false;
+    if (fSuggest === "none" && f.suggested?.length) return false;
+    if ((fSuggest === "library" || fSuggest === "heuristic") && f.suggested_from !== fSuggest) return false;
+    if (fText && !`${f.name} ${f.cdash ?? ""} ${f.source.quote}`.toLowerCase().includes(fText.toLowerCase())) return false;
+    return true;
+  };
+  const visible = form ? form.fields.map((f) => merged(f, form.visit)).filter(matches) : [];
+  const countBy = (pred: (f: FieldDef) => boolean) => (form ? form.fields.map((f) => merged(f, form.visit)).filter(pred).length : 0);
   const blockers = resp.lock_blockers ?? { draft: 0, flagged: 0 };
   const left = blockers.draft + blockers.flagged;
 
@@ -210,10 +232,50 @@ export default function Review() {
         {form && (
           <>
             {form.fields.length === 0 && <p className="muted">No fields survived verification for this visit.</p>}
-            {form.fields.map((f) => (
+            {form.fields.length > 0 && (
+              <div className="filter-bar">
+                <div className="row row-wrap">
+                  {([
+                    ["all", "All", () => true],
+                    ["needs", "Needs a decision", (f: FieldDef) => f.status === "draft" || f.status === "flagged"],
+                    ["flagged", "Flagged", (f: FieldDef) => f.status === "flagged"],
+                    ["draft", "Draft", (f: FieldDef) => f.status === "draft"],
+                    ["approved", "Approved", (f: FieldDef) => f.status === "approved"],
+                    ["rejected", "Rejected", (f: FieldDef) => f.status === "rejected"],
+                  ] as const).map(([key, label, pred]) => (
+                    <button key={key} type="button" className={`tab${fStatus === key ? " active" : ""}`} onClick={() => setFStatus(key)}>
+                      {label}<span className="tab-count">{countBy(pred)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="row row-wrap mt-2">
+                  <select className="input filter-select" value={fIssue} onChange={(e) => setFIssue(e.target.value)} aria-label="Issue">
+                    <option value="">Any issue</option>
+                    <option value="missing">missing</option>
+                    <option value="conflicting">conflicting</option>
+                    <option value="ambiguous">ambiguous</option>
+                    <option value="unsupported">unsupported</option>
+                    <option value="none">no issue</option>
+                  </select>
+                  <select className="input filter-select" value={fSuggest} onChange={(e) => setFSuggest(e.target.value as typeof fSuggest)} aria-label="Suggestion">
+                    <option value="">Any source</option>
+                    <option value="library">suggested by library</option>
+                    <option value="heuristic">range guessed</option>
+                    <option value="none">nothing suggested</option>
+                  </select>
+                  <input className="input filter-text" placeholder="Search name, code or quote" value={fText} onChange={(e) => setFText(e.target.value)} />
+                  <span className="small muted">{visible.length} of {form.fields.length}</span>
+                  {(fStatus !== "all" || fIssue || fSuggest || fText) && (
+                    <button type="button" className="btn-link" onClick={() => { setFStatus("all"); setFIssue(""); setFSuggest(""); setFText(""); }}>clear</button>
+                  )}
+                </div>
+              </div>
+            )}
+            {form.fields.length > 0 && visible.length === 0 && <p className="muted small">No fields match the filter.</p>}
+            {visible.map((f) => (
               <FieldCard
                 key={`${form.visit}-${f.name}`}
-                field={merged(f, form.visit)}
+                field={f}
                 onChange={(c) => onChange(form.visit, f.name, c)}
                 onShowSection={showSection}
                 readOnly={locked}
@@ -277,6 +339,14 @@ export default function Review() {
             title="Flagged only because the protocol gave no unit, range or choices and the CDASH library has a standard one. Approving accepts the library's values."
           >
             Accept {suggestedCount} library suggestion{suggestedCount === 1 ? "" : "s"}
+          </button>
+        )}
+        {guessedCount > 0 && (
+          <button
+            type="button" className="btn btn-secondary" onClick={() => save("approve_suggested", true)} disabled={saving}
+            title="Also approves fields whose range was guessed from the unit or name. Look at them first: they are plausibility limits, not clinical ranges."
+          >
+            Accept {guessedCount} guessed range{guessedCount === 1 ? "" : "s"} too
           </button>
         )}
         <button type="button" className="btn btn-secondary" onClick={() => save("approve_all_remaining")} disabled={saving}>

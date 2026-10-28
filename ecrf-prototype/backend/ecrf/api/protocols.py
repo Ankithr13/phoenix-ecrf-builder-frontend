@@ -353,6 +353,9 @@ class ReviewRequest(BaseModel):
     changes: list[FieldChange]
     note: str | None = None
     action: Literal["save", "approve_all_remaining", "approve_suggested"] = "save"
+    # approve_suggested takes library values by default; guessed ranges only
+    # when the reviewer asks for them explicitly.
+    include_guesses: bool = False
 
 
 @router.post("/{protocol_id}/review")
@@ -391,9 +394,12 @@ def review(protocol_id: int, body: ReviewRequest,
         # library has a standard answer for. One click is still a sign-off:
         # the reviewer chose to accept the library's values.
         for fld in by_key.values():
-            if fld.status == "flagged" and fld.issue == "missing" and fld.suggested:
-                fld.status, fld.issue = "approved", "none"
-                applied += 1
+            if fld.status != "flagged" or fld.issue != "missing" or not fld.suggested:
+                continue
+            if fld.suggested_from == "heuristic" and not body.include_guesses:
+                continue
+            fld.status, fld.issue = "approved", "none"
+            applied += 1
 
     draft.version = v.version + 1
     nv = db.save_version(s, p, draft.model_dump(), cu.user.email,

@@ -31,6 +31,7 @@ export interface FieldDef {
   domain: string | null;
   // what the CDASH library filled in because the protocol was silent
   suggested: string[];
+  suggested_from: "library" | "heuristic" | null;
 }
 
 export interface VisitForm {

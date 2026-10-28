@@ -13,7 +13,7 @@ cost and most of the instability live.
 import logging
 import time
 
-from ecrf import cdash, sections, verify
+from ecrf import cdash, guess, sections, verify
 from ecrf.config import config
 from ecrf.extract import get_extractor
 from ecrf.extract.base import Extractor, Usage
@@ -75,7 +75,7 @@ def run_fields(doc: Document, p: ExtractionPlan, ex: Extractor, protocol_id: int
             ctx = _context_for(doc, form.name)
             ff = ex.fields_for_form(ctx, form.name, form.visits, p.visits)
             kept, rej = verify.filter_fields(form.name, ff.fields, doc, threshold)
-            kept = [cdash.enrich(f) for f in kept]
+            kept = [guess.fill(cdash.enrich(f)) for f in kept]
             rejections.extend(rej)
             for v in form.visits:
                 if v not in by_visit:
@@ -90,7 +90,7 @@ def run_fields(doc: Document, p: ExtractionPlan, ex: Extractor, protocol_id: int
             ctx = _context_for(doc, v)
             form = ex.fields_for_visit(ctx, v, p.visits)
             kept, rej = verify.filter_fields(v, form.fields, doc, threshold)
-            by_visit[v] = [cdash.enrich(f) for f in kept]
+            by_visit[v] = [guess.fill(cdash.enrich(f)) for f in kept]
             form_names[v] = [form.form]
             rejections.extend(rej)
             log.info("[pipeline] %s: kept %s, rejected %s", v, len(kept), len(rej))

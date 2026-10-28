@@ -681,3 +681,7 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 .query-value { width: 220px; }
 @media (max-width: 860px) { .query-value { width: 100%; } }
 .field-meta .suggested { margin-left: var(--s-2); vertical-align: middle; }
+.filter-bar { margin: var(--s-3) 0 var(--s-4); padding: var(--s-3) var(--s-4); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+.filter-select { width: auto; min-width: 160px; }
+.filter-text { width: 260px; }
+@media (max-width: 860px) { .filter-text { width: 100%; } }

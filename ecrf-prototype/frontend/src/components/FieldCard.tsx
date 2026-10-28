@@ -52,9 +52,14 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
       </div>
       <div className="field-meta">
         {metaLine(field)}
-        {field.suggested && field.suggested.length > 0 && (
+        {field.suggested && field.suggested.length > 0 && field.suggested_from === "library" && (
           <span className="pill chip-brand suggested" title={`${field.suggested.join(", ")} filled in from the CDASH library, not stated by the protocol`}>
             {field.suggested.join(" · ")} suggested by library
+          </span>
+        )}
+        {field.suggested && field.suggested.length > 0 && field.suggested_from === "heuristic" && (
+          <span className="pill chip-amber suggested" title="A plausibility range guessed from the unit or the field name. Not from the protocol or the library; check it.">
+            range guessed
           </span>
         )}
       </div>

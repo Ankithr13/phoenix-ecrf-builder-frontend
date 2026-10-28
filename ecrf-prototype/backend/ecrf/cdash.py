@@ -79,6 +79,8 @@ def enrich(field: FieldDef) -> FieldDef:
         field.choices = entry["choices"]
         filled.append("choices")
     field.suggested = filled
+    if filled:
+        field.suggested_from = "library"
     if filled and field.issue == "missing":
         parts = []
         if "min" in filled or "max" in filled:

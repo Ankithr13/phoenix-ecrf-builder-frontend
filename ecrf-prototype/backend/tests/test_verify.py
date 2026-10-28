@@ -105,3 +105,30 @@ def test_approve_suggested_signs_off_only_library_answered_flags(client, demo_ac
     still = {(f["visit"], x["name"]) for f in after["forms"] for x in f["fields"] if x["status"] == "flagged"}
     # The sample's flag is "conflicting", which no library value can answer, so it stays.
     assert all(issue != "missing" or not sugg for (_, _, issue, sugg) in flagged if (_, _) in still)
+
+
+def test_guessed_ranges_fill_only_what_nothing_else_could():
+    from ecrf import cdash, guess
+    # Unit known, no library entry: guess from the unit.
+    f = FieldDef(name="Mean Pulmonary Arterial Pressure", type="decimal", unit="mmHg", issue="missing",
+                 source=Source(section="3", quote="mean pulmonary arterial pressure of 25 mmHg or more"))
+    guess.fill(cdash.enrich(f))
+    assert (f.min, f.max) == (0, 300) and f.suggested_from == "heuristic"
+    assert "educated guess from the unit mmHg" in f.issue_note
+    # No unit, name carries the hint.
+    g = FieldDef(name="Age at enrolment", type="integer", issue="missing",
+                 source=Source(section="4", quote="age at the time of enrolment in years"))
+    guess.fill(g)
+    assert (g.min, g.max) == (0, 120) and "from the field name" in g.issue_note
+    # Nothing to go on: left alone, no fake precision.
+    h = FieldDef(name="Investigator assessment", type="integer", source=Source(section="4", quote="investigator assessment recorded"))
+    guess.fill(h)
+    assert h.min is None and h.suggested == [] and h.suggested_from is None
+    # Library wins over the guess and is labelled as the library.
+    k = FieldDef(name="Heart Rate", type="integer", issue="missing", source=Source(section="7", quote="heart rate will be measured at each visit"))
+    guess.fill(cdash.enrich(k))
+    assert (k.min, k.max) == (20, 250) and k.suggested_from == "library"
+    # Text and dates never get a numeric range.
+    t = FieldDef(name="Age", type="text", source=Source(section="4", quote="age at the time of enrolment in years"))
+    guess.fill(t)
+    assert t.min is None
