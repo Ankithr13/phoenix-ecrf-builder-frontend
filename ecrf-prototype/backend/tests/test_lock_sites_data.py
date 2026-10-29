@@ -184,3 +184,31 @@ def test_stats_count_only_approved_rows_in_both_implementations(client, demo_acc
     # The seeded subjects are real rows owned by the two demo sites.
     rows = client.get(f"/api/protocols/{pid}/data", params={"site": "MRC"}).json()
     assert rows and all(r["subject"].startswith("MRC-") for r in rows)
+
+
+def test_patient_registration_details_and_rules(client, demo_accounts):
+    pid = sponsor_draft()
+    sponsor = lock_and_assign(pid, "BGH")
+    bgh = site_client(BGH)
+    # Full registration with the site's own id.
+    r = bgh.post(f"/api/studies/{pid}/subjects", json={
+        "code": "bgh-0101", "initials": "jd", "birth_year": 1975, "sex": "Female",
+        "enrolled_on": "2026-10-01", "note": "screened at clinic B"})
+    assert r.status_code == 200, r.text
+    row = r.json()
+    assert row["code"] == "BGH-0101" and row["initials"] == "JD" and row["birth_year"] == 1975
+    assert row["sex"] == "Female" and row["enrolled_on"] == "2026-10-01" and row["note"] == "screened at clinic B"
+    # Empty body still works and the server numbers it.
+    assert bgh.post(f"/api/studies/{pid}/subjects").json()["code"] == "BGH-002"
+    # Rules.
+    assert bgh.post(f"/api/studies/{pid}/subjects", json={"code": "MRC-001"}).status_code == 422, "not this site's prefix"
+    assert bgh.post(f"/api/studies/{pid}/subjects", json={"code": "BGH-0101"}).status_code == 409, "duplicate"
+    assert bgh.post(f"/api/studies/{pid}/subjects", json={"initials": "J"}).status_code == 422
+    assert bgh.post(f"/api/studies/{pid}/subjects", json={"birth_year": 1850}).status_code == 422
+    assert bgh.post(f"/api/studies/{pid}/subjects", json={"sex": "F"}).status_code == 422
+    assert bgh.post(f"/api/studies/{pid}/subjects", json={"enrolled_on": "2099-01-01"}).status_code == 422
+    assert bgh.post(f"/api/studies/{pid}/subjects", json={"enrolled_on": "01/10/2026"}).status_code == 422
+    # Listed with the details, to the site and to the sponsor.
+    codes = {x["code"]: x for x in bgh.get(f"/api/studies/{pid}/subjects").json()}
+    assert codes["BGH-0101"]["initials"] == "JD" and codes["BGH-002"]["initials"] is None
+    assert {x["code"] for x in sponsor.get(f"/api/studies/{pid}/subjects").json()} >= {"BGH-0101", "BGH-002"}

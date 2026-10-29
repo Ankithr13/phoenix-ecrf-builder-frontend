@@ -226,6 +226,22 @@ export interface SubjectRow {
   created_by: string;
   created_at: string;
   readings: number;
+  initials: string | null;
+  birth_year: number | null;
+  sex: string | null;
+  enrolled_on: string | null;
+  note: string | null;
+}
+
+/* Registration. Everything optional; the server makes the code when none
+   is given. No name, no full date of birth: a CRF is pseudonymous. */
+export interface SubjectCreate {
+  code?: string;
+  initials?: string;
+  birth_year?: number;
+  sex?: string;
+  enrolled_on?: string;
+  note?: string;
 }
 
 export type ObservationStatus = "entered" | "approved" | "queried";

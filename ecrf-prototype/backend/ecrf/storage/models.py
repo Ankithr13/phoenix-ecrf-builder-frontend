@@ -151,9 +151,14 @@ class ProtocolSite(Base):
 
 
 class Subject(Base):
-    """A patient at one site on one protocol. The code is made by the
-    server (BGH-001), never typed, so a site cannot address a patient it
-    does not own."""
+    """A patient at one site on one protocol. The code is namespaced by the
+    site (BGH-001): the server makes it unless the site supplies one with
+    its own prefix, so a site can never address another site's patient.
+
+    What is stored at registration is what a case report form may hold:
+    the study code, initials, year of birth, sex and the enrolment date.
+    Never a name, full date of birth or any contact detail; the link from
+    code to person lives in the site's own enrolment log, not here."""
 
     __tablename__ = "subject"
     __table_args__ = (UniqueConstraint("protocol_id", "code", name="uq_subject_code"),)
@@ -162,6 +167,11 @@ class Subject(Base):
     protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
     site_org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
     code: Mapped[str] = mapped_column(String(50))
+    initials: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    birth_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sex: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    enrolled_on: Mapped[str | None] = mapped_column(String(10), nullable=True)  # ISO date
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

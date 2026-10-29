@@ -2,7 +2,7 @@
    else. Vite proxies /api to the backend in dev, so the session cookie is
    same-origin and travels with every request. */
 
-import type {
+import type { SubjectCreate,
   DashboardResponse, DataRow, DraftResponse, FieldChange, Health, HistoryRow, Me, Plan,
   ProtocolListItem, QueryRow, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
 } from "./types";
@@ -75,7 +75,8 @@ export const api = {
 
   studies: () => req<StudyListItem[]>("/api/studies"),
   subjects: (id: number) => req<SubjectRow[]>(`/api/studies/${id}/subjects`),
-  createSubject: (id: number) => req<SubjectRow>(`/api/studies/${id}/subjects`, { method: "POST" }),
+  createSubject: (id: number, body: SubjectCreate = {}) =>
+    req<SubjectRow>(`/api/studies/${id}/subjects`, { method: "POST", body: JSON.stringify(body) }),
 
   dataRows: (id: number, filters: { site?: string; visit?: string; status?: string } = {}) => {
     const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => !!v) as [string, string][]);
