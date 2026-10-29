@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 from ecrf.extract import cache, prompts
 from ecrf.extract.base import ExtractionError, Usage
-from ecrf.schema import ExtractionPlan, FormFields, VisitForm, VisitList
+from ecrf.schema import ExtractionPlan, FieldDef, FormFields, VisitForm, VisitList
 
 log = logging.getLogger("ecrf.llm")
 
@@ -62,6 +62,7 @@ class OpenAICompatExtractor:
     # ------------------------------------------------------------- run
     def begin_run(self, protocol_hash: str, force: bool = False) -> None:
         self.usage = Usage()
+        self.invalid_fields: list[dict] = []
         self._cache_key_hint = f"ecrf-{protocol_hash[:16]}" if protocol_hash else None
         self._bypass_cache = force
 
@@ -177,7 +178,43 @@ class OpenAICompatExtractor:
             try:
                 return model_cls.model_validate(json.loads(_FENCE.sub("", raw2).strip()))
             except (json.JSONDecodeError, ValidationError) as e2:
+                salvaged = self._salvage(raw2, model_cls) or self._salvage(raw, model_cls)
+                if salvaged is not None:
+                    return salvaged
                 raise ExtractionError(f"model returned invalid JSON twice: {e2}") from e2
+
+    def _salvage(self, raw: str, model_cls):
+        """A whole visit used to be lost because one field was malformed,
+        typically a quote under 20 characters copied from a table cell. Keep
+        the fields that validate on their own and record the ones that do
+        not, so the pipeline can log them as rejections instead of failing
+        the run. None when the answer is not even a JSON object with fields."""
+        try:
+            obj = json.loads(_FENCE.sub("", raw).strip())
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(obj, dict) or not isinstance(obj.get("fields"), list):
+            return None
+        kept, bad = [], []
+        for item in obj["fields"]:
+            try:
+                FieldDef.model_validate(item)
+                kept.append(item)
+            except ValidationError as e:
+                src = item.get("source") if isinstance(item, dict) else None
+                src = src if isinstance(src, dict) else {}
+                reason = "; ".join(f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}" for err in e.errors())
+                bad.append({"name": str(item.get("name", "?")) if isinstance(item, dict) else "?",
+                            "quote": str(src.get("quote", "")), "section": str(src.get("section", "")),
+                            "reason": reason})
+        try:
+            out = model_cls.model_validate({**obj, "fields": kept})
+        except ValidationError:
+            return None
+        self.invalid_fields.extend(bad)
+        log.warning("salvaged %s fields, dropped %s invalid: %s", len(kept), len(bad),
+                    [(b["name"], b["reason"]) for b in bad])
+        return out
 
     # ---------------------------------------------------------- interface
     def list_visits(self, protocol_text: str) -> VisitList:

@@ -42,6 +42,16 @@ def _enrich(f: FieldDef, doc: Document) -> FieldDef:
     return guess.fill(cdash.enrich(hints.fill(f, doc)))
 
 
+def _invalid(ex: Extractor, visit: str) -> list[Rejection]:
+    """Fields the model wrote that did not fit the schema. Logged with the
+    rest of the rejections so the drop is visible, never silent."""
+    bad = getattr(ex, "invalid_fields", None) or []
+    out = [Rejection(visit=visit, name=b["name"], quote=b["quote"], section=b["section"], score=0.0,
+                     reason=f"model gave an invalid field: {b['reason']}") for b in bad]
+    bad.clear()
+    return out
+
+
 def _strategy(strategy: str | None) -> str:
     s = strategy or config.extract_strategy
     if s not in ("per_visit", "per_form"):
@@ -82,6 +92,7 @@ def run_fields(doc: Document, p: ExtractionPlan, ex: Extractor, protocol_id: int
             ctx = _context_for(doc, form.name)
             ff = ex.fields_for_form(ctx, form.name, form.visits, p.visits)
             kept, rej = verify.filter_fields(form.name, ff.fields, doc, threshold)
+            rej = [*_invalid(ex, form.name), *rej]
             kept = [_enrich(f, doc) for f in kept]
             rejections.extend(rej)
             for v in form.visits:
@@ -97,6 +108,7 @@ def run_fields(doc: Document, p: ExtractionPlan, ex: Extractor, protocol_id: int
             ctx = _context_for(doc, v)
             form = ex.fields_for_visit(ctx, v, p.visits)
             kept, rej = verify.filter_fields(v, form.fields, doc, threshold)
+            rej = [*_invalid(ex, v), *rej]
             by_visit[v] = [_enrich(f, doc) for f in kept]
             form_names[v] = [form.form]
             rejections.extend(rej)

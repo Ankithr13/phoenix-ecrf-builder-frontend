@@ -178,3 +178,33 @@ def test_two_step_extraction_lets_a_person_fix_the_visits(client, demo_accounts)
     draft = client.get(f"/api/protocols/{pid}/draft").json()["draft"]
     assert [f["visit"] for f in draft["forms"]] == edited
     assert draft["summary"]["visits"] == 4 and draft["summary"]["llm_calls_made"] == 0  # mock
+
+
+def test_one_malformed_field_does_not_lose_the_visit(client, demo_accounts, fake_llm, monkeypatch):
+    """Seen live: a quote of 14 characters copied from a table cell failed
+    the schema, the retry repeated it, and the whole run died with a 502.
+    The bad field is dropped and logged; the rest of the visit survives."""
+    import sys
+    good = _answer
+
+    def with_a_bad_field(messages):
+        out = good(messages)
+        if '"fields"' in out:
+            obj = json.loads(out)
+            obj["fields"].append({"name": "Demographics", "type": "text",
+                                  "source": {"section": "1", "quote": "Demographics X"}})
+            return json.dumps(obj)
+        return out
+
+    monkeypatch.setattr(sys.modules[__name__], "_answer", with_a_bad_field)
+    login(client, BUILDER)
+    pid = client.post("/api/protocols/sample").json()["id"]
+    r = _run(client, pid)
+    assert r.status_code == 200, r.text
+    s = r.json()["summary"]
+    assert s["llm_calls_made"] == 11, "each of the 5 visits was retried once, then salvaged"
+    draft = client.get(f"/api/protocols/{pid}/draft").json()["draft"]
+    bad = [x for x in draft["rejections"] if x["name"] == "Demographics"]
+    assert len(bad) == 5 and all("invalid field" in x["reason"] and "20" in x["reason"] for x in bad)
+    assert all(x["quote"] == "Demographics X" for x in bad)
+    assert s["fields_kept"] > 0 and s["rejected"] == len(draft["rejections"])
