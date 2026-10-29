@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { FieldChange, FieldDef } from "../api/types";
+import type { FieldChange, FieldDef, FieldType } from "../api/types";
 import Badge from "./Badge";
 
 interface Props {
@@ -8,6 +8,8 @@ interface Props {
   onShowSection: (section: string) => void;
   readOnly?: boolean;
 }
+
+const TYPES: FieldType[] = ["integer", "decimal", "text", "date", "choice", "boolean"];
 
 function metaLine(f: FieldDef): string {
   const parts: string[] = [f.type];
@@ -25,25 +27,73 @@ function numOrNull(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// What the editor holds while open. Strings throughout so the inputs are
+// uncontrolled-friendly; converted on Apply.
+interface Form {
+  name: string;
+  type: FieldType;
+  unit: string;
+  min: string;
+  max: string;
+  repeats: string;
+  required: boolean;
+  choices: string;
+}
+
+function formFrom(f: FieldDef): Form {
+  return {
+    name: f.name,
+    type: f.type,
+    unit: f.unit ?? "",
+    min: f.min === null ? "" : String(f.min),
+    max: f.max === null ? "" : String(f.max),
+    repeats: String(f.repeats),
+    required: f.required,
+    choices: (f.choices ?? []).join(", "),
+  };
+}
+
 export default function FieldCard({ field, onChange, onShowSection, readOnly = false }: Props) {
-  const [min, setMin] = useState(field.min === null ? "" : String(field.min));
-  const [max, setMax] = useState(field.max === null ? "" : String(field.max));
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<Form>(() => formFrom(field));
+  const [problem, setProblem] = useState<string | null>(null);
 
-  // Resync when the draft is reloaded (e.g. after a save).
-  useEffect(() => { setMin(field.min === null ? "" : String(field.min)); }, [field.min]);
-  useEffect(() => { setMax(field.max === null ? "" : String(field.max)); }, [field.max]);
+  // Resync when the draft is reloaded (e.g. after a save) and the editor is closed.
+  useEffect(() => { if (!editing) setForm(formFrom(field)); }, [field, editing]);
 
-  const commitMin = () => {
-    const v = numOrNull(min);
-    if (v !== field.min) onChange({ min: v });
+  const numeric = form.type === "integer" || form.type === "decimal";
+  const set = (patch: Partial<Form>) => { setForm((p) => ({ ...p, ...patch })); setProblem(null); };
+
+  const apply = () => {
+    const change: Partial<FieldChange> = {};
+    const name = form.name.trim();
+    if (!name) { setProblem("A field needs a name."); return; }
+    if (name !== field.name) change.new_name = name;
+    if (form.type !== field.type) change.type = form.type;
+    const unit = form.unit.trim();
+    if (unit !== (field.unit ?? "")) change.unit = unit === "" ? null : unit;
+    const min = numeric ? numOrNull(form.min) : null;
+    const max = numeric ? numOrNull(form.max) : null;
+    if (numeric && form.min.trim() !== "" && min === null) { setProblem("Minimum must be a number."); return; }
+    if (numeric && form.max.trim() !== "" && max === null) { setProblem("Maximum must be a number."); return; }
+    if (min !== null && max !== null && min > max) { setProblem("Minimum is above maximum."); return; }
+    if (min !== field.min) change.min = min;
+    if (max !== field.max) change.max = max;
+    const repeats = Number(form.repeats);
+    if (!Number.isInteger(repeats) || repeats < 1) { setProblem("Repeats must be a whole number of at least 1."); return; }
+    if (repeats !== field.repeats) change.repeats = repeats;
+    if (form.required !== field.required) change.required = form.required;
+    const choices = form.type === "choice" ? form.choices.split(",").map((c) => c.trim()).filter(Boolean) : null;
+    if (form.type === "choice" && (!choices || choices.length === 0)) { setProblem("A choice field needs at least one choice, separated by commas."); return; }
+    if (JSON.stringify(choices) !== JSON.stringify(field.choices ?? null)) change.choices = choices;
+    if (Object.keys(change).length > 0) onChange(change);
+    setEditing(false);
   };
-  const commitMax = () => {
-    const v = numOrNull(max);
-    if (v !== field.max) onChange({ max: v });
-  };
+
+  const cancel = () => { setForm(formFrom(field)); setProblem(null); setEditing(false); };
 
   return (
-    <div className="field-card">
+    <div className={`field-card${editing ? " editing" : ""}`}>
       <div className="field-head">
         <span className="field-name">{field.name}</span>
         {field.cdash && <span className="pill">{field.cdash}</span>}
@@ -94,29 +144,58 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
         </div>
       )}
 
-      {!readOnly && <div className="field-controls">
-        <label className="ctl">
-          min
-          <input
-            className="input input-sm input-mono"
-            type="number"
-            value={min}
-            onChange={(e) => setMin(e.target.value)}
-            onBlur={commitMin}
-            aria-label={`${field.name} minimum`}
-          />
-        </label>
-        <label className="ctl">
-          max
-          <input
-            className="input input-sm input-mono"
-            type="number"
-            value={max}
-            onChange={(e) => setMax(e.target.value)}
-            onBlur={commitMax}
-            aria-label={`${field.name} maximum`}
-          />
-        </label>
+      {!readOnly && editing && (
+        <div className="field-editor">
+          <label className="ctl ctl-wide">
+            name
+            <input className="input input-sm input-grow" value={form.name} onChange={(e) => set({ name: e.target.value })} aria-label="Field name" />
+          </label>
+          <label className="ctl">
+            type
+            <select className="input input-sm" value={form.type} onChange={(e) => set({ type: e.target.value as FieldType })} aria-label="Field type">
+              {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          {numeric && (
+            <>
+              <label className="ctl">
+                unit
+                <input className="input input-sm" value={form.unit} onChange={(e) => set({ unit: e.target.value })} placeholder="e.g. mmHg" aria-label="Unit" />
+              </label>
+              <label className="ctl">
+                min
+                <input className="input input-sm input-mono" type="number" value={form.min} onChange={(e) => set({ min: e.target.value })} aria-label="Minimum" />
+              </label>
+              <label className="ctl">
+                max
+                <input className="input input-sm input-mono" type="number" value={form.max} onChange={(e) => set({ max: e.target.value })} aria-label="Maximum" />
+              </label>
+            </>
+          )}
+          {form.type === "choice" && (
+            <label className="ctl ctl-wide">
+              choices
+              <input className="input input-sm input-grow" value={form.choices} onChange={(e) => set({ choices: e.target.value })} placeholder="Yes, No, Not done" aria-label="Choices, comma separated" />
+            </label>
+          )}
+          <label className="ctl">
+            repeats
+            <input className="input input-sm input-mono" type="number" min={1} step={1} value={form.repeats} onChange={(e) => set({ repeats: e.target.value })} aria-label="Repeats" />
+          </label>
+          <label className="ctl">
+            <input type="checkbox" checked={form.required} onChange={(e) => set({ required: e.target.checked })} aria-label="Required" />
+            required
+          </label>
+          <span className="grow" />
+          {problem && <span className="error small">{problem}</span>}
+          <button type="button" className="btn btn-primary btn-sm" onClick={apply}>Apply</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={cancel}>Cancel</button>
+          <p className="small muted editor-note">The quote and section cannot be edited: they are what the protocol says, and the grounding check depends on them. Applied edits are pending until you save the review.</p>
+        </div>
+      )}
+
+      {!readOnly && !editing && <div className="field-controls">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>Edit</button>
         <span className="grow" />
         <button type="button" className="btn btn-teal btn-sm" onClick={() => onChange({ status: "approved" })}>Approve</button>
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => onChange({ status: "flagged" })}>Flag</button>

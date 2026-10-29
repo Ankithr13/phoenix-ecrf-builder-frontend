@@ -148,12 +148,16 @@ export interface VersionRow {
 
 export interface FieldChange {
   visit: string;
-  name: string;
+  name: string;          // identifies the field; a rename goes in new_name
   status?: Status;
+  new_name?: string;
+  type?: FieldType;
+  unit?: string | null;
   min?: number | null;
   max?: number | null;
   required?: boolean;
   repeats?: number;
+  choices?: string[] | null;
 }
 
 export interface Reading {

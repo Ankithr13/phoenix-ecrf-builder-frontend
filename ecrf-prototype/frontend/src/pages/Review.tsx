@@ -90,11 +90,15 @@ export default function Review() {
     if (!c) return f;
     return {
       ...f,
+      name: c.new_name ?? f.name,
+      type: c.type ?? f.type,
+      unit: c.unit !== undefined ? c.unit : f.unit,
       status: c.status ?? f.status,
       min: c.min !== undefined ? c.min : f.min,
       max: c.max !== undefined ? c.max : f.max,
       required: c.required ?? f.required,
       repeats: c.repeats ?? f.repeats,
+      choices: c.choices !== undefined ? c.choices : f.choices,
     };
   };
 
@@ -139,7 +143,9 @@ export default function Review() {
     if (fText && !`${f.name} ${f.cdash ?? ""} ${f.source.quote}`.toLowerCase().includes(fText.toLowerCase())) return false;
     return true;
   };
-  const visible = form ? form.fields.map((f) => merged(f, form.visit)).filter(matches) : [];
+  const visible = form
+    ? form.fields.map((f) => ({ original: f.name, field: merged(f, form.visit) })).filter((x) => matches(x.field))
+    : [];
   const countBy = (pred: (f: FieldDef) => boolean) => (form ? form.fields.map((f) => merged(f, form.visit)).filter(pred).length : 0);
   const blockers = resp.lock_blockers ?? { draft: 0, flagged: 0 };
   const left = blockers.draft + blockers.flagged;
@@ -273,11 +279,11 @@ export default function Review() {
               </div>
             )}
             {form.fields.length > 0 && visible.length === 0 && <p className="muted small">No fields match the filter.</p>}
-            {visible.map((f) => (
+            {visible.map(({ original, field: f }) => (
               <FieldCard
-                key={`${form.visit}-${f.name}`}
+                key={`${form.visit}-${original}`}
                 field={f}
-                onChange={(c) => onChange(form.visit, f.name, c)}
+                onChange={(c) => onChange(form.visit, original, c)}
                 onShowSection={showSection}
                 readOnly={locked}
               />

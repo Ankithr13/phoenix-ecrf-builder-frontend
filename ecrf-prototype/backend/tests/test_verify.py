@@ -132,3 +132,39 @@ def test_guessed_ranges_fill_only_what_nothing_else_could():
     t = FieldDef(name="Age", type="text", source=Source(section="4", quote="age at the time of enrolment in years"))
     guess.fill(t)
     assert t.min is None
+
+
+def test_reviewer_can_edit_every_attribute_and_rename(client, demo_accounts):
+    c = client
+    login(c, BUILDER)
+    pid = c.post("/api/protocols/sample").json()["id"]
+    c.post(f"/api/protocols/{pid}/extract")
+    before = c.get(f"/api/protocols/{pid}/draft").json()["draft"]
+    visit = before["forms"][0]["visit"]
+    f = before["forms"][0]["fields"][0]
+    other = before["forms"][0]["fields"][1]["name"]
+    r = c.post(f"/api/protocols/{pid}/review", json={"changes": [{
+        "visit": visit, "name": f["name"], "new_name": "Renamed Field", "type": "choice",
+        "unit": "", "choices": ["Yes", " No ", ""], "required": False, "repeats": 2, "status": "approved"}]})
+    assert r.status_code == 200, r.text
+    after = c.get(f"/api/protocols/{pid}/draft").json()["draft"]
+    names = [x["name"] for x in after["forms"][0]["fields"]]
+    assert "Renamed Field" in names and f["name"] not in names
+    g = next(x for x in after["forms"][0]["fields"] if x["name"] == "Renamed Field")
+    assert g["type"] == "choice" and g["unit"] is None and g["choices"] == ["Yes", "No"]
+    assert g["required"] is False and g["repeats"] == 2 and g["status"] == "approved"
+    assert g["source"] == f["source"], "the quote is the model's, a reviewer cannot change it"
+    # Bad edits are refused, nothing is written.
+    v = len(c.get(f"/api/protocols/{pid}/versions").json())
+    for bad in ({"min": 10, "max": 5}, {"repeats": 0}, {"type": "choice", "choices": []},
+                {"new_name": other}):
+        r = c.post(f"/api/protocols/{pid}/review", json={"changes": [{"visit": visit, "name": "Renamed Field", **bad}]})
+        assert r.status_code == 422, (bad, r.text)
+    assert len(c.get(f"/api/protocols/{pid}/versions").json()) == v
+    # Editing a suggested value removes the suggestion label.
+    sug = next((x for fm in after["forms"] for x in fm["fields"] if x.get("suggested")), None)
+    if sug:
+        vis = next(fm["visit"] for fm in after["forms"] if sug in fm["fields"])
+        c.post(f"/api/protocols/{pid}/review", json={"changes": [{"visit": vis, "name": sug["name"], **{k: 1 for k in sug["suggested"] if k in ("min", "max")}}]})
+        now = next(x for fm in c.get(f"/api/protocols/{pid}/draft").json()["draft"]["forms"] if fm["visit"] == vis for x in fm["fields"] if x["name"] == sug["name"])
+        assert not set(now["suggested"]) & {k for k in sug["suggested"] if k in ("min", "max")}

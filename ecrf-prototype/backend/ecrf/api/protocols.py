@@ -18,7 +18,7 @@ from ecrf.auth.permissions import CurrentUser, require
 from ecrf.config import config
 from ecrf.extract import get_extractor
 from ecrf.extract.base import Usage
-from ecrf.schema import DraftECRF, ExtractionPlan, Status
+from ecrf.schema import DraftECRF, ExtractionPlan, FieldType, Status
 from ecrf.storage import db
 from ecrf.storage.models import ECRFVersion, Protocol, utcnow
 
@@ -339,14 +339,25 @@ def section_text(protocol_id: int, number: str,
 # ------------------------------------------------------------- approve
 
 class FieldChange(BaseModel):
+    """One reviewer edit. `name` identifies the field; everything else is
+    optional and only what is sent is changed. Renaming goes through
+    `new_name` so the identifier and the edit cannot be confused."""
     visit: str
     name: str
     status: Status | None = None
+    new_name: str | None = None
+    type: FieldType | None = None
+    unit: str | None = None
     min: float | None = None
     max: float | None = None
     required: bool | None = None
     repeats: int | None = None
+    choices: list[str] | None = None
     reviewer_note: str | None = None
+
+
+# Reviewer-editable attributes, applied in this order.
+_EDITABLE = ("type", "unit", "min", "max", "required", "repeats", "choices")
 
 
 class ReviewRequest(BaseModel):
@@ -377,10 +388,36 @@ def review(protocol_id: int, body: ReviewRequest,
         fld = by_key.get((ch.visit, ch.name))
         if not fld:
             continue
-        for attr in ("status", "min", "max", "required", "repeats"):
+        if ch.repeats is not None and ch.repeats < 1:
+            raise HTTPException(422, f"{ch.name}: repeats must be at least 1")
+        edited = []
+        for attr in _EDITABLE:
             val = getattr(ch, attr)
             if val is not None:
+                if attr == "unit" and not val.strip():
+                    val = None
+                if attr == "choices":
+                    val = [c.strip() for c in val if c.strip()] or None
                 setattr(fld, attr, val)
+                edited.append(attr)
+        if fld.min is not None and fld.max is not None and fld.min > fld.max:
+            raise HTTPException(422, f"{ch.name}: min {fld.min} is above max {fld.max}")
+        if fld.type == "choice" and not fld.choices:
+            raise HTTPException(422, f"{ch.name}: a choice field needs at least one choice")
+        new_name = (ch.new_name or "").strip()
+        if new_name and new_name != fld.name:
+            if (ch.visit, new_name) in by_key:
+                raise HTTPException(422, f"{ch.visit} already has a field called {new_name}")
+            del by_key[(ch.visit, fld.name)]
+            fld.name = new_name
+            by_key[(ch.visit, new_name)] = fld
+        # A reviewer's value replaces a suggestion, so the label comes off.
+        if edited and fld.suggested:
+            fld.suggested = [a for a in fld.suggested if a not in edited]
+            if not fld.suggested:
+                fld.suggested_from = None
+        if ch.status is not None:
+            fld.status = ch.status
         if ch.status == "approved":
             fld.issue = "none"
         applied += 1
