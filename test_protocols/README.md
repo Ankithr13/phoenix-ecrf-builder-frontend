@@ -72,6 +72,13 @@ nothing stated to find. The provider's prompt cache was hit on only one of
 the nine per-visit calls, which is worth looking into; a full set of hits
 would roughly halve the cost.
 
+## test_protocol6.pdf
+
+NCT02251431, extended-release exenatide versus placebo in diabetic
+patients with type 4 cardiorenal syndrome. Industry, phase 3, 31 pages,
+about 17,000 tokens, text layer present. Added 29 October 2026 as a
+protocol no model had seen, for a live, uncached demo run.
+
 ## Re-downloading these
 
     cd ecrf-prototype/backend
