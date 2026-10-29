@@ -6,8 +6,8 @@ nothing confidential in any of them.
 
 Protocols 1 and 2 are small enough to run on a free API tier. Protocol 3 is
 a full-length industry protocol at 76 pages, which is the realistic size,
-and needs a paid key: one run is about nine API calls and roughly a dollar
-on gpt-5.1.
+and needs a paid key: one run is ten API calls and about four cents on
+gpt-6-luna (it was roughly a dollar on gpt-5.1).
 
 | | test_protocol1.pdf | test_protocol2.pdf | test_protocol3.pdf |
 | --- | --- | --- | --- |
@@ -42,6 +42,35 @@ Protocol 3 is the interesting one. It is the only test where the grounding
 check deleted anything: 14 fields whose quotes scored between 71 and 88,
 below the threshold of 90. It also shows the review problem at scale, with
 172 of 325 fields flagged because the protocol states no unit or range.
+
+### Protocol 3 again on 29 October 2026, gpt-6-luna
+
+Same file, after the gap-filling steps (protocol text search, CDASH
+library, plausibility guess) were added.
+
+| | test_protocol3 |
+| --- | --- |
+| Visits found | 7 |
+| Fields generated | 200 |
+| Fields kept after verification | 185 |
+| Quotes matched exactly | 145 |
+| Quotes matched approximately | 40 |
+| Fields deleted as ungrounded | 15 |
+| Fields flagged for review | 138 |
+| of which fully filled from the CDASH library | 71 |
+| of which fully filled by a plausibility guess | 29 |
+| of which nothing to suggest (inferred booleans, text, choices) | 38 |
+| Left for a person after accepting library and guessed values | 46 |
+| API calls / tokens in / tokens out | 10 / 307,082 / 21,485 |
+| Measured cost | $0.038 |
+| Run time | 164 s |
+
+The model wrote fewer, terser fields than gpt-oss-120b did and flagged a
+larger share of them. The protocol text search filled nothing here: this
+protocol lists its lab parameters without units or ranges, so there was
+nothing stated to find. The provider's prompt cache was hit on only one of
+the nine per-visit calls, which is worth looking into; a full set of hits
+would roughly halve the cost.
 
 ## Re-downloading these
 

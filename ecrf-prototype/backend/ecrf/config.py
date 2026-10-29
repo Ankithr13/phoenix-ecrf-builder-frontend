@@ -43,7 +43,7 @@ class Config:
     # Cost controls. Output is capped so a runaway answer cannot bill ten
     # dollars; reasoning tokens bill as output, so effort is sent only when
     # set. Prices are per million tokens and WILL go stale; they are the
-    # gpt-5.1 list prices as of October 2026.
+    # gpt-6-luna list prices as of October 2026.
     max_output_tokens: int
     reasoning_effort: str
     provider_cache: bool
@@ -78,9 +78,9 @@ def load() -> Config:
         max_output_tokens=int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "16000")),
         reasoning_effort=os.getenv("LLM_REASONING_EFFORT", "none"),
         provider_cache=os.getenv("LLM_PROVIDER_CACHE", "true").lower() == "true",
-        price_input_per_m=float(os.getenv("PRICE_INPUT_PER_M", "1.25")),
-        price_cached_input_per_m=float(os.getenv("PRICE_CACHED_INPUT_PER_M", "0.125")),
-        price_output_per_m=float(os.getenv("PRICE_OUTPUT_PER_M", "10")),
+        price_input_per_m=float(os.getenv("PRICE_INPUT_PER_M", "0.10")),
+        price_cached_input_per_m=float(os.getenv("PRICE_CACHED_INPUT_PER_M", "0.01")),
+        price_output_per_m=float(os.getenv("PRICE_OUTPUT_PER_M", "0.50")),
         extract_strategy=os.getenv("EXTRACT_STRATEGY", "per_visit"),
         database_url=os.getenv("DATABASE_URL", f"sqlite:///{ROOT / 'ecrf.db'}"),
         data_dir=Path(os.getenv("ECRF_DATA_DIR", ROOT / "data")),

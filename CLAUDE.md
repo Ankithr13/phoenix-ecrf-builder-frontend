@@ -78,8 +78,14 @@ Breaking any of these breaks the point of the project.
   protocol, most of them wrongly. It is computed but not displayed.
 - Roughly half the generated fields come back flagged on a real protocol,
   almost always because the protocol states no unit or range. That is
-  correct behaviour, but nothing groups them, so a reviewer faces a long
-  undifferentiated list.
+  correct behaviour. Three code steps now fill the gap after verification,
+  most trustworthy first: `hints.py` searches the protocol text for a
+  stated unit or range (the only step allowed to clear a flag, and only
+  when the unit was already known), `cdash.py` takes the library's value,
+  `guess.py` takes a plausibility range from the unit or name. The last
+  two leave the flag and label the field, and the Review filter bar groups
+  by that label. Booleans and text the model inferred stay flagged with
+  nothing to suggest; those are a person's call.
 - Tested models did not flag a contradiction deliberately planted in the
   sample protocol, although the recorded fixture does. Do not claim
   contradiction detection works.

@@ -24,7 +24,7 @@ export default function Review() {
   const [locking, setLocking] = useState(false);
   const [fStatus, setFStatus] = useState<"all" | "needs" | "draft" | "flagged" | "approved" | "rejected">("all");
   const [fIssue, setFIssue] = useState<string>("");
-  const [fSuggest, setFSuggest] = useState<"" | "library" | "heuristic" | "none">("");
+  const [fSuggest, setFSuggest] = useState<"" | "protocol" | "library" | "heuristic" | "none">("");
   const [fText, setFText] = useState("");
 
   const load = useCallback(async () => {
@@ -135,7 +135,7 @@ export default function Review() {
     if (fStatus !== "all" && fStatus !== "needs" && st !== fStatus) return false;
     if (fIssue && f.issue !== fIssue) return false;
     if (fSuggest === "none" && f.suggested?.length) return false;
-    if ((fSuggest === "library" || fSuggest === "heuristic") && f.suggested_from !== fSuggest) return false;
+    if ((fSuggest === "protocol" || fSuggest === "library" || fSuggest === "heuristic") && f.suggested_from !== fSuggest) return false;
     if (fText && !`${f.name} ${f.cdash ?? ""} ${f.source.quote}`.toLowerCase().includes(fText.toLowerCase())) return false;
     return true;
   };
@@ -259,6 +259,7 @@ export default function Review() {
                   </select>
                   <select className="input filter-select" value={fSuggest} onChange={(e) => setFSuggest(e.target.value as typeof fSuggest)} aria-label="Suggestion">
                     <option value="">Any source</option>
+                    <option value="protocol">found in protocol</option>
                     <option value="library">suggested by library</option>
                     <option value="heuristic">range guessed</option>
                     <option value="none">nothing suggested</option>

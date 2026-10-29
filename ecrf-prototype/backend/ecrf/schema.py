@@ -55,9 +55,11 @@ class FieldDef(BaseModel):
     # fact about the protocol; the field stays flagged until a person
     # approves it.
     suggested: list[str] = []
-    # "library" when the CDASH library supplied them, "heuristic" when a
-    # plausibility guess from the unit or name did. None when nothing was.
-    suggested_from: Literal["library", "heuristic"] | None = None
+    # Where they came from, weakest source wins: "protocol" when code found
+    # them stated in the protocol text, "library" when the CDASH library
+    # supplied them, "heuristic" when a plausibility guess from the unit or
+    # name did. None when nothing was filled in.
+    suggested_from: Literal["protocol", "library", "heuristic"] | None = None
 
 
 class VisitForm(BaseModel):

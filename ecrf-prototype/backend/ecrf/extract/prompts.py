@@ -33,8 +33,12 @@ Rules:
    searched for in the protocol text. A quote that is not found causes the
    field to be discarded, so copy precisely rather than paraphrasing.
 2. source.section is the section number the quote came from, e.g. "7.3.2".
-3. Never state a value the protocol does not give. If a range, unit or
-   requirement is not stated, leave it null.
+3. Never state a value the protocol does not give. Before leaving a
+   range or unit null, look for it elsewhere in the protocol: eligibility
+   criteria, laboratory tables, the schedule of assessments, appendices
+   and the statistics section often state a unit or limit that the
+   assessment section omits. If it is stated anywhere, use it and quote
+   that place. If it is stated nowhere, leave it null.
 4. If the protocol is unclear, contradictory, or silent on something it
    should specify, keep the field but set issue to one of: missing,
    conflicting, ambiguous, unsupported, and explain in issue_note.

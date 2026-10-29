@@ -30,7 +30,9 @@ protocol.pdf
  3 VERIFY        quote search, exact then fuzzy   backend/ecrf/verify.py
                  not found → field deleted
    ▼
-   CDASH         attach standard codes            backend/ecrf/cdash.py
+   FILL GAPS     protocol text, then library,     backend/ecrf/hints.py
+                 then plausibility guess          backend/ecrf/cdash.py
+                                                  backend/ecrf/guess.py
    ▼
  4 REVIEW        approve, edit, append a version  backend/ecrf/api/protocols.py
    ▼
