@@ -47,7 +47,7 @@ export default function Sites() {
         <div className="card">
           <p className="strong">Lock the form first</p>
           <p className="muted small mt-2">
-            A site only ever sees a locked form, so sites can be assigned once an approver has locked it.{" "}
+            A site only ever sees a locked form, so sites can be assigned once the form is locked.{" "}
             <Link className="inline" to={`/sponsor/p/${id}/review`}>Go to Review</Link>
           </p>
         </div>
@@ -58,7 +58,7 @@ export default function Sites() {
           <div className="section-title">Assigned sites</div>
           <p className="muted small mb-3">
             An assigned site sees this study in its portal and can add its own patients and enter their data.
-            {!can("site.assign") && " Only an approver can change assignments."}
+            {!can("site.assign") && " Only sponsor accounts can change assignments."}
           </p>
           {sites.map((s) => (
             <label className="check site-row" key={s.org_id}>

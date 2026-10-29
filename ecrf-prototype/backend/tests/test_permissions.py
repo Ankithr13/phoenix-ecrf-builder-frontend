@@ -4,49 +4,49 @@
 caller's scope (which is what a site gets for a sponsor's protocol)."""
 
 import pytest
-from conftest import APPROVER, BGH, BUILDER, PASSWORD, fresh_client, login
+from conftest import BGH, BUILDER, PASSWORD, fresh_client, login
 
 from ecrf.auth.passwords import hash_password
 from ecrf.storage import db
 from ecrf.storage.models import Organisation, User
 
-ROLES = {"builder": BUILDER, "approver": APPROVER, "site_staff": BGH, "anon": None}
+ROLES = {"sponsor": BUILDER, "site_staff": BGH, "anon": None}
 
 ENTRY = {"subject_id": "S1", "visit": "Week 4",
          "readings": [{"field_name": "Systolic Blood Pressure", "value": 120}]}
 
-# method, path, body, expected for builder / approver / site_staff / anon
+# method, path, body, expected for sponsor / site_staff / anon
 MATRIX = [
-    ("GET", "/api/protocols", None, 200, 200, 403, 401),
-    ("POST", "/api/protocols/sample", None, 200, 200, 403, 401),
-    ("POST", "/api/protocols/{id}/extract", None, 200, 200, 403, 401),
-    ("GET", "/api/protocols/{id}/draft", None, 200, 200, 404, 401),
-    ("GET", "/api/protocols/{id}/versions", None, 200, 200, 404, 401),
-    ("GET", "/api/protocols/{id}/section/7.3.2", None, 200, 200, 404, 401),
-    ("POST", "/api/protocols/{id}/review", {"changes": []}, 200, 200, 403, 401),
-    ("POST", "/api/data/validate", ENTRY, 403, 403, 404, 401),
-    ("POST", "/api/data/enter", ENTRY, 403, 403, 404, 401),
-    ("POST", "/api/data/seed/{id}", None, 200, 200, 403, 401),
-    ("GET", "/api/data/{id}/subjects", None, 200, 200, 404, 401),
-    ("GET", "/api/dashboard/calculations", None, 200, 200, 403, 401),
-    ("GET", "/api/dashboard/{id}", None, 200, 200, 403, 401),
-    ("POST", "/api/dashboard/{id}/unsupported?name=x", None, 403, 403, 403, 401),
-    ("GET", "/api/studies", None, 403, 403, 200, 401),
-    # stage 3. The sample is extracted but not locked, so an approver's lock
+    ("GET", "/api/protocols", None, 200, 403, 401),
+    ("POST", "/api/protocols/sample", None, 200, 403, 401),
+    ("POST", "/api/protocols/{id}/extract", None, 200, 403, 401),
+    ("GET", "/api/protocols/{id}/draft", None, 200, 404, 401),
+    ("GET", "/api/protocols/{id}/versions", None, 200, 404, 401),
+    ("GET", "/api/protocols/{id}/section/7.3.2", None, 200, 404, 401),
+    ("POST", "/api/protocols/{id}/review", {"changes": []}, 200, 403, 401),
+    ("POST", "/api/data/validate", ENTRY, 403, 404, 401),
+    ("POST", "/api/data/enter", ENTRY, 403, 404, 401),
+    ("POST", "/api/data/seed/{id}", None, 200, 403, 401),
+    ("GET", "/api/data/{id}/subjects", None, 200, 404, 401),
+    ("GET", "/api/dashboard/calculations", None, 200, 403, 401),
+    ("GET", "/api/dashboard/{id}", None, 200, 403, 401),
+    ("POST", "/api/dashboard/{id}/unsupported?name=x", None, 403, 403, 401),
+    ("GET", "/api/studies", None, 403, 200, 401),
+    # stage 3. The sample is extracted but not locked, so the sponsor's lock
     # and site assignment are refused on state, not on role.
-    ("POST", "/api/protocols/{id}/lock", None, 403, 409, 403, 401),
-    ("GET", "/api/protocols/{id}/sites", None, 200, 200, 403, 401),
-    ("POST", "/api/protocols/{id}/sites", {"site_org_id": 1}, 403, 409, 403, 401),
-    ("GET", "/api/protocols/{id}/data", None, 200, 200, 404, 401),
-    ("POST", "/api/protocols/{id}/data/approve", {"observation_ids": []}, 403, 200, 403, 401),
-    ("GET", "/api/studies/{id}/subjects", None, 200, 200, 404, 401),
-    ("POST", "/api/studies/{id}/subjects", None, 403, 403, 404, 401),
+    ("POST", "/api/protocols/{id}/lock", None, 409, 403, 401),
+    ("GET", "/api/protocols/{id}/sites", None, 200, 403, 401),
+    ("POST", "/api/protocols/{id}/sites", {"site_org_id": 1}, 409, 403, 401),
+    ("GET", "/api/protocols/{id}/data", None, 200, 404, 401),
+    ("POST", "/api/protocols/{id}/data/approve", {"observation_ids": []}, 200, 403, 401),
+    ("GET", "/api/studies/{id}/subjects", None, 200, 404, 401),
+    ("POST", "/api/studies/{id}/subjects", None, 403, 404, 401),
     # stage 5
-    ("GET", "/api/queries", None, 200, 200, 200, 401),
-    ("POST", "/api/data/999999/queries", {"text": "why"}, 404, 404, 403, 401),
-    ("POST", "/api/queries/999999/answer", {"text": "because"}, 403, 403, 404, 401),
-    ("POST", "/api/queries/999999/close", None, 404, 404, 403, 401),
-    ("GET", "/api/auth/me", None, 200, 200, 200, 401),
+    ("GET", "/api/queries", None, 200, 200, 401),
+    ("POST", "/api/data/999999/queries", {"text": "why"}, 404, 403, 401),
+    ("POST", "/api/queries/999999/answer", {"text": "because"}, 403, 404, 401),
+    ("POST", "/api/queries/999999/close", None, 404, 403, 401),
+    ("GET", "/api/auth/me", None, 200, 200, 401),
 ]
 
 
@@ -61,10 +61,10 @@ def sample_protocol(client, demo_accounts):
 
 
 @pytest.mark.parametrize("role", list(ROLES))
-@pytest.mark.parametrize("method,path,body,b,a,st,anon", MATRIX,
+@pytest.mark.parametrize("method,path,body,sp,st,anon", MATRIX,
                          ids=[f"{m} {p}" for m, p, *_ in MATRIX])
-def test_matrix(sample_protocol, role, method, path, body, b, a, st, anon):
-    expected = {"builder": b, "approver": a, "site_staff": st, "anon": anon}[role]
+def test_matrix(sample_protocol, role, method, path, body, sp, st, anon):
+    expected = {"sponsor": sp, "site_staff": st, "anon": anon}[role]
     c = fresh_client()
     with c:
         if ROLES[role]:
@@ -81,7 +81,7 @@ def test_another_sponsor_cannot_see_phoenix_protocols(client, sample_protocol):
         other = Organisation(name="Other Sponsor", type="sponsor", code="OTH")
         s.add(other)
         s.flush()
-        s.add(User(email="b@other.demo", name="Other Builder", org_id=other.id, role="builder",
+        s.add(User(email="b@other.demo", name="Other Sponsor", org_id=other.id, role="sponsor",
                    password_hash=hash_password(PASSWORD), is_active=True))
     c = fresh_client()
     with c:

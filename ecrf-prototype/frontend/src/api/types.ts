@@ -193,7 +193,7 @@ export interface DashboardResponse {
 }
 
 export type OrgType = "sponsor" | "site";
-export type Role = "builder" | "approver" | "site_staff";
+export type Role = "sponsor" | "site_staff";
 
 export interface Me {
   user: { id: number; name: string; email: string };

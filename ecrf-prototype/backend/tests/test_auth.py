@@ -11,8 +11,8 @@ from ecrf.storage.models import User, UserSession, utcnow
 
 def test_login_succeeds_and_me_reflects_the_account(client, demo_accounts):
     me = login(client, BUILDER)
-    assert me["org"]["type"] == "sponsor" and me["role"] == "builder"
-    assert "protocol.upload" in me["permissions"] and "form.lock" not in me["permissions"]
+    assert me["org"]["type"] == "sponsor" and me["role"] == "sponsor"
+    assert "protocol.upload" in me["permissions"] and "form.lock" in me["permissions"]
     assert client.get("/api/auth/me").json()["user"]["email"] == BUILDER
     assert client.cookies.get("ecrf_session")
 
@@ -67,4 +67,4 @@ def test_five_failures_in_a_row_lock_the_email_out(client, demo_accounts):
 
 
 def test_email_is_case_insensitive(client, demo_accounts):
-    assert login(client, "Builder@Phoenix.Demo")["user"]["email"] == BUILDER
+    assert login(client, "Dana@Phoenix.Demo")["user"]["email"] == BUILDER

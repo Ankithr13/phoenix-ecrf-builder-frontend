@@ -4,8 +4,8 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/useAuth";
 
 const DEMO = [
-  ["builder@phoenix.demo", "sponsor · builder"],
-  ["approver@phoenix.demo", "sponsor · approver"],
+  ["dana@phoenix.demo", "sponsor"],
+  ["alex@phoenix.demo", "sponsor"],
   ["staff@bgh.demo", "site · Boston General"],
   ["staff@mrc.demo", "site · Mercy Hospital"],
 ];

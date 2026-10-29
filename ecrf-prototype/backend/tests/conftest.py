@@ -22,7 +22,11 @@ from ecrf.storage import db, migrate  # noqa: E402
 from ecrf.storage.models import Base  # noqa: E402
 
 PASSWORD = "demo1234"
-BUILDER, APPROVER, BGH, MRC = ("builder@phoenix.demo", "approver@phoenix.demo",
+# Two sponsor accounts with the same role. The old names are kept as
+# aliases so the tests read as "the person who built it" and "the person
+# who signed it off", which is still the story even though either could do both.
+SPONSOR, SPONSOR2 = "dana@phoenix.demo", "alex@phoenix.demo"
+BUILDER, APPROVER, BGH, MRC = (SPONSOR, SPONSOR2,
                                "staff@bgh.demo", "staff@mrc.demo")
 
 

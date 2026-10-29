@@ -7,7 +7,7 @@ import { useAuth } from "../auth/useAuth";
 const ID_IN_PATH = /^\/(sponsor\/p|site\/s)\/(\d+)/;
 
 const ROLE_LABEL: Record<string, string> = {
-  builder: "Builder", approver: "Approver", site_staff: "Site staff",
+  sponsor: "Sponsor", site_staff: "Site staff",
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

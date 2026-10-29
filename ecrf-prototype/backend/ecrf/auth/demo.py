@@ -13,9 +13,11 @@ ORGS = [
     ("Boston General Demo", "site", "BGH"),
     ("Mercy Hospital Demo", "site", "MRC"),
 ]
+# Two sponsor people with the same role, so versions and approvals can be
+# seen to come from different hands.
 USERS = [
-    ("builder@phoenix.demo", "Dana Builder", "PHX", "builder"),
-    ("approver@phoenix.demo", "Alex Approver", "PHX", "approver"),
+    ("dana@phoenix.demo", "Dana Patel", "PHX", "sponsor"),
+    ("alex@phoenix.demo", "Alex Morgan", "PHX", "sponsor"),
     ("staff@bgh.demo", "Sam Site", "BGH", "site_staff"),
     ("staff@mrc.demo", "Morgan Site", "MRC", "site_staff"),
 ]

@@ -15,12 +15,14 @@ from ecrf.auth import sessions
 from ecrf.storage import db
 from ecrf.storage.models import Organisation, User
 
+# One role per organisation type. The sponsor side used to be split into a
+# builder (upload, extract, review) and an approver (also lock, assign
+# sites, approve data); the client did not ask for that separation and in
+# practice it is the same person, so the two were merged on 29 October
+# 2026. The boundary that matters is sponsor versus site, and the audit
+# trail still records which person did what.
 PERMISSIONS: dict[str, frozenset[str]] = {
-    "builder": frozenset({
-        "protocol.view", "protocol.upload", "protocol.extract", "form.edit",
-        "data.view", "query.raise", "query.close", "stats.view", "data.seed",
-    }),
-    "approver": frozenset({
+    "sponsor": frozenset({
         "protocol.view", "protocol.upload", "protocol.extract", "form.edit",
         "form.lock", "site.assign", "data.view", "data.approve",
         "query.raise", "query.close", "stats.view", "data.seed",
@@ -31,7 +33,7 @@ PERMISSIONS: dict[str, frozenset[str]] = {
 }
 
 ROLES_FOR_ORG_TYPE: dict[str, tuple[str, ...]] = {
-    "sponsor": ("builder", "approver"),
+    "sponsor": ("sponsor",),
     "site": ("site_staff",),
 }
 

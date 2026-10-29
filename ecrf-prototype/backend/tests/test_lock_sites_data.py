@@ -75,10 +75,14 @@ def test_lock_needs_every_field_decided_and_then_freezes_the_form(client, demo_a
     assert client.get("/api/protocols").json()[0]["state"] == "locked"
 
 
-def test_builder_cannot_lock(client, demo_accounts):
+def test_site_staff_cannot_lock(client, demo_accounts):
+    # Any sponsor account may lock (the builder/approver split was dropped);
+    # the boundary that matters is sponsor versus site.
     pid = sponsor_draft()
-    login(client, BUILDER)
+    login(client, BGH)
     assert client.post(f"/api/protocols/{pid}/lock").status_code == 403
+    login(client, BUILDER)
+    assert client.post(f"/api/protocols/{pid}/lock").status_code in (200, 409)
 
 
 # ----------------------------------------------------------------- sites
