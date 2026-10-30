@@ -744,3 +744,15 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 .calc-panel { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; padding: var(--s-3); border: 1px dashed var(--line-strong); border-radius: var(--radius); }
 .calc-item { font-size: var(--text-sm); padding: var(--s-1) var(--s-3); background: var(--paper); border-radius: 999px; }
 .hint.calc { color: var(--teal-ink); }
+
+/* Glossary page and its link at the foot of the sidebar. */
+.glossary-link { display: block; margin-bottom: var(--s-2); }
+.glossary-group + .glossary-group { margin-top: var(--s-4); }
+.glossary-title { font-size: var(--text-md, 1rem); font-weight: 600; color: var(--ink); margin: 0 0 var(--s-3); }
+.glossary { margin: 0; }
+.glossary-term { display: grid; grid-template-columns: 200px 1fr; gap: var(--s-2) var(--s-4); padding: var(--s-2) 0; border-top: 1px solid var(--line); }
+.glossary-term:first-child { border-top: 0; }
+.glossary dt { font-weight: 600; color: var(--ink); }
+.glossary dd { margin: 0; color: var(--ink-2); font-size: var(--text-sm); line-height: 1.5; }
+.glossary-example { margin-top: var(--s-1); color: var(--muted); font-style: italic; }
+@media (max-width: 760px) { .glossary-term { grid-template-columns: 1fr; } }

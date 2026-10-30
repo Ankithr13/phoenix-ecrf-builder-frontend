@@ -86,6 +86,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="sidebar-foot">
+          <NavLink to="/glossary" className="btn-link small glossary-link">Glossary: what the words mean</NavLink>
           <span className={`backend-pill${pillState}`} title="Extraction backend">
             {health ? `${health.backend} · ${health.model}` : healthError ? "backend offline" : "connecting…"}
           </span>

@@ -6,6 +6,7 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import DataEntry from "./pages/DataEntry";
 import DataReview from "./pages/DataReview";
+import Glossary from "./pages/Glossary";
 import Login from "./pages/Login";
 import Patients from "./pages/Patients";
 import Protocols from "./pages/Protocols";
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route element={<RequireAuth />}>
           <Route path="/" element={<Home />} />
+          <Route path="/glossary" element={<Layout><Glossary /></Layout>} />
 
           <Route element={<Portal type="sponsor" />}>
             <Route path="/sponsor" element={<Protocols />} />
