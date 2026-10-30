@@ -43,9 +43,11 @@ MATRIX = [
     ("POST", "/api/studies/{id}/subjects", None, 403, 404, 401),
     # stage 5
     ("GET", "/api/queries", None, 200, 200, 401),
-    ("POST", "/api/data/999999/queries", {"text": "why"}, 404, 403, 401),
-    ("POST", "/api/queries/999999/answer", {"text": "because"}, 403, 404, 401),
-    ("POST", "/api/queries/999999/close", None, 404, 403, 401),
+    # queries run both ways, so both roles reach the endpoints and an
+    # unknown id is a 404 for everyone signed in
+    ("POST", "/api/data/999999/queries", {"text": "why"}, 404, 404, 401),
+    ("POST", "/api/queries/999999/answer", {"text": "because"}, 404, 404, 401),
+    ("POST", "/api/queries/999999/close", None, 404, 404, 401),
     ("GET", "/api/auth/me", None, 200, 200, 401),
 ]
 

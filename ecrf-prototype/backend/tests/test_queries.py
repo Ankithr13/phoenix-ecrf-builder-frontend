@@ -1,4 +1,4 @@
-"""Stage 5: the sponsor flags a value, the site answers, the sponsor closes."""
+"""Stage 5: queries in both directions."""
 
 from conftest import BGH, BUILDER, MRC, fresh_client, login
 from sqlalchemy import select
@@ -78,3 +78,35 @@ def test_builder_can_raise_and_close_too(client, demo_accounts):
     login(builder, BUILDER)
     q = builder.post(f"/api/data/{row['id']}/queries", json={"text": "unit?"}).json()
     assert builder.post(f"/api/queries/{q['id']}/close").json()["status"] == "closed"
+
+
+def test_site_raises_sponsor_answers_site_closes(client, demo_accounts):
+    _, sponsor, bgh, row = _setup()
+    q = bgh.post(f"/api/data/{row['id']}/queries", json={"text": "Form says mmHg but our device reports kPa. Which do you want?"}).json()
+    assert q["raised_by_org"] == "site" and q["status"] == "open" and q["observation_status"] == "queried"
+    assert q["can_close"] is True and q["can_answer"] is False, "the site raised it, so the site closes it"
+    # Not the site's turn to answer its own question.
+    assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "me"}).status_code == 403
+    # The sponsor sees it as waiting for them.
+    mine = next(x for x in sponsor.get("/api/queries").json() if x["id"] == q["id"])
+    assert mine["for_me"] is True and mine["can_answer"] is True and mine["can_close"] is False
+    # A sponsor answers in words; it may not change the entered value.
+    assert sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "x", "new_value": 120}).status_code == 403
+    r = sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "mmHg, as on the form. Convert and re-enter."})
+    assert r.status_code == 200 and r.json()["status"] == "answered"
+    # Only the raiser closes.
+    assert sponsor.post(f"/api/queries/{q['id']}/close").status_code == 403
+    r = bgh.post(f"/api/queries/{q['id']}/close")
+    assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["observation_status"] == "entered"
+    # The other site cannot raise a query on a BGH value.
+    assert site_client(MRC).post(f"/api/data/{row['id']}/queries", json={"text": "?"}).status_code == 404
+
+
+def test_sponsor_raised_query_direction_is_unchanged(client, demo_accounts):
+    _, sponsor, bgh, row = _setup()
+    q = sponsor.post(f"/api/data/{row['id']}/queries", json={"text": "check"}).json()
+    assert q["raised_by_org"] == "sponsor" and q["can_close"] and not q["can_answer"]
+    assert sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "me"}).status_code == 403
+    assert bgh.post(f"/api/queries/{q['id']}/close").status_code == 403
+    assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "ok", "new_value": 131}).status_code == 200
+    assert sponsor.post(f"/api/queries/{q['id']}/close").status_code == 200

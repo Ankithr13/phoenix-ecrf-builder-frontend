@@ -5,13 +5,17 @@ import { useAuth } from "../auth/useAuth";
 
 const CHIP: Record<QueryStatus, string> = { open: "chip-rust", answered: "chip-amber", closed: "chip-teal" };
 
-/* One page for both portals. A site sees queries on its own patients and
-   answers them, optionally with a corrected value. A sponsor sees queries
-   on its protocols and closes them once satisfied. */
+type Filter = "mine" | "open" | "answered" | "closed" | "";
+
+/* One page for both portals. Queries run both ways: a sponsor questions a
+   value a site entered, a site asks the sponsor about a value or the form.
+   The other side answers; the side that raised it closes it. The server
+   says per row whose turn it is (can_answer / can_close / for_me), so this
+   page never has to know which side it is on. */
 export default function Queries() {
-  const { me, can } = useAuth();
+  const { me } = useAuth();
   const [rows, setRows] = useState<QueryRow[] | null>(null);
-  const [filter, setFilter] = useState<string>(me?.org.type === "site" ? "open" : "answered");
+  const [filter, setFilter] = useState<Filter>("mine");
   const [answers, setAnswers] = useState<Record<number, { text: string; value: string }>>({});
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +27,9 @@ export default function Queries() {
 
   useEffect(() => { load(); }, [load]);
 
-  const shown = (rows ?? []).filter((q) => !filter || q.status === filter);
+  const isSite = me?.org.type === "site";
+  const pass = (q: QueryRow, f: Filter) => (f === "mine" ? q.for_me : !f || q.status === f);
+  const shown = (rows ?? []).filter((q) => pass(q, filter));
   const draft = (id: number) => answers[id] ?? { text: "", value: "" };
   const setDraft = (id: number, patch: Partial<{ text: string; value: string }>) =>
     setAnswers((a) => ({ ...a, [id]: { ...draft(id), ...patch } }));
@@ -33,7 +39,7 @@ export default function Queries() {
     if (!d.text.trim()) return;
     setBusy(q.id); setError(null);
     try {
-      await api.answerQuery(q.id, d.text.trim(), d.value.trim() || undefined);
+      await api.answerQuery(q.id, d.text.trim(), isSite && d.value.trim() ? d.value.trim() : undefined);
       setAnswers((a) => { const n = { ...a }; delete n[q.id]; return n; });
       await load();
     } catch (e) { setError((e as Error).message); }
@@ -47,6 +53,8 @@ export default function Queries() {
     finally { setBusy(null); }
   };
 
+  const who = (org: "sponsor" | "site") => (org === "sponsor" ? "sponsor" : "site");
+
   if (!rows && !error) return <div className="page"><p className="muted">Loading…</p></div>;
 
   return (
@@ -54,16 +62,17 @@ export default function Queries() {
       <div className="page-head">
         <h1 className="page-title">Queries</h1>
         <div className="muted small">
-          {me?.org.type === "site"
-            ? "Questions the sponsor has raised about values entered at this site"
-            : "Questions raised about entered values; close one once the answer satisfies you"}
+          {isSite
+            ? "Questions from the sponsor about values entered here, and questions this site has asked the sponsor"
+            : "Questions raised about entered values, from either side. The side that asked closes it once satisfied."}
         </div>
       </div>
 
       <div className="row row-wrap mb-3">
-        {(["open", "answered", "closed", ""] as const).map((f) => (
+        {(["mine", "open", "answered", "closed", ""] as const).map((f) => (
           <button key={f || "all"} type="button" className={`tab${filter === f ? " active" : ""}`} onClick={() => setFilter(f)}>
-            {f || "all"}<span className="tab-count">{(rows ?? []).filter((q) => !f || q.status === f).length}</span>
+            {f === "mine" ? "my turn" : f || "all"}
+            <span className="tab-count">{(rows ?? []).filter((q) => pass(q, f)).length}</span>
           </button>
         ))}
       </div>
@@ -75,6 +84,7 @@ export default function Queries() {
           <div className="row row-between row-wrap">
             <div className="row row-wrap">
               <span className={`pill ${CHIP[q.status]}`}>{q.status}</span>
+              <span className="pill">asked by {who(q.raised_by_org)}</span>
               <span className="mono">{q.subject}</span>
               <span className="muted">·</span>
               <span>{q.visit}</span>
@@ -102,21 +112,26 @@ export default function Queries() {
             )}
           </div>
 
-          {q.status !== "closed" && can("query.answer") && (
+          {q.can_answer && (
             <div className="row row-wrap mt-3 query-reply">
               <input className="input grow" placeholder="Your answer" value={draft(q.id).text} onChange={(e) => setDraft(q.id, { text: e.target.value })} />
-              <input className="input input-mono query-value" placeholder="Corrected value (optional)" value={draft(q.id).value} onChange={(e) => setDraft(q.id, { value: e.target.value })} />
+              {isSite && (
+                <input className="input input-mono query-value" placeholder="Corrected value (optional)" value={draft(q.id).value} onChange={(e) => setDraft(q.id, { value: e.target.value })} />
+              )}
               <button type="button" className="btn btn-primary btn-sm" onClick={() => answer(q)} disabled={busy === q.id || !draft(q.id).text.trim()}>
                 {busy === q.id ? "Sending…" : q.status === "answered" ? "Answer again" : "Answer"}
               </button>
             </div>
           )}
-          {q.status !== "closed" && can("query.close") && (
+          {q.can_close && (
             <div className="row mt-3">
               <button type="button" className="btn btn-teal btn-sm" onClick={() => close(q)} disabled={busy === q.id}>
                 {busy === q.id ? "Closing…" : "Close query"}
               </button>
-              <span className="small muted">Closing returns the value to awaiting review, so it is approved again on purpose.</span>
+              <span className="small muted">
+                {q.status === "open" ? "Waiting for the other side to answer. " : ""}
+                Closing returns the value to awaiting review, so it is approved again on purpose.
+              </span>
             </div>
           )}
         </div>

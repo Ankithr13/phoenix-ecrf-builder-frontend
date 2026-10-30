@@ -224,15 +224,19 @@ class ObservationHistory(Base):
 
 
 class Query(Base):
-    """A sponsor's question about one entered value. The site answers, with
-    a corrected value if needed; the sponsor closes it, which sends the
-    value back to 'entered' so it is approved again on purpose."""
+    """A question about one entered value, raised by either side. The other
+    side answers (a site may attach a corrected value; a sponsor cannot,
+    data entry is the site's job) and the side that raised it closes it,
+    which sends the value back to 'entered' so it is approved again on
+    purpose. `raised_by_org` is the organisation type that asked, which is
+    what decides who may answer and who may close."""
 
     __tablename__ = "query"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     observation_id: Mapped[int] = mapped_column(ForeignKey("observation.id"))
     raised_by: Mapped[str] = mapped_column(String(100))
+    raised_by_org: Mapped[str] = mapped_column(String(20), default="sponsor", server_default="sponsor")  # sponsor | site
     raised_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     text: Mapped[str] = mapped_column(String(1000))
     status: Mapped[str] = mapped_column(String(20), default="open", server_default="open")  # open | answered | closed

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { DraftResponse, FieldDef, Reading } from "../api/types";
+import type { DataRow, DraftResponse, FieldDef, Reading } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 
 type Values = Record<string, string | boolean>;
@@ -49,6 +49,29 @@ export default function DataEntry() {
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [entered, setEntered] = useState<DataRow[]>([]);
+  const [asking, setAsking] = useState<{ id: number; text: string } | null>(null);
+  const [askBusy, setAskBusy] = useState(false);
+
+  // What this patient already has on file, with a way to ask the sponsor
+  // about any value. The rows come back scoped to this site.
+  const loadEntered = useCallback(async () => {
+    try { setEntered((await api.dataRows(id)).filter((r) => r.subject === subject)); }
+    catch { setEntered([]); }
+  }, [id, subject]);
+  useEffect(() => { loadEntered(); }, [loadEntered]);
+
+  const ask = async () => {
+    if (!asking || !asking.text.trim()) return;
+    setAskBusy(true);
+    try {
+      await api.raiseQuery(asking.id, asking.text.trim());
+      setAsking(null);
+      await loadEntered();
+      setMessage({ kind: "ok", text: "Query sent to the sponsor. Track it under Queries." });
+    } catch (e) { setMessage({ kind: "error", text: (e as Error).message }); }
+    finally { setAskBusy(false); }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -121,6 +144,7 @@ export default function DataEntry() {
       }
       const r = await api.enter(id, subject, visit, readings());
       setMessage({ kind: "ok", text: `${r.saved} readings saved for ${subject} at ${visit}.` });
+      await loadEntered();
     } catch (e) {
       const errs = parseServerErrors((e as Error).message);
       if (errs) { setServerErrors(errs); setMessage({ kind: "error", text: "The server rejected some readings." }); }
@@ -231,6 +255,41 @@ export default function DataEntry() {
           {message && <span className={message.kind === "ok" ? "ok" : "error"}>{message.text}</span>}
         </div>
       </div>
+
+      {entered.length > 0 && (
+        <div className="card mt-4">
+          <div className="row row-between row-wrap">
+            <p className="strong">On file for {subject}</p>
+            <p className="muted small">Ask the sponsor about any value; an approved value can only be changed through a query.</p>
+          </div>
+          <table className="table mt-2">
+            <thead><tr><th>Visit</th><th>Field</th><th>Value</th><th>Status</th><th /></tr></thead>
+            <tbody>
+              {entered.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.visit}</td>
+                  <td>{r.field}{r.repeat > 1 ? ` · ${r.repeat}` : ""}</td>
+                  <td className="mono">{r.value ?? "—"}</td>
+                  <td><span className={`pill ${r.status === "approved" ? "chip-teal" : r.status === "queried" ? "chip-amber" : ""}`}>{r.status}</span></td>
+                  <td className="num">
+                    {r.status !== "queried" && (
+                      <button type="button" className="btn-link" onClick={() => setAsking({ id: r.id, text: "" })}>Ask the sponsor</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {asking && (
+            <div className="row row-wrap mt-3 query-reply">
+              <input className="input grow" autoFocus placeholder="Your question about this value, e.g. which unit do you want?"
+                     value={asking.text} onChange={(e) => setAsking({ ...asking, text: e.target.value })} />
+              <button type="button" className="btn btn-primary btn-sm" onClick={ask} disabled={askBusy || !asking.text.trim()}>{askBusy ? "Sending…" : "Send query"}</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAsking(null)}>Cancel</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -25,10 +25,13 @@ PERMISSIONS: dict[str, frozenset[str]] = {
     "sponsor": frozenset({
         "protocol.view", "protocol.upload", "protocol.extract", "form.edit",
         "form.lock", "site.assign", "data.view", "data.approve",
-        "query.raise", "query.close", "stats.view", "data.seed",
+        "query.raise", "query.answer", "query.close", "stats.view", "data.seed",
     }),
+    # Queries run both ways. Who may answer or close a given query depends
+    # on which side raised it, and that is checked in the queries module.
     "site_staff": frozenset({
-        "study.view", "subject.create", "data.enter", "data.view", "query.answer",
+        "study.view", "subject.create", "data.enter", "data.view",
+        "query.raise", "query.answer", "query.close",
     }),
 }
 

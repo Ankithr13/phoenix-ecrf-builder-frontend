@@ -21,12 +21,12 @@ export default function Layout({ children }: { children: ReactNode }) {
     api.health().then(setHealth).catch(() => setHealthError(true));
   }, []);
 
-  // The badge is the alert: sites count queries waiting for an answer,
-  // sponsors count answers waiting to be closed. Refreshed on navigation.
+  // The badge is the alert: queries where it is this user's turn, either
+  // to answer the other side or to close one they raised that has been
+  // answered. The server works that out per row. Refreshed on navigation.
   useEffect(() => {
     if (!me) return;
-    const want = me.org.type === "site" ? "open" : "answered";
-    api.queries(want).then((q) => setOpenItems(q.length)).catch(() => setOpenItems(0));
+    api.queries().then((q) => setOpenItems(q.filter((x) => x.for_me).length)).catch(() => setOpenItems(0));
   }, [me, pathname]);
 
   const badge = openItems > 0 ? <span className="nav-badge">{openItems}</span> : null;

@@ -295,10 +295,15 @@ export interface QueryRow {
   status: QueryStatus;
   text: string;
   raised_by: string;
+  raised_by_org: "sponsor" | "site";
   raised_at: string;
   answer_text: string | null;
   answered_by: string | null;
   answered_at: string | null;
   closed_by: string | null;
   closed_at: string | null;
+  // For the signed-in user: their turn to answer, or theirs to close.
+  can_answer: boolean;
+  can_close: boolean;
+  for_me: boolean;
 }
