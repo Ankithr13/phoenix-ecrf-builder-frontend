@@ -110,3 +110,40 @@ def test_sponsor_raised_query_direction_is_unchanged(client, demo_accounts):
     assert bgh.post(f"/api/queries/{q['id']}/close").status_code == 403
     assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "ok", "new_value": 131}).status_code == 200
     assert sponsor.post(f"/api/queries/{q['id']}/close").status_code == 200
+
+
+def test_queries_about_a_study_a_patient_or_a_visit(client, demo_accounts):
+    pid, sponsor, bgh, row = _setup()
+    mrc = site_client(MRC)
+    # Site asks about the study as a whole: no patient, no value.
+    q = bgh.post("/api/queries", json={"protocol_id": pid, "text": "Which visit window applies to Week 4?"}).json()
+    assert q["about"] == "study" and q["site"] == "BGH" and q["subject"] is None and q["value"] is None
+    # Sponsor sees it, answers in words, cannot attach a value, site closes.
+    assert any(x["id"] == q["id"] and x["for_me"] for x in sponsor.get("/api/queries").json())
+    assert sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "x", "new_value": 1}).status_code == 403
+    assert sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "Plus or minus 3 days."}).status_code == 200
+    assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "ok", "new_value": 5}).status_code in (403, 422)
+    assert bgh.post(f"/api/queries/{q['id']}/close").status_code == 200
+    # The other site never sees BGH's study-level question.
+    assert all(x["id"] != q["id"] for x in mrc.get("/api/queries").json())
+    assert mrc.post(f"/api/queries/{q['id']}/answer", json={"text": "?"}).status_code == 404
+
+    # Sponsor asks about a patient: belongs to that patient's site.
+    q2 = sponsor.post("/api/queries", json={"protocol_id": pid, "subject_code": "bgh-001", "text": "Consent date?"}).json()
+    assert q2["about"] == "patient" and q2["site"] == "BGH" and q2["subject"] == "BGH-001"
+    assert any(x["id"] == q2["id"] for x in bgh.get("/api/queries").json())
+    assert all(x["id"] != q2["id"] for x in mrc.get("/api/queries").json())
+    # ... about a visit of a patient.
+    q3 = sponsor.post("/api/queries", json={"protocol_id": pid, "subject_code": "BGH-001", "visit": "Week 4", "text": "Was Week 4 in window?"}).json()
+    assert q3["about"] == "visit" and q3["visit"] == "Week 4"
+    assert sponsor.post("/api/queries", json={"protocol_id": pid, "subject_code": "BGH-001", "visit": "Week 99", "text": "?"}).status_code == 422
+    # A sponsor asking the study as a whole must name the site, and an assigned one.
+    assert sponsor.post("/api/queries", json={"protocol_id": pid, "text": "no site"}).status_code == 422
+    bgh_org = next(o["org_id"] for o in sponsor.get(f"/api/protocols/{pid}/sites").json() if o["code"] == "BGH")
+    q4 = sponsor.post("/api/queries", json={"protocol_id": pid, "site_org_id": bgh_org, "text": "Enrolment update please"}).json()
+    assert q4["about"] == "study" and q4["site"] == "BGH"
+    # A query about one value through the general endpoint still marks the value.
+    q5 = sponsor.post("/api/queries", json={"protocol_id": pid, "observation_id": row["id"], "text": "check"}).json()
+    assert q5["about"] == "value" and q5["observation_status"] == "queried" and q5["field"] == row["field"]
+    # Sites cannot ask about another site's patient.
+    assert mrc.post("/api/queries", json={"protocol_id": pid, "subject_code": "BGH-001", "text": "?"}).status_code == 404

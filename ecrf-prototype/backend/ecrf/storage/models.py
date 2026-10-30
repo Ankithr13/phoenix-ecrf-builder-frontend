@@ -224,17 +224,24 @@ class ObservationHistory(Base):
 
 
 class Query(Base):
-    """A question about one entered value, raised by either side. The other
-    side answers (a site may attach a corrected value; a sponsor cannot,
-    data entry is the site's job) and the side that raised it closes it,
-    which sends the value back to 'entered' so it is approved again on
-    purpose. `raised_by_org` is the organisation type that asked, which is
-    what decides who may answer and who may close."""
+    """A question raised by either side about a study, a patient, a visit
+    or one entered value. It always belongs to one protocol and one site
+    (the site that asked, the patient's site, or the site a sponsor chose
+    to ask), which is what keeps a site's traffic its own. The other side
+    answers (a site may attach a corrected value when the query is about
+    one value; a sponsor cannot, data entry is the site's job) and the side
+    that raised it closes it, which sends a queried value back to 'entered'
+    so it is approved again on purpose. `raised_by_org` is the
+    organisation type that asked, which decides who answers and who closes."""
 
     __tablename__ = "query"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    observation_id: Mapped[int] = mapped_column(ForeignKey("observation.id"))
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
+    site_org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
+    subject_ref: Mapped[int | None] = mapped_column(ForeignKey("subject.id"), nullable=True)
+    visit: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    observation_id: Mapped[int | None] = mapped_column(ForeignKey("observation.id"), nullable=True)
     raised_by: Mapped[str] = mapped_column(String(100))
     raised_by_org: Mapped[str] = mapped_column(String(20), default="sponsor", server_default="sponsor")  # sponsor | site
     raised_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

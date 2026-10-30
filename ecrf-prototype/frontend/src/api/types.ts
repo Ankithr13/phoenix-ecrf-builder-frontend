@@ -282,16 +282,21 @@ export type QueryStatus = "open" | "answered" | "closed";
 
 export interface QueryRow {
   id: number;
-  observation_id: number;
   protocol_id: number;
   protocol_name: string | null;
+  // What the question is about: the study as a whole, one patient, one
+  // visit of a patient, or one entered value. Narrower levels fill in more
+  // of the fields below.
+  about: "study" | "patient" | "visit" | "value";
   site: string | null;
-  subject: string;
-  visit: string;
-  field: string;
-  repeat: number;
+  site_name: string | null;
+  subject: string | null;
+  visit: string | null;
+  observation_id: number | null;
+  field: string | null;
+  repeat: number | null;
   value: string | null;
-  observation_status: ObservationStatus;
+  observation_status: ObservationStatus | null;
   status: QueryStatus;
   text: string;
   raised_by: string;
@@ -306,4 +311,13 @@ export interface QueryRow {
   can_answer: boolean;
   can_close: boolean;
   for_me: boolean;
+}
+
+export interface NewQuery {
+  protocol_id: number;
+  text: string;
+  site_org_id?: number;
+  subject_code?: string;
+  visit?: string;
+  observation_id?: number;
 }

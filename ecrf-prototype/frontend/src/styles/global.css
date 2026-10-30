@@ -711,3 +711,11 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 /* New query picker on the Queries page. */
 .new-query .ctl { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--text-xs); color: var(--muted); min-width: 180px; }
 .new-query .ctl-wide { flex: 1 1 320px; }
+
+/* Toggle chips (the "about" picker on a new query). */
+.chip-btn {
+  font: inherit; font-size: var(--text-sm); padding: var(--s-1) var(--s-3); border-radius: 999px;
+  border: 1px solid var(--line-strong); background: var(--surface, #fff); color: var(--ink-2); cursor: pointer;
+}
+.chip-btn:hover { border-color: var(--brand); color: var(--brand-ink); }
+.chip-btn.active { background: var(--brand-bg); border-color: var(--brand); color: var(--brand-ink); }

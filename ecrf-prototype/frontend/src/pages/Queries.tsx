@@ -96,13 +96,17 @@ export default function Queries() {
             <div className="row row-wrap">
               <span className={`pill ${CHIP[q.status]}`}>{q.status}</span>
               <span className="pill">asked by {who(q.raised_by_org)}</span>
-              <span className="mono">{q.subject}</span>
-              <span className="muted">·</span>
-              <span>{q.visit}</span>
-              <span className="muted">·</span>
-              <span className="strong">{q.field}{q.repeat > 1 ? ` · ${q.repeat}` : ""}</span>
-              <span className="muted">=</span>
-              <span className="mono">{q.value ?? "—"}</span>
+              <span className="pill chip-brand">about {q.about === "value" ? "a value" : q.about === "study" ? "the study" : `a ${q.about}`}</span>
+              {q.subject && <span className="mono">{q.subject}</span>}
+              {q.visit && <><span className="muted">·</span><span>{q.visit}</span></>}
+              {q.field && (
+                <>
+                  <span className="muted">·</span>
+                  <span className="strong">{q.field}{(q.repeat ?? 1) > 1 ? ` · ${q.repeat}` : ""}</span>
+                  <span className="muted">=</span>
+                  <span className="mono">{q.value ?? "—"}</span>
+                </>
+              )}
             </div>
             <div className="small muted">{q.protocol_name}{q.site ? ` · ${q.site}` : ""}</div>
           </div>
@@ -126,7 +130,7 @@ export default function Queries() {
           {q.can_answer && (
             <div className="row row-wrap mt-3 query-reply">
               <input className="input grow" placeholder="Your answer" value={draft(q.id).text} onChange={(e) => setDraft(q.id, { text: e.target.value })} />
-              {isSite && (
+              {isSite && q.about === "value" && (
                 <input className="input input-mono query-value" placeholder="Corrected value (optional)" value={draft(q.id).value} onChange={(e) => setDraft(q.id, { value: e.target.value })} />
               )}
               <button type="button" className="btn btn-primary btn-sm" onClick={() => answer(q)} disabled={busy === q.id || !draft(q.id).text.trim()}>
@@ -141,7 +145,7 @@ export default function Queries() {
               </button>
               <span className="small muted">
                 {q.status === "open" ? "Waiting for the other side to answer. " : ""}
-                Closing returns the value to awaiting review, so it is approved again on purpose.
+                {q.about === "value" ? "Closing returns the value to awaiting review, so it is approved again on purpose." : "Close it once the answer settles the question."}
               </span>
             </div>
           )}
