@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ecrf import derive
 from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
 from ecrf.schema import DraftECRF, FieldDef
@@ -111,7 +112,7 @@ def validate(field: FieldDef, value) -> str | None:
     return None
 
 
-def _check(fields: dict[str, FieldDef], readings: list[Reading]) -> dict:
+def _check(fields: dict[str, FieldDef], readings: list[Reading], subj: Subject | None = None) -> dict:
     errors = {}
     for r in readings:
         f = fields.get(r.field_name)
@@ -121,6 +122,11 @@ def _check(fields: dict[str, FieldDef], readings: list[Reading]) -> dict:
         err = validate(f, r.value)
         if err:
             errors[f"{r.field_name}#{r.repeat_num}"] = err
+    # A derived value (BMI from weight and height, ...) must agree with the
+    # inputs entered beside it. The frontend fills these in; this is the check.
+    if not errors:
+        errors.update(derive.check(fields, readings, subj.birth_year if subj else None,
+                                   subj.sex if subj else None, date.today().year))
     return {"ok": not errors, "errors": errors}
 
 
@@ -168,15 +174,15 @@ def record_change(s: Session, o: Observation, num, text, by: str, reason: str | 
 @router.post("/validate")
 def validate_only(body: EntryRequest, cu: CurrentUser = Depends(require("data.enter")),
                   s: Session = Depends(db.get_session)):
-    _, _, _, fields = _locked_fields(s, cu, body)
-    return _check(fields, body.readings)
+    _, _, subj, fields = _locked_fields(s, cu, body)
+    return _check(fields, body.readings, subj)
 
 
 @router.post("/enter")
 def enter(body: EntryRequest, cu: CurrentUser = Depends(require("data.enter")),
           s: Session = Depends(db.get_session)):
     p, v, subj, fields = _locked_fields(s, cu, body)
-    check = _check(fields, body.readings)
+    check = _check(fields, body.readings, subj)
     if not check["ok"]:
         raise HTTPException(422, {"errors": check["errors"]})
     saved, blocked = 0, []

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { DataRow, DraftResponse, FieldDef, Reading } from "../api/types";
+import type { DataRow, DraftResponse, FieldDef, Reading, SubjectRow } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import { DERIVED, INPUTS, LABEL, compute, roleOf } from "../derive";
 
 type Values = Record<string, string | boolean>;
 
@@ -51,6 +52,10 @@ export default function DataEntry() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [entered, setEntered] = useState<DataRow[]>([]);
+  const [patient, setPatient] = useState<SubjectRow | null>(null);
+  useEffect(() => {
+    api.subjects(id).then((rows) => setPatient(rows.find((r) => r.code === subject) ?? null)).catch(() => setPatient(null));
+  }, [id, subject]);
   const [asking, setAsking] = useState<{ id: number; text: string } | null>(null);
   const [askBusy, setAskBusy] = useState(false);
 
@@ -114,6 +119,44 @@ export default function DataEntry() {
         return { field_name: f.name, repeat_num: i + 1, value };
       }),
     );
+
+  // Values that follow from others (BMI from weight and height, ...). The
+  // matching fields on this visit are filled in as the inputs are typed;
+  // the server refuses a derived value that disagrees with its inputs.
+  const derived = useMemo(() => {
+    const inputs: Record<string, { value: number; unit: string | null }> = {};
+    for (const f of fields) {
+      const role = roleOf(f, INPUTS);
+      if (!role || inputs[role]) continue;
+      const v = values[slot(f.name, 1)];
+      const n = v === undefined || v === "" ? NaN : Number(v);
+      if (Number.isFinite(n)) inputs[role] = { value: n, unit: f.unit };
+    }
+    return compute(inputs, patient ? { birth_year: patient.birth_year, sex: patient.sex } : null);
+  }, [fields, values, patient]);
+  const derivedFields = useMemo(() => {
+    const out: Record<string, FieldDef> = {};
+    for (const f of fields) { const k = roleOf(f, DERIVED); if (k && !out[k]) out[k] = f; }
+    return out;
+  }, [fields]);
+  useEffect(() => {
+    setValues((prev) => {
+      let next = prev; let changed = false;
+      for (const d of derived) {
+        const f = derivedFields[d.key];
+        if (!f) continue;
+        const k = slot(f.name, 1);
+        const want = f.type === "integer" ? String(Math.round(d.value)) : String(d.value);
+        if (prev[k] !== want) { if (!changed) { next = { ...prev }; changed = true; } next[k] = want; }
+      }
+      return changed ? next : prev;
+    });
+  }, [derived, derivedFields]);
+  const calculatedFor = (f: FieldDef): string | null => {
+    const k = roleOf(f, DERIVED);
+    const d = k ? derived.find((x) => x.key === k) : undefined;
+    return d ? `calculated from ${d.from}` : null;
+  };
 
   const clientErrors = useMemo(() => {
     const out: Record<string, string> = {};
@@ -251,6 +294,7 @@ export default function DataEntry() {
                     {label}{f.required && <span className="req" aria-label="required">*</span>}
                   </label>
                   {control}
+                  {calculatedFor(f) && <span className="hint calc">{calculatedFor(f)}</span>}
                   {hint && <span className="hint">{hint}</span>}
                   {err && <span className="error">{err}</span>}
                 </div>
@@ -258,6 +302,18 @@ export default function DataEntry() {
             }),
           )}
         </div>
+
+        {derived.length > 0 && (
+          <div className="calc-panel mt-4">
+            <span className="strong small">Calculated</span>
+            {derived.map((d) => (
+              <span key={d.key} className="calc-item" title={`from ${d.from}`}>
+                {LABEL[d.key]} <span className="mono">{d.value} {d.unit}</span>
+                {derivedFields[d.key] ? <span className="xs muted"> · filled in</span> : <span className="xs muted"> · not a field on this form</span>}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="row mt-5">
           <button type="button" className="btn btn-primary" onClick={save} disabled={saving || fields.length === 0}>

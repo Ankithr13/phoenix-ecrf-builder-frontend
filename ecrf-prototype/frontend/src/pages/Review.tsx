@@ -6,7 +6,33 @@ import FieldCard from "../components/FieldCard";
 import Stat from "../components/Stat";
 import { useAuth } from "../auth/useAuth";
 
-type SectionView = { number: string; title: string; page: number; text: string };
+type SectionView = { number: string; title: string; page: number | null; text: string; located_by?: "number" | "title" | "text" };
+
+/* PDF text comes hard-wrapped with running headers and footers in it.
+   Rebuild paragraphs: a bullet ("o ", "•", "-") or a numbered line starts
+   a new block, a short line ending in a full stop ends one, and footer
+   lines like "9 | P a g e 26 Feb 2019" or "Confidential Page 31" go. */
+function formatSection(text: string): { kind: "p" | "li" | "h"; text: string }[] {
+  const junk = /^(\d+\s*\|\s*P\s*a\s*g\s*e.*|.*\bPage\s*\d+\s*(of\s*\d+)?\s*$|Confidential.*|Version\s*Date.*|CONFIDENTIAL.*)$/i;
+  const bullet = /^\s*(?:[o•\-–▪■]|\(?[a-z0-9]{1,3}[.)])\s+(.*)$/;
+  const heading = /^[A-Z][A-Za-z /&-]{2,60}$/;
+  const out: { kind: "p" | "li" | "h"; text: string }[] = [];
+  let buf = "";
+  const flush = () => { if (buf.trim()) out.push({ kind: "p", text: buf.trim() }); buf = ""; };
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || junk.test(line)) continue;
+    const b = bullet.exec(line);
+    if (b) { flush(); out.push({ kind: "li", text: b[1] }); continue; }
+    if (heading.test(line) && line.split(" ").length <= 8 && !/[.:;]$/.test(line)) { flush(); out.push({ kind: "h", text: line }); continue; }
+    const last = out[out.length - 1];
+    if (!buf && last && last.kind === "li" && /^[a-z(]/.test(line)) { last.text += " " + line; continue; }
+    buf += (buf ? " " : "") + line;
+    if (/[.!?]$/.test(line) && line.length < 70) flush();
+  }
+  flush();
+  return out;
+}
 
 const key = (visit: string, name: string) => `${visit}\u0000${name}`;
 
@@ -382,7 +408,11 @@ export default function Review() {
         <aside className="side-panel" aria-label="Protocol section">
           <div className="row row-between mb-3">
             <div className="section-title" style={{ marginBottom: 0 }}>
-              {section.data ? `§${section.data.number} ${section.data.title}` : "Section"}
+              {section.data
+                ? (section.data.number === section.data.title || !/^[\d.]+$/.test(section.data.number)
+                    ? section.data.title
+                    : `§${section.data.number} ${section.data.title}`)
+                : "Section"}
             </div>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSection(null)}>Close</button>
           </div>
@@ -390,8 +420,17 @@ export default function Review() {
           {section.error && <p className="error">{section.error}</p>}
           {section.data && (
             <>
-              <div className="mono xs muted mb-3">page {section.data.page}</div>
-              <pre>{section.data.text}</pre>
+              <div className="mono xs muted mb-3">
+                {section.data.page ? `page ${section.data.page}` : ""}
+                {section.data.located_by === "text" && (section.data.page ? " · " : "") + "passage found by searching the protocol text for this phrase"}
+                {section.data.located_by === "title" && (section.data.page ? " · " : "") + "matched by heading"}
+              </div>
+              <div className="section-body">
+                {formatSection(section.data.text).map((b, i) =>
+                  b.kind === "h" ? <h4 key={i}>{b.text}</h4>
+                  : b.kind === "li" ? <li key={i}>{b.text}</li>
+                  : <p key={i}>{b.text}</p>)}
+              </div>
             </>
           )}
         </aside>

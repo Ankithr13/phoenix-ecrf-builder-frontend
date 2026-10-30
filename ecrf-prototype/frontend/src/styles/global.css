@@ -733,3 +733,14 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 .inline-details { display: inline-block; margin-left: var(--s-2); }
 .inline-details summary { display: inline; cursor: pointer; }
 .inline-details div { margin-top: var(--s-1); }
+
+/* Protocol section panel: rebuilt paragraphs, bullets and sub-headings. */
+.section-body { font-size: var(--text-sm); line-height: 1.55; }
+.section-body p { margin: 0 0 var(--s-3); }
+.section-body h4 { margin: var(--s-4) 0 var(--s-2); font-size: var(--text-sm); font-weight: 600; color: var(--ink); }
+.section-body li { margin: 0 0 var(--s-1) var(--s-5); list-style: disc; }
+
+/* Calculated values on the data entry form. */
+.calc-panel { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; padding: var(--s-3); border: 1px dashed var(--line-strong); border-radius: var(--radius); }
+.calc-item { font-size: var(--text-sm); padding: var(--s-1) var(--s-3); background: var(--paper); border-radius: 999px; }
+.hint.calc { color: var(--teal-ink); }
