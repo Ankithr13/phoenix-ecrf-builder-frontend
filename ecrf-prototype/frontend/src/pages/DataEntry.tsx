@@ -11,8 +11,9 @@ const slot = (name: string, rep: number) => `${name}#${rep}`;
 /* Mirrors backend/ecrf/api/data.py validate(). The server check is the
    guarantee; this one is for immediate feedback. */
 function validate(f: FieldDef, v: string | boolean | undefined): string | null {
-  if (f.type === "boolean") return null;
   const s = v === undefined || v === null ? "" : String(v);
+  // A yes/no question left blank is unanswered, not "no". It is required
+  // like any other field; nothing is recorded until someone chooses.
   if (s.trim() === "") return f.required ? "required" : null;
   if (f.type === "integer" || f.type === "decimal") {
     const x = Number(s);
@@ -108,7 +109,7 @@ export default function DataEntry() {
         const k = slot(f.name, i + 1);
         const v = values[k];
         let value: Reading["value"];
-        if (f.type === "boolean") value = v === true;
+        if (f.type === "boolean") value = v === "true" ? true : v === "false" ? false : null;
         else value = v === undefined || v === "" ? null : String(v);
         return { field_name: f.name, repeat_num: i + 1, value };
       }),
@@ -207,11 +208,21 @@ export default function DataEntry() {
               const cls = `input${err ? " input-invalid" : ""}`;
               let control;
               if (f.type === "boolean") {
+                // Two explicit answers and a blank. A single "Yes" checkbox made
+                // "not answered" indistinguishable from "No" and let a required
+                // question through unanswered.
                 control = (
-                  <label className="check">
-                    <input type="checkbox" checked={values[k] === true} onChange={(e) => set(k, e.target.checked)} />
-                    Yes
-                  </label>
+                  <div className="yesno" role="radiogroup" aria-label={label}>
+                    {(["true", "false"] as const).map((opt) => (
+                      <label key={opt} className={`check yesno-opt${values[k] === opt ? " active" : ""}${err ? " invalid" : ""}`}>
+                        <input type="radio" name={k} value={opt} checked={values[k] === opt} onChange={() => set(k, opt)} />
+                        {opt === "true" ? "Yes" : "No"}
+                      </label>
+                    ))}
+                    {values[k] !== undefined && values[k] !== "" && (
+                      <button type="button" className="btn-link small" onClick={() => set(k, "")}>clear</button>
+                    )}
+                  </div>
                 );
               } else if (f.type === "choice" && f.choices) {
                 control = (

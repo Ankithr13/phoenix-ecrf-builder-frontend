@@ -212,3 +212,20 @@ def test_patient_registration_details_and_rules(client, demo_accounts):
     codes = {x["code"]: x for x in bgh.get(f"/api/studies/{pid}/subjects").json()}
     assert codes["BGH-0101"]["initials"] == "JD" and codes["BGH-002"]["initials"] is None
     assert {x["code"] for x in sponsor.get(f"/api/studies/{pid}/subjects").json()} >= {"BGH-0101", "BGH-002"}
+
+
+def test_an_unanswered_yes_no_is_not_a_no():
+    """Seen in the UI: a lone 'Yes' checkbox meant an untouched required
+    question was saved as False. The server has always treated a blank as
+    missing; this pins that down for booleans so the form cannot regress."""
+    from ecrf.api.data import validate
+    from ecrf.schema import FieldDef, Source
+    f = FieldDef(name="Informed Consent Obtained", type="boolean", required=True,
+                 source=Source(section="4", quote="written informed consent must be obtained"))
+    assert validate(f, None) == "required"
+    assert validate(f, "") == "required"
+    assert validate(f, False) is None, "an explicit No is an answer"
+    assert validate(f, True) is None
+    assert validate(f, "maybe") == "must be yes or no"
+    g = f.model_copy(update={"required": False})
+    assert validate(g, None) is None

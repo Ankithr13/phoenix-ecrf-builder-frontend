@@ -719,3 +719,9 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 }
 .chip-btn:hover { border-color: var(--brand); color: var(--brand-ink); }
 .chip-btn.active { background: var(--brand-bg); border-color: var(--brand); color: var(--brand-ink); }
+
+/* Yes / No answer. Blank until a choice is made. */
+.yesno { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.yesno-opt { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s-1) var(--s-3); cursor: pointer; }
+.yesno-opt.active { border-color: var(--brand); background: var(--brand-bg); }
+.yesno-opt.invalid { border-color: var(--rust-ink); }
