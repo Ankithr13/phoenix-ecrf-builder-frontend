@@ -35,6 +35,9 @@ def test_roles_match_by_code_then_name():
     assert derive.role_of(_f("Body weight at visit"), derive.INPUTS) == "weight"
     assert derive.role_of(_f("Body Mass Index"), derive.DERIVED) == "bmi"
     assert derive.role_of(_f("QTcF Interval", cdash="QTCF"), derive.DERIVED) == "qtcf"
+    # The library files QTc and QTcB under the QTCF code; Bazett is not Fridericia.
+    assert derive.role_of(_f("QTcB Interval", cdash="QTCF"), derive.DERIVED) is None
+    assert derive.role_of(_f("QTc Interval", cdash="QTCF"), derive.DERIVED) is None
     assert derive.role_of(_f("QT Interval", cdash="QT"), derive.INPUTS) == "qt"
     assert derive.role_of(_f("Temperature"), derive.INPUTS) is None
 

@@ -21,7 +21,7 @@ export const DERIVED: Table = {
   bsa: { codes: [], pattern: /\bbsa\b|body surface area/ },
   map: { codes: [], pattern: /\bmean arterial pressure\b|\bmap\b/ },
   pulse_pressure: { codes: [], pattern: /\bpulse pressure\b/ },
-  qtcf: { codes: ["QTCF"], pattern: /\bqtcf\b|fridericia/ },
+  qtcf: { codes: [], pattern: /\bqtcf\b|fridericia/ },  // by name only: the library files QTc and QTcB under QTCF
   egfr: { codes: ["EGFR"], pattern: /\begfr\b|glomerular filtration/ },
 };
 export const LABEL: Record<string, string> = {

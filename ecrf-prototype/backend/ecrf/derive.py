@@ -36,7 +36,9 @@ DERIVED: dict[str, tuple[tuple[str, ...], str]] = {
     "bsa": ((), r"\bbsa\b|body surface area"),
     "map": ((), r"\bmean arterial pressure\b|\bmap\b"),
     "pulse_pressure": ((), r"\bpulse pressure\b"),
-    "qtcf": (("QTCF",), r"\bqtcf\b|fridericia"),
+    # By name only: the library maps plain "QTc" and even "QTcB" onto the
+    # QTCF code, and Bazett's correction is a different number.
+    "qtcf": ((), r"\bqtcf\b|fridericia"),
     "egfr": (("EGFR",), r"\begfr\b|glomerular filtration"),
 }
 TOLERANCE = {"bmi": 0.2, "bsa": 0.05, "map": 1.0, "pulse_pressure": 0.5, "qtcf": 5.0, "egfr": 2.0}
