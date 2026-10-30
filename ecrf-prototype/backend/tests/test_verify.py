@@ -1,5 +1,7 @@
 """The grounding check at its edges."""
 
+from urllib.parse import quote
+
 from conftest import BUILDER, login
 
 from ecrf.ingest import Document
@@ -168,3 +170,24 @@ def test_reviewer_can_edit_every_attribute_and_rename(client, demo_accounts):
         c.post(f"/api/protocols/{pid}/review", json={"changes": [{"visit": vis, "name": sug["name"], **{k: 1 for k in sug["suggested"] if k in ("min", "max")}}]})
         now = next(x for fm in c.get(f"/api/protocols/{pid}/draft").json()["draft"]["forms"] if fm["visit"] == vis for x in fm["fields"] if x["name"] == sug["name"])
         assert not set(now["suggested"]) & {k for k in sug["suggested"] if k in ("min", "max")}
+
+
+def test_cited_section_is_found_by_number_title_or_phrase(client, demo_accounts):
+    c = client
+    login(c, BUILDER)
+    pid = c.post("/api/protocols/sample").json()["id"]
+    sections = c.get("/api/protocols").json()
+    assert sections
+    by_number = c.get(f"/api/protocols/{pid}/section/7.3.2").json()
+    assert by_number["located_by"] == "number" and by_number["text"]
+    # The model often cites the heading instead of the number.
+    by_title = c.get(f"/api/protocols/{pid}/section/{by_number['title']}").json()
+    assert by_title["located_by"] in ("title", "number") and by_title["number"] == "7.3.2"
+    # Or a phrase that is not a heading at all: the passage around it comes back.
+    # A phrase from inside the section body, so it is not a heading.
+    phrase = " ".join(by_number["text"].split())[60:100]
+    r = c.get(f"/api/protocols/{pid}/section/{quote(phrase)}")
+    assert r.status_code == 200 and phrase.lower() in " ".join(r.json()["text"].split()).lower()
+    assert r.json()["located_by"] == "text"
+    assert c.get(f"/api/protocols/{pid}/section/zzz-not-in-protocol").status_code == 404
+    assert c.get(f"/api/protocols/{pid}/section/9.9.9").status_code == 404

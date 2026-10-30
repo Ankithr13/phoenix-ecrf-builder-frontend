@@ -3,6 +3,7 @@
 Every route needs a signed-in user. What they may do comes from the one
 permission table; what they may see comes from the scope helpers."""
 
+import re
 import shutil
 from pathlib import Path
 from typing import Literal
@@ -327,12 +328,35 @@ def versions(protocol_id: int,
 def section_text(protocol_id: int, number: str,
                  cu: CurrentUser = Depends(require("protocol.view", "study.view")),
                  s: Session = Depends(db.get_session)):
-    """Lets the reviewer read the cited section without opening the PDF."""
+    """Lets the reviewer read the cited section without opening the PDF.
+
+    Three ways to find it, because models cite sections three ways: the
+    number ("7.3.2"), the heading ("Schedule of Events"), or a phrase that
+    is not a heading at all. Section detection also misses headings on
+    some protocols, so a title or phrase falls back to a text search and
+    returns the passage around the first hit, labelled as such."""
     p = scope.protocol_or_404(s, cu, protocol_id)
+    want = number.strip()
     for sec in p.sections:
-        if sec["number"] == number:
-            return {"number": number, "title": sec["title"], "page": sec["page"],
-                    "text": p.normalised[sec["start"]:sec["end"]]}
+        if sec["number"] == want:
+            return {"number": want, "title": sec["title"], "page": sec["page"],
+                    "text": p.normalised[sec["start"]:sec["end"]], "located_by": "number"}
+    low = want.lower()
+    if len(low) >= 4:
+        for sec in p.sections:
+            title = (sec.get("title") or "").lower()
+            if title and (low in title or title in low):
+                return {"number": sec["number"], "title": sec["title"], "page": sec["page"],
+                        "text": p.normalised[sec["start"]:sec["end"]], "located_by": "title"}
+        # Whitespace-insensitive: the protocol breaks lines where the model's
+        # citation has a space.
+        pat = re.compile(r"\s+".join(re.escape(w) for w in low.split()), re.IGNORECASE)
+        m = pat.search(p.normalised)
+        if m:
+            i = m.start()
+            start, end = max(0, i - 200), min(len(p.normalised), i + 1800)
+            return {"number": want, "title": want, "page": None,
+                    "text": p.normalised[start:end], "located_by": "text"}
     raise HTTPException(404, "section not found")
 
 
