@@ -49,85 +49,77 @@ input, select, textarea { font: inherit; color: inherit; }
   width: var(--sidebar);
   flex: 0 0 var(--sidebar);
   background: var(--card);
-  color: var(--ink);
-  border-right: 1px solid var(--line);
+  color: var(--sidebar-ink);
+  border-right: 1px solid var(--sidebar-line);
   display: flex;
   flex-direction: column;
-  padding: var(--s-5) var(--s-4) var(--s-4);
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100dvh;
 }
 
-.brand { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-6); padding: 0 var(--s-2); }
-.brand-logo { display: flex; align-items: center; }
-.brand-logo img { display: block; height: 58px; width: auto; }
-.brand-name {
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--muted);
-  letter-spacing: 0.01em;
-  padding-top: var(--s-2);
-  border-top: 1px solid var(--line);
-}
+.sidebar-heading { display: flex; align-items: center; justify-content: space-between; padding: var(--s-5); }
+.brand { display: flex; align-items: center; gap: var(--s-3); text-decoration: none; min-width: 0; }
+.brand-logo { display: block; height: 58px; width: auto; max-width: 100%; object-fit: contain; }
+.sidebar-icon { width: 21px; height: 21px; flex: 0 0 auto; }
+.sidebar-toggle { display: none; }
+.sidebar-content { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: var(--s-5) var(--s-4) var(--s-4); }
 
-.nav { display: flex; flex-direction: column; gap: 2px; }
-.nav-group { margin-top: var(--s-4); display: flex; flex-direction: column; gap: 2px; animation: fade var(--normal) var(--ease); }
+.sidebar .nav { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; gap: var(--s-5); margin: 0 calc(-1 * var(--s-4)); padding: 0 var(--s-4); }
+.nav-section { display: flex; flex-direction: column; gap: var(--s-2); }
 .nav-group-label {
-  font-size: var(--text-xs);
-  color: var(--muted-2);
-  padding: 0 var(--s-3);
-  margin-bottom: var(--s-1);
-  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.15em;
+  color: var(--sidebar-subtle); padding: 0 var(--s-4); margin-bottom: var(--s-2);
 }
-.nav a {
+.sidebar .nav a, .nav-folder, .nav-unavailable {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--s-2);
-  padding: var(--s-2) var(--s-3);
+  gap: var(--s-3);
+  min-height: 50px;
+  padding: var(--s-3) var(--s-4);
   border-radius: var(--radius);
-  color: var(--muted);
+  color: var(--sidebar-muted);
   text-decoration: none;
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   font-weight: 500;
   transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
-.nav a::before {
-  content: "";
-  width: 6px; height: 6px;
-  border-radius: 999px;
-  background: var(--line-strong);
-  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
+.nav-label { flex: 1; min-width: 0; }
+.nav-folder { width: 100%; border: 0; text-align: left; background: transparent; }
+.nav-chevron { display: inline-flex; transition: transform var(--fast) var(--ease); }
+.nav-chevron .sidebar-icon { width: 15px; height: 15px; }
+.nav-chevron.expanded { transform: rotate(90deg); }
+.nav-submenu { padding-left: var(--s-3); margin: 0 0 var(--s-1) 26px; border-left: 1px solid var(--sidebar-line); }
+.sidebar .nav .nav-submenu a { min-height: 36px; padding: var(--s-2) var(--s-3); font-size: var(--text-sm); }
+.nav-submenu .sidebar-icon { width: 17px; height: 17px; }
+.sidebar .nav .nav-submenu a.active { background: transparent; }
+.sidebar .nav .nav-submenu a.active::before { display: none; }
+.sidebar .nav a:hover, .nav-folder:hover { color: var(--sidebar-teal); background: var(--sidebar-surface); }
+.sidebar .nav a.active, .nav-folder.active { color: var(--sidebar-teal); background: var(--sidebar-active); }
+.sidebar .nav a.active::before, .nav-folder.active::before {
+  content: ""; position: absolute; left: calc(-1 * var(--s-4)); top: 14px; bottom: 14px;
+  width: 3px; border-radius: 0 var(--radius) var(--radius) 0; background: var(--sidebar-teal);
 }
-.nav a:hover { color: var(--ink); background: var(--paper); }
-.nav a.active { color: var(--brand-ink); background: var(--brand-bg); }
-.nav a.active::before { background: var(--brand); transform: scale(1.25); }
+.nav-unavailable { color: var(--sidebar-muted); opacity: 0.65; cursor: not-allowed; }
+.nav-soon { font-size: 10px; font-weight: 500; border: 1px solid var(--sidebar-line); border-radius: var(--radius); padding: 2px 6px; background: var(--sidebar-surface); }
+.sidebar a:focus-visible, .sidebar button:focus-visible { box-shadow: var(--sidebar-ring); }
 
-.sidebar-foot { margin-top: auto; padding: 0 var(--s-2); }
-.backend-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--muted);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: var(--s-1) var(--s-3);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.sidebar-foot { flex-shrink: 0; margin-top: auto; padding-top: var(--s-5); }
+
+@media (max-width: 760px) {
+  .shell { flex-direction: column; }
+  .sidebar { position: relative; width: 100%; flex: 0 0 auto; height: auto; border-right: 0; border-bottom: 1px solid var(--sidebar-line); }
+  .sidebar-heading { padding: var(--s-4); }
+  .sidebar-toggle, .identity-out { display: inline-flex; align-items: center; justify-content: center; }
+  .sidebar-toggle { width: 44px; height: 44px; border: 1px solid var(--sidebar-line); border-radius: var(--radius); background: var(--card); color: var(--sidebar-muted); }
+  .sidebar-content { display: none; overflow-y: visible; padding-top: var(--s-2); }
+  .sidebar .nav { flex: initial; overflow-y: visible; }
+  .sidebar-open .sidebar-content { display: flex; }
+  .sidebar-foot { padding-top: var(--s-5); }
+  .shell > main > .page { padding: var(--s-5) var(--s-4); }
 }
-.backend-pill::before {
-  content: "";
-  width: 6px; height: 6px; border-radius: 999px;
-  background: var(--teal);
-  flex: 0 0 6px;
-}
-.backend-pill.offline::before { background: var(--rust); }
-.backend-pill.pending::before { background: var(--line-strong); }
 
 main { flex: 1; min-width: 0; }
 
@@ -521,16 +513,15 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 /* ------------------------------------------------------------ identity
    Who is signed in, under the brand in the sidebar. */
 .identity {
-  margin: calc(-1 * var(--s-4)) 0 var(--s-5);
-  padding: var(--s-3) var(--s-2) 0;
-  border-top: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  margin-top: var(--s-4); padding: var(--s-4) 0 0; border-top: 1px solid var(--sidebar-line);
+  display: flex; align-items: center; gap: var(--s-2);
 }
-.identity-org { font-size: var(--text-sm); font-weight: 500; color: var(--ink); }
-.identity-user { font-size: var(--text-xs); color: var(--muted); }
-.identity-out { align-self: flex-start; margin-top: var(--s-2); font-size: var(--text-xs); }
+.identity-avatar { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: 0 0 36px; background: var(--sidebar-active); border-radius: 50%; color: var(--sidebar-teal); font-size: var(--text-xs); font-weight: 600; }
+.identity-details { flex: 1; min-width: 0; }
+.identity-user { font-size: 13px; font-weight: 600; color: var(--sidebar-ink); }
+.identity-org { font-size: 11px; color: var(--sidebar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.identity-out { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: 0 0 40px; border: 0; border-radius: var(--radius); background: transparent; color: var(--sidebar-muted); }
+.identity-out:hover { color: var(--sidebar-teal); background: var(--sidebar-active); }
 
 /* ---------------------------------------------------------------- login
    One centred card on the paper background. Same tokens as everything

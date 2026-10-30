@@ -66,5 +66,13 @@
 
   --radius: 8px;
   --radius-lg: 12px;
-  --sidebar: 240px;
+  --sidebar: 280px;
+  --sidebar-ink: #162036;
+  --sidebar-muted: #60728f;
+  --sidebar-subtle: #94a6bf;
+  --sidebar-teal: #00847d;
+  --sidebar-active: #effbf8;
+  --sidebar-line: #e7edf4;
+  --sidebar-surface: #f8fafc;
+  --sidebar-ring: 0 0 0 3px rgba(0, 132, 125, 0.2);
 }

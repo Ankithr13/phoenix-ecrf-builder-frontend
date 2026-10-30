@@ -56,6 +56,10 @@ export default function App() {
 
           <Route element={<Portal type="sponsor" />}>
             <Route path="/sponsor" element={<Protocols />} />
+            <Route path="/sponsor/upload" element={<Protocols uploadOnly />} />
+            <Route path="/sponsor/ecrfs" element={<Protocols destination="review" />} />
+            <Route path="/sponsor/data" element={<Protocols destination="data" />} />
+            <Route path="/sponsor/reports" element={<Protocols destination="dashboard" />} />
             <Route path="/sponsor/queries" element={<Queries />} />
             <Route path="/sponsor/p/:id/visits" element={<Visits />} />
             <Route path="/sponsor/p/:id/review" element={<Review />} />
