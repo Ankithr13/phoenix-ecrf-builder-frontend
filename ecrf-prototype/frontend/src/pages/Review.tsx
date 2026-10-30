@@ -182,6 +182,23 @@ export default function Review() {
         </div>
       </div>
 
+      {!locked && can("form.lock") && (resp.lock_warnings ?? []).length > 0 && (
+        <div className="card warn-card">
+          <p className="strong">Before you lock</p>
+          <p className="muted small">These will not stop the lock, but a site will run into them. Edit the field, or lock anyway if it is deliberate.</p>
+          <ul className="warn-list">
+            {(resp.lock_warnings ?? []).map((w) => (
+              <li key={w.kind}>
+                <span className="strong">{w.count}</span> {w.text}
+                <details className="inline-details"><summary className="btn-link small">which</summary>
+                  <div className="small muted mono">{w.fields.join(" · ")}</div>
+                </details>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {locked && (
         <div className="lock-banner">
           <span className="strong">Locked</span>

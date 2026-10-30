@@ -33,11 +33,11 @@ def test_full_flow_raise_answer_with_correction_close_approve(client, demo_accou
     # The site sees it as an open item and answers with a corrected value.
     assert [x["id"] for x in bgh.get("/api/queries", params={"status": "open"}).json()] == [q["id"]]
     r = bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "transcription slip, it was 138", "new_value": 138})
-    assert r.status_code == 200 and r.json()["status"] == "answered" and r.json()["value"] == "138.0"
+    assert r.status_code == 200 and r.json()["status"] == "answered" and r.json()["value"] == "138"
     assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "x", "new_value": 9999}).status_code == 422
 
     hist = approver.get(f"/api/protocols/{pid}/data/{row['id']}/history").json()
-    assert hist[-1]["old_value"] == "130.0" and hist[-1]["new_value"] == "138.0"
+    assert hist[-1]["old_value"] == "130" and hist[-1]["new_value"] == "138"
     assert hist[-1]["reason"].startswith(f"query {q['id']}:")
     with db.session() as s:
         assert s.scalars(select(ObservationHistory)).first().reason
@@ -50,7 +50,7 @@ def test_full_flow_raise_answer_with_correction_close_approve(client, demo_accou
 
     assert approver.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]}).json() == {"approved": 1}
     final = approver.get(f"/api/protocols/{pid}/data").json()[0]
-    assert final["status"] == "approved" and final["value"] == "138.0"
+    assert final["status"] == "approved" and final["value"] == "138"
     assert bgh.get("/api/queries", params={"status": "open"}).json() == []
 
 

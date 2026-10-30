@@ -135,7 +135,17 @@ export interface DraftResponse {
   locked_by?: string | null;
   locked_at?: string | null;
   lock_blockers?: { draft: number; flagged: number };
+  lock_warnings?: LockWarning[];
   plan?: Plan | null;
+}
+
+/* Approved fields a site will struggle with. Shown next to the Lock
+   button; none of them block the lock. */
+export interface LockWarning {
+  kind: "choice_without_choices" | "numeric_without_range" | "numeric_without_unit";
+  count: number;
+  fields: string[];
+  text: string;
 }
 
 export interface VersionRow {

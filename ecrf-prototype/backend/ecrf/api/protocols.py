@@ -152,6 +152,36 @@ def _lock_blockers(content: dict) -> dict[str, int]:
     return counts
 
 
+def _lock_warnings(content: dict) -> list[dict]:
+    """Approved fields a site cannot answer well. None of these block the
+    lock, because each can be a deliberate choice, but the reviewer should
+    see them before freezing the form."""
+    choice_no_list, num_no_range, num_no_unit = [], [], []
+    for form in content.get("forms", []):
+        for f in form.get("fields", []):
+            if f.get("status") != "approved":
+                continue
+            tag = f"{form['visit']}: {f['name']}"
+            if f.get("type") == "choice" and not f.get("choices"):
+                choice_no_list.append(tag)
+            if f.get("type") in ("integer", "decimal"):
+                if f.get("min") is None or f.get("max") is None:
+                    num_no_range.append(tag)
+                if not f.get("unit"):
+                    num_no_unit.append(tag)
+    out = []
+    if choice_no_list:
+        out.append({"kind": "choice_without_choices", "count": len(choice_no_list), "fields": choice_no_list,
+                    "text": "choice fields with no answer list; the site will get a free-text box"})
+    if num_no_range:
+        out.append({"kind": "numeric_without_range", "count": len(num_no_range), "fields": num_no_range,
+                    "text": "numeric fields with no min or max; any number will be accepted"})
+    if num_no_unit:
+        out.append({"kind": "numeric_without_unit", "count": len(num_no_unit), "fields": num_no_unit,
+                    "text": "numeric fields with no unit; sites may record in different units"})
+    return out
+
+
 def _reviewed(v: ECRFVersion) -> bool:
     """Has a human touched this version? A review always writes a version
     whose note is not the extraction note, and approval is only ever set by
@@ -309,6 +339,7 @@ def get_draft(protocol_id: int,
         "state": v.state, "locked_by": v.locked_by,
         "locked_at": v.locked_at.isoformat() if v.locked_at else None,
         "lock_blockers": _lock_blockers(v.content),
+        "lock_warnings": _lock_warnings(v.content),
     }
 
 

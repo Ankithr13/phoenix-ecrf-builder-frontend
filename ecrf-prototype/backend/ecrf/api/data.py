@@ -10,6 +10,8 @@ Three rules live here:
   - every change to a value writes a history row first
 """
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -62,14 +64,32 @@ def _locked_fields(s: Session, cu: CurrentUser, body: EntryRequest):
     raise HTTPException(404, f"visit '{body.visit}' not in eCRF")
 
 
+_TRUE = ("true", "yes", "1", "y")
+_FALSE = ("false", "no", "0", "n")
+
+
+def as_bool(value) -> bool | None:
+    """Yes/no in any of the spellings the API accepts; None if it is neither."""
+    if isinstance(value, bool):
+        return value
+    v = str(value).strip().lower()
+    return True if v in _TRUE else False if v in _FALSE else None
+
+
 def validate(field: FieldDef, value) -> str | None:
-    """Return an error message, or None if valid."""
+    """Return an error message, or None if valid. A blank is missing, and
+    missing is an error only when the field is required; an explicit No,
+    zero or empty choice is never confused with a blank."""
     if value is None or value == "":
         return "required" if field.required else None
     if field.type in ("integer", "decimal"):
+        if isinstance(value, bool):
+            return "must be a number"
         try:
             x = float(value)
         except (TypeError, ValueError):
+            return "must be a number"
+        if x != x or x in (float("inf"), float("-inf")):
             return "must be a number"
         if field.type == "integer" and x != int(x):
             return "must be a whole number"
@@ -79,8 +99,15 @@ def validate(field: FieldDef, value) -> str | None:
             return f"above maximum {field.max}"
     if field.type == "choice" and field.choices and str(value) not in field.choices:
         return f"must be one of: {', '.join(field.choices)}"
-    if field.type == "boolean" and str(value).lower() not in ("true", "false", "yes", "no", "1", "0"):
+    if field.type == "boolean" and as_bool(value) is None:
         return "must be yes or no"
+    if field.type == "date":
+        try:
+            d = date.fromisoformat(str(value))
+        except ValueError:
+            return "must be a date, YYYY-MM-DD"
+        if not 1900 <= d.year <= date.today().year + 1:
+            return "date is out of range"
     return None
 
 
@@ -98,15 +125,27 @@ def _check(fields: dict[str, FieldDef], readings: list[Reading]) -> dict:
 
 
 def _split(field: FieldDef, value):
-    num = float(value) if field.type in ("integer", "decimal") and value not in (None, "") else None
-    text = None if num is not None else (str(value) if value not in (None, "") else None)
-    return num, text
+    """Numbers go in value_num, everything else in value_text. A yes/no is
+    stored as the words Yes / No whatever spelling arrived, so the review
+    table, the history and the statistics all read the same thing."""
+    if value in (None, ""):
+        return None, None
+    if field.type in ("integer", "decimal"):
+        return float(value), None
+    if field.type == "boolean":
+        return None, "Yes" if as_bool(value) else "No"
+    return None, str(value)
+
+
+def fmt_num(x: float) -> str:
+    """138.0 is shown as 138; 25.5 stays 25.5."""
+    return str(int(x)) if float(x).is_integer() else str(x)
 
 
 def shown(o: Observation) -> str | None:
     """The value as text, for history rows and the review table."""
     if o.value_num is not None:
-        return str(o.value_num)
+        return fmt_num(o.value_num)
     return o.value_text
 
 
@@ -114,7 +153,7 @@ def record_change(s: Session, o: Observation, num, text, by: str, reason: str | 
     """Write the history row, then change the value. Returns False when
     nothing changed, so an unchanged resubmission leaves no trace."""
     before = shown(o)
-    after = str(num) if num is not None else text
+    after = fmt_num(num) if num is not None else text
     if before == after:
         return False
     s.add(ObservationHistory(observation_id=o.id, old_value=before, new_value=after,

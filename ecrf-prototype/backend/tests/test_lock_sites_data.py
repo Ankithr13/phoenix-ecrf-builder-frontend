@@ -149,10 +149,10 @@ def test_edits_write_history_and_approved_values_are_frozen(client, demo_account
     assert r.status_code == 422, "range check still applies"
 
     rows = approver.get(f"/api/protocols/{pid}/data").json()
-    assert len(rows) == 1 and rows[0]["value"] == "135.0" and rows[0]["status"] == "entered"
+    assert len(rows) == 1 and rows[0]["value"] == "135" and rows[0]["status"] == "entered"
     assert rows[0]["site"] == "BGH" and rows[0]["entered_by"] == BGH
     hist = approver.get(f"/api/protocols/{pid}/data/{rows[0]['id']}/history").json()
-    assert [(h["old_value"], h["new_value"], h["changed_by"]) for h in hist] == [("130.0", "135.0", BGH)]
+    assert [(h["old_value"], h["new_value"], h["changed_by"]) for h in hist] == [("130", "135", BGH)]
     with db.session() as s:
         assert s.scalar(select(ObservationHistory.id)) is not None
 
@@ -161,7 +161,7 @@ def test_edits_write_history_and_approved_values_are_frozen(client, demo_account
     r = bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 140))
     assert r.status_code == 409 and r.json()["detail"]["approved"] == [f"{SBP}#1"]
     rows = approver.get(f"/api/protocols/{pid}/data", params={"status": "approved"}).json()
-    assert rows[0]["value"] == "135.0" and rows[0]["approved_by"] == APPROVER
+    assert rows[0]["value"] == "135" and rows[0]["approved_by"] == APPROVER
 
 
 def test_stats_count_only_approved_rows_in_both_implementations(client, demo_accounts):
@@ -229,3 +229,22 @@ def test_an_unanswered_yes_no_is_not_a_no():
     assert validate(f, "maybe") == "must be yes or no"
     g = f.model_copy(update={"required": False})
     assert validate(g, None) is None
+
+
+def test_value_rules_dates_booleans_and_display():
+    from ecrf.api.data import _split, as_bool, validate
+    from ecrf.schema import FieldDef, Source
+    src = Source(section="4", quote="recorded at every visit in the clinic")
+    d = FieldDef(name="Visit Date", type="date", source=src)
+    assert validate(d, "2026-10-01") is None
+    assert validate(d, "01/10/2026") == "must be a date, YYYY-MM-DD"
+    assert validate(d, "1850-01-01") == "date is out of range"
+    n = FieldDef(name="Heart Rate", type="integer", min=20, max=250, source=src)
+    assert validate(n, True) == "must be a number", "a boolean is not an integer 1"
+    assert validate(n, "nan") == "must be a number"
+    b = FieldDef(name="ECG Performed", type="boolean", source=src)
+    for v in (True, "true", "Yes", "y", 1):
+        assert as_bool(v) is True and _split(b, v) == (None, "Yes")
+    for v in (False, "false", "No", "0"):
+        assert as_bool(v) is False and _split(b, v) == (None, "No")
+    assert _split(n, "138") == (138.0, None)

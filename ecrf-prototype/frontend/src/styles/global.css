@@ -725,3 +725,11 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 .yesno-opt { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s-1) var(--s-3); cursor: pointer; }
 .yesno-opt.active { border-color: var(--brand); background: var(--brand-bg); }
 .yesno-opt.invalid { border-color: var(--rust-ink); }
+
+/* Pre-lock warnings on the Review page. */
+.warn-card { border-color: var(--amber-bg); background: var(--amber-bg); }
+.warn-list { margin: var(--s-2) 0 0; padding-left: var(--s-4); font-size: var(--text-sm); }
+.warn-list li + li { margin-top: var(--s-1); }
+.inline-details { display: inline-block; margin-left: var(--s-2); }
+.inline-details summary { display: inline; cursor: pointer; }
+.inline-details div { margin-top: var(--s-1); }
