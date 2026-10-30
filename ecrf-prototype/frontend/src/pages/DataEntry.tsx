@@ -256,12 +256,15 @@ export default function DataEntry() {
         </div>
       </div>
 
-      {entered.length > 0 && (
-        <div className="card mt-4">
-          <div className="row row-between row-wrap">
-            <p className="strong">On file for {subject}</p>
-            <p className="muted small">Ask the sponsor about any value; an approved value can only be changed through a query.</p>
-          </div>
+      <div className="card mt-4">
+        <div className="row row-between row-wrap">
+          <p className="strong">On file for {subject}</p>
+          <p className="muted small">Ask the sponsor about any value; an approved value can only be changed through a query.</p>
+        </div>
+        {entered.length === 0 && (
+          <p className="muted small mt-2">Nothing saved for this patient yet. Save readings above; each one then appears here with an <em>Ask the sponsor</em> link. You can also start a query from the Queries page.</p>
+        )}
+        {entered.length > 0 && (
           <table className="table mt-2">
             <thead><tr><th>Visit</th><th>Field</th><th>Value</th><th>Status</th><th /></tr></thead>
             <tbody>
@@ -280,16 +283,16 @@ export default function DataEntry() {
               ))}
             </tbody>
           </table>
-          {asking && (
-            <div className="row row-wrap mt-3 query-reply">
-              <input className="input grow" autoFocus placeholder="Your question about this value, e.g. which unit do you want?"
-                     value={asking.text} onChange={(e) => setAsking({ ...asking, text: e.target.value })} />
-              <button type="button" className="btn btn-primary btn-sm" onClick={ask} disabled={askBusy || !asking.text.trim()}>{askBusy ? "Sending…" : "Send query"}</button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAsking(null)}>Cancel</button>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+        {asking && (
+          <div className="row row-wrap mt-3 query-reply">
+            <input className="input grow" autoFocus placeholder="Your question about this value, e.g. which unit do you want?"
+                   value={asking.text} onChange={(e) => setAsking({ ...asking, text: e.target.value })} />
+            <button type="button" className="btn btn-primary btn-sm" onClick={ask} disabled={askBusy || !asking.text.trim()}>{askBusy ? "Sending…" : "Send query"}</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAsking(null)}>Cancel</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { QueryRow, QueryStatus } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import NewQuery from "../components/NewQuery";
 
 const CHIP: Record<QueryStatus, string> = { open: "chip-rust", answered: "chip-amber", closed: "chip-teal" };
 
@@ -19,6 +20,7 @@ export default function Queries() {
   const [answers, setAnswers] = useState<Record<number, { text: string; value: string }>>({});
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
 
   const load = useCallback(async () => {
     try { setRows(await api.queries()); setError(null); }
@@ -61,12 +63,21 @@ export default function Queries() {
     <div className="page">
       <div className="page-head">
         <h1 className="page-title">Queries</h1>
-        <div className="muted small">
-          {isSite
-            ? "Questions from the sponsor about values entered here, and questions this site has asked the sponsor"
-            : "Questions raised about entered values, from either side. The side that asked closes it once satisfied."}
+        <div className="row row-wrap">
+          <div className="muted small">
+            {isSite
+              ? "Questions from the sponsor about values entered here, and questions this site has asked the sponsor"
+              : "Questions raised about entered values, from either side. The side that asked closes it once satisfied."}
+          </div>
+          {!composing && <button type="button" className="btn btn-primary" onClick={() => setComposing(true)}>New query</button>}
         </div>
       </div>
+
+      {composing && (
+        <div className="mb-3">
+          <NewQuery onDone={() => { setComposing(false); setFilter(""); load(); }} onCancel={() => setComposing(false)} />
+        </div>
+      )}
 
       <div className="row row-wrap mb-3">
         {(["mine", "open", "answered", "closed", ""] as const).map((f) => (
