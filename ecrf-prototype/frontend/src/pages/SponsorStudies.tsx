@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { SponsorStudy } from "../api/types";
 import StudyForm from "../components/StudyForm";
@@ -9,7 +9,9 @@ export default function SponsorStudies() {
   const [unassigned, setUnassigned] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const creating = params.get("create") === "1";
+  const setCreating = (value: boolean) => setParams(value ? { create: "1" } : {});
   const [search, setSearch] = useState("");
 
   const refresh = useCallback(async () => {

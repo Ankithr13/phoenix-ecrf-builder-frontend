@@ -16,6 +16,7 @@ import Sites from "./pages/Sites";
 import Studies from "./pages/Studies";
 import SponsorStudies from "./pages/SponsorStudies";
 import Visits from "./pages/Visits";
+import WorkspaceDashboard from "./pages/WorkspaceDashboard";
 
 const HOME: Record<OrgType, string> = { sponsor: "/sponsor", site: "/site" };
 
@@ -62,7 +63,8 @@ export default function App() {
           <Route path="/" element={<Home />} />
 
           <Route element={<Portal type="sponsor" />}>
-            <Route path="/sponsor" element={<SponsorStudies />} />
+            <Route path="/sponsor" element={<WorkspaceDashboard />} />
+            <Route path="/sponsor/studies" element={<SponsorStudies />} />
             <Route path="/sponsor/studies/:studyId" element={<StudyProtocols />} />
             <Route path="/sponsor/protocols" element={<Protocols />} />
             <Route path="/sponsor/upload" element={<ProtocolUpload />} />

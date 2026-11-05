@@ -95,6 +95,7 @@ function ProtocolCard({ protocol, studies, destination, onAssigned }: {
 export default function Protocols({ destination, studyId }: { destination?: Destination; studyId?: number }) {
   const [params] = useSearchParams();
   const unassignedOnly = studyId === undefined && params.get("unassigned") === "1";
+  const pendingOnly = destination === "review" && params.get("pending") === "1";
   const [items, setItems] = useState<ProtocolListItem[]>([]);
   const [studies, setStudies] = useState<SponsorStudy[]>([]);
   const [study, setStudy] = useState<SponsorStudy | null>(null);
@@ -122,13 +123,15 @@ export default function Protocols({ destination, studyId }: { destination?: Dest
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  const visibleItems = pendingOnly ? items.filter((protocol) => protocol.latest_version !== null && protocol.state === "draft") : items;
+
   return (
     <div className="page">
       <div className="page-head">
-        {studyId !== undefined && <Link className="inline small" to="/sponsor">← All studies</Link>}
+        {studyId !== undefined && <Link className="inline small" to="/sponsor/studies">← All studies</Link>}
         {study && <p className="study-eyebrow mt-4">{study.code}</p>}
-        <h1 className="page-title">{studyId !== undefined ? study?.name ?? "Study protocols" : section?.title ?? (unassignedOnly ? "Unassigned protocols" : "All protocols")}</h1>
-        <p className="muted small">{studyId !== undefined ? "Protocols assigned to this study. Uploads are managed separately from the sidebar." : section?.description ?? "Choose the study each protocol belongs to. Existing forms and clinical data stay with their protocol."}</p>
+        <h1 className="page-title">{studyId !== undefined ? study?.name ?? "Study protocols" : pendingOnly ? "Pending eCRF reviews" : section?.title ?? (unassignedOnly ? "Unassigned protocols" : "All protocols")}</h1>
+        <p className="muted small">{studyId !== undefined ? "Protocols assigned to this study. Uploads are managed separately from the sidebar." : pendingOnly ? "Draft forms awaiting review or locking." : section?.description ?? "Choose the study each protocol belongs to. Existing forms and clinical data stay with their protocol."}</p>
       </div>
       {error && <p className="error mb-4" role="alert">{error}</p>}
       {studyId === undefined && !destination && (
@@ -138,15 +141,15 @@ export default function Protocols({ destination, studyId }: { destination?: Dest
         </div>
       )}
       {loading && <p className="muted">Loading protocols…</p>}
-      {!loading && !error && items.length === 0 && (
+      {!loading && !error && visibleItems.length === 0 && (
         <div className="empty">
-          <h2 className="section-title">{studyId !== undefined ? "No protocols assigned yet" : unassignedOnly ? "No unassigned protocols" : "No protocols yet"}</h2>
-          <p>{studyId !== undefined ? "Assign an existing protocol here from All protocols. New documents can be added from Upload Protocol in the sidebar." : "Use Upload Protocol in the sidebar to add documents to a study."}</p>
+          <h2 className="section-title">{studyId !== undefined ? "No protocols assigned yet" : pendingOnly ? "No pending reviews" : unassignedOnly ? "No unassigned protocols" : "No protocols yet"}</h2>
+          <p>{studyId !== undefined ? "Assign an existing protocol here from All protocols. New documents can be added from Upload Protocol in the sidebar." : pendingOnly ? "There are no draft forms awaiting review or locking." : "Use Upload Protocol in the sidebar to add documents to a study."}</p>
           {studyId !== undefined && <Link className="btn btn-secondary mt-3" to="/sponsor/protocols">Manage existing protocols</Link>}
         </div>
       )}
       <div className="stack">
-        {items.map((protocol) => <ProtocolCard key={`${protocol.id}:${protocol.study_id}`} protocol={protocol} studies={studies} destination={destination} onAssigned={refresh} />)}
+        {visibleItems.map((protocol) => <ProtocolCard key={`${protocol.id}:${protocol.study_id}`} protocol={protocol} studies={studies} destination={destination} onAssigned={refresh} />)}
       </div>
     </div>
   );

@@ -66,6 +66,11 @@ def _about(q: Query) -> str:
     return "study"
 
 
+def needs_attention(query: Query, organisation_type: str) -> bool:
+    return ((query.status == "open" and query.raised_by_org != organisation_type)
+            or (query.status == "answered" and query.raised_by_org == organisation_type))
+
+
 def _row(s: Session, q: Query, cu: CurrentUser | None = None) -> dict:
     p = s.get(Protocol, q.protocol_id)
     o = s.get(Observation, q.observation_id) if q.observation_id else None
@@ -90,7 +95,7 @@ def _row(s: Session, q: Query, cu: CurrentUser | None = None) -> dict:
         "closed_by": q.closed_by, "closed_at": q.closed_at.isoformat() if q.closed_at else None,
         # For the caller: whether it is their turn to answer, or theirs to close.
         "can_answer": can_answer, "can_close": can_close,
-        "for_me": (can_answer and q.status == "open") or (can_close and q.status == "answered"),
+        "for_me": needs_attention(q, cu.org.type) if cu else False,
     }
 
 

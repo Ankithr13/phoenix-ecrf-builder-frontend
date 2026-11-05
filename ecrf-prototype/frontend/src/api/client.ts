@@ -5,7 +5,7 @@
 import type { NewQuery, SubjectCreate,
   DashboardResponse, DataRow, DraftResponse, FieldChange, Health, HistoryRow, Me, Plan,
   ProtocolListItem, ProtocolUploadResult, QueryRow, Reading, SiteRow, SponsorStudy, StudyCreate,
-  StudyListItem, SubjectRow, VersionRow,
+  StudyListItem, SubjectRow, VersionRow, WorkspaceOverview,
 } from "./types";
 
 export class ApiError extends Error {
@@ -49,6 +49,7 @@ export const api = {
   logout: () => req<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
 
   sponsorStudies: () => req<SponsorStudy[]>("/api/sponsor/studies"),
+  workspaceDashboard: () => req<WorkspaceOverview>("/api/sponsor/dashboard"),
   sponsorStudy: (id: number) => req<SponsorStudy>(`/api/sponsor/studies/${id}`),
   createStudy: (body: StudyCreate) => req<SponsorStudy>("/api/sponsor/studies", post(body)),
   assignProtocolStudy: (protocolId: number, studyId: number | null) =>

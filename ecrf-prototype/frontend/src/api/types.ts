@@ -139,6 +139,34 @@ export interface StudyCreate {
   name: string;
 }
 
+export type StudyProgress = "no_protocols" | "needs_extraction" | "needs_review" | "forms_locked";
+
+export interface WorkspaceStudyOverview {
+  id: number;
+  code: string;
+  name: string;
+  protocol_count: number;
+  pending_reviews: number;
+  locked_protocols: number;
+  unextracted_protocols: number;
+  status: StudyProgress;
+  latest_protocol_update: string | null;
+  created_at: string;
+}
+
+export interface WorkspaceOverview {
+  counts: {
+    studies: number;
+    protocols: number;
+    pending_reviews: number;
+    queries_for_me: number;
+    unassigned_protocols: number;
+    unextracted_protocols: number;
+    locked_protocols: number;
+  };
+  studies: WorkspaceStudyOverview[];
+}
+
 export interface ProtocolUploadResult {
   id: number;
   name: string;

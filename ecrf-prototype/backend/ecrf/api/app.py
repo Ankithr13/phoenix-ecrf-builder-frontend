@@ -7,7 +7,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ecrf import __version__
-from ecrf.api import auth, dashboard, data, protocols, queries, sites, studies, study_management
+from ecrf.api import (
+    auth,
+    dashboard,
+    data,
+    protocols,
+    queries,
+    sites,
+    studies,
+    study_management,
+    workspace,
+)
 from ecrf.config import config
 from ecrf.storage import db, migrate
 
@@ -44,6 +54,7 @@ app.include_router(data.review_router)
 app.include_router(queries.router)
 app.include_router(data.router)
 app.include_router(dashboard.router)
+app.include_router(workspace.router)
 
 
 @app.get("/api/health")
