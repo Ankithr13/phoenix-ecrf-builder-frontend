@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type { StudyProgress, WorkspaceOverview } from "../api/types";
 import Icon, { type IconName } from "../components/Icon";
+import NavigationActions from "../components/NavigationActions";
 import "../styles/workspace.css";
 
 const STATUS_LABELS: Record<StudyProgress, string> = {
@@ -58,13 +59,12 @@ export default function WorkspaceDashboard() {
 
   return (
     <div className="workspace-dashboard">
-      <header className="workspace-topbar">
-        <nav className="workspace-breadcrumb" aria-label="Breadcrumb"><span>Workspace</span><Icon name="chevron" className="workspace-icon" /><strong>Dashboard</strong></nav>
+      <NavigationActions>
         <div className="workspace-tools">
           <label className="workspace-search"><Icon name="search" className="workspace-icon" /><input type="search" aria-label="Search dashboard studies" placeholder="Search studies…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
           <button className="workspace-refresh" type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh dashboard" title="Refresh dashboard"><Icon name="refresh" className="workspace-icon" /></button>
         </div>
-      </header>
+      </NavigationActions>
       <div className="workspace-body" aria-busy={refreshing}>
         <div className="workspace-heading">
           <div><p className="study-eyebrow"><span aria-hidden="true">●</span> Workspace overview</p><h1>Study overview</h1><p>Track your studies, review protocols, and follow up on the work that needs you.</p></div>

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { EcrfPatientStatus, EcrfProtocolStatus, EcrfStatusOverview } from "../api/types";
 import Icon from "../components/Icon";
+import NavigationActions from "../components/NavigationActions";
 import "../styles/workspace.css";
 import "../styles/ecrf-status.css";
 
@@ -103,13 +104,12 @@ export default function EcrfStatus() {
 
   return (
     <div className="workspace-dashboard ecrf-status-page">
-      <header className="workspace-topbar">
-        <nav className="workspace-breadcrumb" aria-label="Breadcrumb"><Link to="/sponsor">Workspace</Link><Icon name="chevron" className="workspace-icon" /><strong>eCRF Status</strong></nav>
+      <NavigationActions>
         <div className="workspace-tools">
           {refreshedAt && overview && <span className="ecrf-refreshed">Refreshed {new Date(refreshedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</span>}
           <button className="workspace-refresh" type="button" aria-label="Refresh eCRF status" title="Refresh eCRF status" disabled={loading} onClick={refresh}><Icon name="refresh" className="workspace-icon" /></button>
         </div>
-      </header>
+      </NavigationActions>
       <div className="workspace-body" aria-busy={loading}>
         <div className="workspace-heading"><div><p className="study-eyebrow">Updates from your hospitals</p><h1>eCRF Status</h1><p>Follow hospital registrations and visit entries for assigned eCRFs.</p></div></div>
         {error && <div className="workspace-error" role="alert"><strong>Couldn’t load hospital updates.</strong><p>{error}</p><button className="btn btn-secondary btn-sm mt-3" type="button" disabled={loading} onClick={refresh}>Try again</button></div>}

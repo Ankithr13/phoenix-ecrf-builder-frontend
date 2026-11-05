@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { NotificationItem } from "../api/types";
 import Icon from "../components/Icon";
+import NavigationActions from "../components/NavigationActions";
 import "../styles/workspace.css";
 import "../styles/notifications.css";
 
@@ -46,7 +47,7 @@ export default function Notifications() {
   };
 
   return <div className="workspace-dashboard">
-    <header className="workspace-topbar"><nav className="workspace-breadcrumb" aria-label="Breadcrumb"><Link to="/sponsor">Workspace</Link><Icon name="chevron" className="workspace-icon" /><strong>Notifications</strong></nav><button className="workspace-refresh" type="button" aria-label="Refresh notifications" onClick={() => refresh()} disabled={loading || busy}><Icon name="refresh" className="workspace-icon" /></button></header>
+    <NavigationActions><button className="workspace-refresh" type="button" aria-label="Refresh notifications" onClick={() => refresh()} disabled={loading || busy}><Icon name="refresh" className="workspace-icon" /></button></NavigationActions>
     <div className="workspace-body">
       <div className="workspace-heading"><div><p className="study-eyebrow">Hospital alerts</p><h1>Notifications</h1><p>New hospital queries and entire-eCRF submissions, in one place.</p></div><span className="notification-unread-total">{unreadCount ?? "—"} unread</span></div>
       <div className="notification-controls"><label className="check"><input type="checkbox" checked={unreadOnly} disabled={loading || busy} onChange={(event) => setUnreadOnly(event.target.checked)} />Unread only</label><button className="btn btn-secondary btn-sm" type="button" onClick={() => markRead()} disabled={loading || busy || !unreadCount || !items.length}>Mark all as read</button></div>

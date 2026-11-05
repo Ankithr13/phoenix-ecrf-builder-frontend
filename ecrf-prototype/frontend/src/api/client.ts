@@ -3,7 +3,7 @@
    same-origin and travels with every request. */
 
 import type { NewQuery, SubjectCreate,
-  DashboardResponse, DataRow, DraftResponse, EcrfStatusOverview, FieldChange, Health, HistoryRow, HospitalSubmissionStatus, Me, NotificationPage, Plan,
+  DashboardResponse, DataRow, DraftResponse, EcrfStatusOverview, FieldChange, Health, HistoryRow, HospitalSubmissionStatus, Me, NavigationContextData, NotificationPage, Plan,
   ProtocolListItem, ProtocolUploadResult, QueryRow, Reading, SiteRow, SponsorStudy, StudyCreate,
   StudyListItem, SubjectRow, VersionRow, WorkspaceOverview,
 } from "./types";
@@ -60,6 +60,8 @@ export const api = {
   hospitalSubmission: (protocolId: number) => req<HospitalSubmissionStatus>(`/api/studies/${protocolId}/submission`),
   submitHospitalEcrf: (protocolId: number) => req<HospitalSubmissionStatus>(`/api/studies/${protocolId}/submission`, post({ confirmed: true })),
   sponsorStudy: (id: number) => req<SponsorStudy>(`/api/sponsor/studies/${id}`),
+  navigationContext: (protocolId: string, subject?: string) =>
+    req<NavigationContextData>(`/api/navigation/protocols/${protocolId}${subject === undefined ? "" : `?${new URLSearchParams({ subject })}`}`),
   createStudy: (body: StudyCreate) => req<SponsorStudy>("/api/sponsor/studies", post(body)),
   assignProtocolStudy: (protocolId: number, studyId: number | null) =>
     req<{ protocol_id: number; study_id: number | null }>(`/api/protocols/${protocolId}/study`, {

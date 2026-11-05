@@ -134,6 +134,12 @@ export interface SponsorStudy {
   created_at: string;
 }
 
+export interface NavigationContextData {
+  protocol: { id: number; name: string; state: "draft" | "locked" | null };
+  study: { id: number; code: string; name: string } | null;
+  subject: { code: string } | null;
+}
+
 export interface StudyCreate {
   code: string;
   name: string;

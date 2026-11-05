@@ -12,6 +12,7 @@ from ecrf.api import (
     dashboard,
     data,
     ecrf_status,
+    navigation,
     notifications,
     protocols,
     queries,
@@ -61,6 +62,7 @@ app.include_router(workspace.router)
 app.include_router(ecrf_status.router)
 app.include_router(notifications.router)
 app.include_router(submissions.router)
+app.include_router(navigation.router)
 
 
 @app.get("/api/health")
