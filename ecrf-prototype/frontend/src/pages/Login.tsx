@@ -3,13 +3,6 @@ import { Navigate, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/useAuth";
 
-const DEMO = [
-  ["dana@phoenix.demo", "sponsor"],
-  ["alex@phoenix.demo", "sponsor"],
-  ["staff@bgh.demo", "site · Boston General"],
-  ["staff@mrc.demo", "site · Mercy Hospital"],
-];
-
 export default function Login() {
   const { me, loading, signIn } = useAuth();
   const [params] = useSearchParams();
@@ -64,16 +57,6 @@ export default function Login() {
 
       <div className="login-foot">
         <div>BU Spark! × Phoenix Clinical — prototype</div>
-        {import.meta.env.DEV && (
-          <div className="login-demo">
-            {DEMO.map(([e, who]) => (
-              <button type="button" key={e} className="login-demo-row" onClick={() => { setEmail(e); setPassword("demo1234"); }}>
-                <span className="mono">{e}</span><span>{who}</span>
-              </button>
-            ))}
-            <div className="login-demo-note">password demo1234 · click a row to fill the form</div>
-          </div>
-        )}
       </div>
     </div>
   );
