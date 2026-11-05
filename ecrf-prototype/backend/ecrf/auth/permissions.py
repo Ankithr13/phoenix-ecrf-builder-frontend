@@ -23,6 +23,7 @@ from ecrf.storage.models import Organisation, User
 # trail still records which person did what.
 PERMISSIONS: dict[str, frozenset[str]] = {
     "sponsor": frozenset({
+        "study.manage",
         "protocol.view", "protocol.upload", "protocol.extract", "form.edit",
         "form.lock", "site.assign", "data.view", "data.approve",
         "query.raise", "query.answer", "query.close", "stats.view", "data.seed",

@@ -12,7 +12,14 @@ from sqlalchemy import Select, exists, select
 from sqlalchemy.orm import Session
 
 from ecrf.auth.permissions import CurrentUser
-from ecrf.storage.models import ECRFVersion, Observation, Protocol, ProtocolSite, Subject
+from ecrf.storage.models import ECRFVersion, Observation, Protocol, ProtocolSite, Study, Subject
+
+
+def study_or_404(session: Session, current: CurrentUser, study_id: int) -> Study:
+    study = session.scalar(select(Study).where(Study.id == study_id, Study.org_id == current.org.id))
+    if study is None:
+        raise HTTPException(404, "study not found")
+    return study
 
 
 def _locked() -> Select:

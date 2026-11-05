@@ -7,8 +7,9 @@ import re
 import shutil
 from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +22,7 @@ from ecrf.extract import get_extractor
 from ecrf.extract.base import Usage
 from ecrf.schema import DraftECRF, ExtractionPlan, FieldType, Status
 from ecrf.storage import db
-from ecrf.storage.models import ECRFVersion, Protocol, utcnow
+from ecrf.storage.models import ECRFVersion, Protocol, StudyProtocol, utcnow
 
 router = APIRouter(prefix="/api/protocols", tags=["protocols"])
 
@@ -51,12 +52,23 @@ def _doc_from_protocol(p: Protocol) -> ingest.Document:
 # ----------------------------------------------------------------- list
 
 @router.get("")
-def list_protocols(cu: CurrentUser = Depends(require("protocol.view")),
+def list_protocols(study_id: int | None = None, unassigned: bool = False,
+                   cu: CurrentUser = Depends(require("protocol.view")),
                    s: Session = Depends(db.get_session)):
-    rows = s.scalars(scope.visible_protocols(cu).order_by(Protocol.uploaded_at.desc())).all()
+    query = scope.visible_protocols(cu)
+    if study_id is not None:
+        scope.study_or_404(s, cu, study_id)
+        if unassigned:
+            raise HTTPException(422, "Choose a study or unassigned protocols, not both")
+        query = query.where(Protocol.id.in_(select(StudyProtocol.protocol_id).where(
+            StudyProtocol.study_id == study_id)))
+    elif unassigned:
+        query = query.where(~Protocol.id.in_(select(StudyProtocol.protocol_id)))
+    rows = s.scalars(query.order_by(Protocol.uploaded_at.desc())).all()
     out = []
     for p in rows:
         v = db.latest_version(s, p.id)
+        study = db.protocol_study(s, p.id)
         out.append({
             "id": p.id, "name": p.name, "filename": p.filename, "pages": p.pages,
             "tokens_estimate": p.tokens_estimate, "uploaded_by": p.uploaded_by,
@@ -65,6 +77,9 @@ def list_protocols(cu: CurrentUser = Depends(require("protocol.view")),
             "state": v.state if v else None,
             "summary": (v.content.get("summary") if v else None),
             "plan": _plan_response(p) if p.extraction_plan else None,
+            "study_id": study.id if study else None,
+            "study_name": study.name if study else None,
+            "study_code": study.code if study else None,
         })
     return out
 
@@ -72,12 +87,14 @@ def list_protocols(cu: CurrentUser = Depends(require("protocol.view")),
 # --------------------------------------------------------------- upload
 
 @router.post("/upload")
-async def upload(file: UploadFile = File(...),
+async def upload(file: UploadFile = File(...), study_id: int | None = Form(None, gt=0),
                  cu: CurrentUser = Depends(require("protocol.upload")),
                  s: Session = Depends(db.get_session)):
-    if not file.filename.lower().endswith(".pdf"):
+    if study_id is not None:
+        scope.study_or_404(s, cu, study_id)
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF protocols are supported in the prototype")
-    dest = UPLOAD_DIR / file.filename
+    dest = UPLOAD_DIR / f"{uuid4().hex}_{Path(file.filename).name}"
     with dest.open("wb") as f:
         shutil.copyfileobj(file.file, f)
     try:
@@ -85,6 +102,9 @@ async def upload(file: UploadFile = File(...),
     except ingest.ScannedPDFError as e:
         dest.unlink(missing_ok=True)
         raise HTTPException(422, str(e)) from e
+    except Exception:
+        dest.unlink(missing_ok=True)
+        raise
 
     # The same document uploaded twice must not become two protocols that
     # drift apart under review. Match on the hash of the normalised text, so
@@ -92,38 +112,63 @@ async def upload(file: UploadFile = File(...),
     existing = s.scalars(select(Protocol).where(
         Protocol.text_hash == doc.hash, Protocol.org_id == cu.org.id)).first()
     if existing:
-        if dest.name != existing.filename:
-            dest.unlink(missing_ok=True)
+        dest.unlink(missing_ok=True)
+        _assign_uploaded_study(s, cu, existing, study_id)
+        s.commit()
         return {"id": existing.id, "name": existing.name, "pages": existing.pages,
-                "tokens_estimate": existing.tokens_estimate, "already_loaded": True}
+                "tokens_estimate": existing.tokens_estimate, "already_loaded": True,
+                "study_id": _assigned_study_id(s, existing.id)}
 
     name = Path(file.filename).stem.replace("_", " ")
     p = Protocol(
-        name=name, filename=file.filename, text_hash=doc.hash, normalised=doc.text,
+        name=name, filename=dest.name, text_hash=doc.hash, normalised=doc.text,
         sections=[{"number": x.number, "title": x.title, "page": x.page_start,
                    "start": x.start, "end": x.end} for x in doc.sections],
         pages=doc.pages, tokens_estimate=doc.tokens_estimate,
         uploaded_by=cu.user.email, org_id=cu.org.id,
     )
     s.add(p)
+    s.flush()
+    _assign_uploaded_study(s, cu, p, study_id)
     s.commit()
     return {"id": p.id, "name": p.name, "pages": p.pages,
             "tokens_estimate": p.tokens_estimate, "sections": len(doc.sections),
-            "tables": len(doc.tables)}
+            "tables": len(doc.tables), "study_id": study_id}
+
+
+def _assigned_study_id(session: Session, protocol_id: int) -> int | None:
+    assignment = session.get(StudyProtocol, protocol_id)
+    return assignment.study_id if assignment else None
+
+
+def _assign_uploaded_study(session: Session, current: CurrentUser,
+                           protocol: Protocol, study_id: int | None) -> None:
+    if study_id is None:
+        return
+    assigned_id = _assigned_study_id(session, protocol.id)
+    if assigned_id is not None and assigned_id != study_id:
+        raise HTTPException(409, "This protocol already belongs to another study. Change its assignment from the Protocols page instead.")
+    db.assign_study(session, protocol.id, study_id, current.user.email)
 
 
 @router.post("/sample")
-def load_sample(cu: CurrentUser = Depends(require("protocol.upload")),
+def load_sample(study_id: int | None = None,
+                cu: CurrentUser = Depends(require("protocol.upload")),
                 s: Session = Depends(db.get_session)):
     """Load the bundled synthetic protocol without a file picker."""
+    if study_id is not None:
+        scope.study_or_404(s, cu, study_id)
     src = config.data_dir / "sample" / "PHX-401-201_protocol.pdf"
     if not src.exists():
         raise HTTPException(500, "sample protocol missing; run data/sample/make_sample_protocol.py")
-    existing = s.scalars(select(Protocol).where(
-        Protocol.filename == src.name, Protocol.org_id == cu.org.id)).first()
-    if existing:
-        return {"id": existing.id, "name": existing.name, "already_loaded": True}
     doc = ingest.load(str(src))
+    existing = s.scalars(select(Protocol).where(
+        Protocol.text_hash == doc.hash, Protocol.org_id == cu.org.id)).first()
+    if existing:
+        _assign_uploaded_study(s, cu, existing, study_id)
+        s.commit()
+        return {"id": existing.id, "name": existing.name, "already_loaded": True,
+                "study_id": _assigned_study_id(s, existing.id)}
     p = Protocol(
         name="PHX-401-201 (synthetic sample)", filename=src.name, text_hash=doc.hash,
         normalised=doc.text,
@@ -133,8 +178,10 @@ def load_sample(cu: CurrentUser = Depends(require("protocol.upload")),
         uploaded_by=cu.user.email, org_id=cu.org.id,
     )
     s.add(p)
+    s.flush()
+    _assign_uploaded_study(s, cu, p, study_id)
     s.commit()
-    return {"id": p.id, "name": p.name, "already_loaded": False}
+    return {"id": p.id, "name": p.name, "already_loaded": False, "study_id": study_id}
 
 
 # ------------------------------------------------------------- extract

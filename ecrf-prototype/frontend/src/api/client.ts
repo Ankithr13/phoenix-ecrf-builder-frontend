@@ -4,7 +4,8 @@
 
 import type { NewQuery, SubjectCreate,
   DashboardResponse, DataRow, DraftResponse, FieldChange, Health, HistoryRow, Me, Plan,
-  ProtocolListItem, QueryRow, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
+  ProtocolListItem, ProtocolUploadResult, QueryRow, Reading, SiteRow, SponsorStudy, StudyCreate,
+  StudyListItem, SubjectRow, VersionRow,
 } from "./types";
 
 export class ApiError extends Error {
@@ -47,11 +48,25 @@ export const api = {
   login: (email: string, password: string) => req<Me>("/api/auth/login", post({ email, password }), { allow401: true }),
   logout: () => req<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
 
-  listProtocols: () => req<ProtocolListItem[]>("/api/protocols"),
-  loadSample: () => req<{ id: number; name: string }>("/api/protocols/sample", { method: "POST" }),
-  upload: (file: File) => {
-    const fd = new FormData(); fd.append("file", file);
-    return req<{ id: number; name: string; pages: number; already_loaded?: boolean }>("/api/protocols/upload", { method: "POST", body: fd });
+  sponsorStudies: () => req<SponsorStudy[]>("/api/sponsor/studies"),
+  sponsorStudy: (id: number) => req<SponsorStudy>(`/api/sponsor/studies/${id}`),
+  createStudy: (body: StudyCreate) => req<SponsorStudy>("/api/sponsor/studies", post(body)),
+  assignProtocolStudy: (protocolId: number, studyId: number | null) =>
+    req<{ protocol_id: number; study_id: number | null }>(`/api/protocols/${protocolId}/study`, {
+      method: "PUT", body: JSON.stringify({ study_id: studyId }),
+    }),
+  listProtocols: (filters: { study_id?: number; unassigned?: boolean } = {}) => {
+    const query = new URLSearchParams();
+    if (filters.study_id !== undefined) query.set("study_id", String(filters.study_id));
+    if (filters.unassigned) query.set("unassigned", "true");
+    return req<ProtocolListItem[]>(`/api/protocols${query.size ? `?${query}` : ""}`);
+  },
+  loadSample: (studyId: number) => req<ProtocolUploadResult>(`/api/protocols/sample?study_id=${studyId}`, { method: "POST" }),
+  upload: (file: File, studyId: number) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("study_id", String(studyId));
+    return req<ProtocolUploadResult>("/api/protocols/upload", { method: "POST", body: formData });
   },
   extract: (id: number, force = false) =>
     req<{ version: number }>(`/api/protocols/${id}/extract${force ? "?force=true" : ""}`, { method: "POST" }),

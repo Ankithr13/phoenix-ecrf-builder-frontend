@@ -71,6 +71,27 @@ class UserSession(Base):
 
 # ------------------------------------------------------------ protocols
 
+class Study(Base):
+    __tablename__ = "study"
+    __table_args__ = (UniqueConstraint("org_id", "code", name="uq_study_org_code"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
+    code: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(200))
+    created_by: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class StudyProtocol(Base):
+    __tablename__ = "study_protocol"
+
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"), primary_key=True)
+    study_id: Mapped[int] = mapped_column(ForeignKey("study.id"), index=True)
+    assigned_by: Mapped[str] = mapped_column(String(200))
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Protocol(Base):
     """A protocol document, with the normalised text we extract from."""
 

@@ -9,10 +9,12 @@ import DataReview from "./pages/DataReview";
 import Login from "./pages/Login";
 import Patients from "./pages/Patients";
 import Protocols from "./pages/Protocols";
+import ProtocolUpload from "./pages/ProtocolUpload";
 import Queries from "./pages/Queries";
 import Review from "./pages/Review";
 import Sites from "./pages/Sites";
 import Studies from "./pages/Studies";
+import SponsorStudies from "./pages/SponsorStudies";
 import Visits from "./pages/Visits";
 
 const HOME: Record<OrgType, string> = { sponsor: "/sponsor", site: "/site" };
@@ -46,6 +48,11 @@ function Legacy({ to }: { to: (id: string) => string }) {
   return <Navigate to={to(id)} replace />;
 }
 
+function StudyProtocols() {
+  const { studyId } = useParams();
+  return <Protocols key={studyId} studyId={Number(studyId)} />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -55,8 +62,10 @@ export default function App() {
           <Route path="/" element={<Home />} />
 
           <Route element={<Portal type="sponsor" />}>
-            <Route path="/sponsor" element={<Protocols />} />
-            <Route path="/sponsor/upload" element={<Protocols uploadOnly />} />
+            <Route path="/sponsor" element={<SponsorStudies />} />
+            <Route path="/sponsor/studies/:studyId" element={<StudyProtocols />} />
+            <Route path="/sponsor/protocols" element={<Protocols />} />
+            <Route path="/sponsor/upload" element={<ProtocolUpload />} />
             <Route path="/sponsor/ecrfs" element={<Protocols destination="review" />} />
             <Route path="/sponsor/data" element={<Protocols destination="data" />} />
             <Route path="/sponsor/reports" element={<Protocols destination="dashboard" />} />

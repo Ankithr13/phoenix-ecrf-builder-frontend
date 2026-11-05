@@ -121,6 +121,29 @@ export interface ProtocolListItem {
   state: "draft" | "locked" | null;
   summary: Summary | null;
   plan: Plan | null;
+  study_id: number | null;
+  study_name: string | null;
+  study_code: string | null;
+}
+
+export interface SponsorStudy {
+  id: number;
+  code: string;
+  name: string;
+  protocol_count: number;
+  created_at: string;
+}
+
+export interface StudyCreate {
+  code: string;
+  name: string;
+}
+
+export interface ProtocolUploadResult {
+  id: number;
+  name: string;
+  study_id: number | null;
+  already_loaded?: boolean;
 }
 
 export interface DraftResponse {

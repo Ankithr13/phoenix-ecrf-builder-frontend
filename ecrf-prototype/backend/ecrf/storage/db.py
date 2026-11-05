@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ecrf.config import config
-from ecrf.storage.models import ECRFVersion, Protocol
+from ecrf.storage.models import ECRFVersion, Protocol, Study, StudyProtocol, utcnow
 
 _engine = create_engine(
     config.database_url,
@@ -66,3 +66,22 @@ def locked_version(s: Session, protocol_id: int) -> ECRFVersion | None:
     refuse once a version is locked, so it is always also the latest."""
     v = latest_version(s, protocol_id)
     return v if v and v.state == "locked" else None
+
+
+def protocol_study(session: Session, protocol_id: int) -> Study | None:
+    return session.scalar(select(Study).join(StudyProtocol).where(
+        StudyProtocol.protocol_id == protocol_id))
+
+
+def assign_study(session: Session, protocol_id: int, study_id: int | None, actor: str) -> None:
+    assignment = session.get(StudyProtocol, protocol_id)
+    if study_id is None:
+        if assignment:
+            session.delete(assignment)
+    elif assignment:
+        if assignment.study_id != study_id:
+            assignment.study_id = study_id
+            assignment.assigned_by = actor
+            assignment.assigned_at = utcnow()
+    else:
+        session.add(StudyProtocol(protocol_id=protocol_id, study_id=study_id, assigned_by=actor))

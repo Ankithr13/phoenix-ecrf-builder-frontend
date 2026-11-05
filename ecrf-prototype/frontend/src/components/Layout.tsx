@@ -74,7 +74,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const sponsor = me?.org.type === "sponsor";
   const closeMenu = () => setMenuOpen(false);
   const initials = me?.user.name.trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join("");
-  const inStudies = pathname === "/sponsor" || /^\/sponsor\/p\/\d+\/(visits|sites)$/.test(pathname);
+  const inStudies = pathname === "/sponsor" || pathname === "/sponsor/protocols" || pathname.startsWith("/sponsor/studies/") || /^\/sponsor\/p\/\d+\/(visits|sites)$/.test(pathname);
   const dashboardItems: NavigationItem[] = [{
     label: "Dashboard", icon: "dashboard", to: null,
     unavailableReason: "The workspace dashboard is coming in a separate feature.",
@@ -91,7 +91,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     { label: "Queries", icon: "queries", to: "/site/queries", badge },
   ];
   const studyItems: NavigationItem[] = sponsor ? [
-    { label: "Protocols", icon: "forms", to: "/sponsor", end: true },
+    { label: "All studies", icon: "protocols", to: "/sponsor", end: true },
+    { label: "All protocols", icon: "forms", to: "/sponsor/protocols" },
     ...(id ? [
       { label: "Visits", icon: "visits", to: `/sponsor/p/${id}/visits` } as NavigationItem,
       { label: "Sites", icon: "sites", to: `/sponsor/p/${id}/sites` } as NavigationItem,
