@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ecrf import __version__
 from ecrf.api import auth, dashboard, data, protocols, queries, sites, studies
-from ecrf.config import config
+from ecrf.config import check_production, config, docs_settings
 from ecrf.storage import db, migrate
 
 log = logging.getLogger("ecrf")
@@ -19,6 +19,7 @@ async def lifespan(_: FastAPI):
     # The schema is owned by Alembic now. Starting on a database that is
     # behind would surface as bare 500s on the first query, so refuse here
     # with the command that fixes it.
+    check_production(config)
     migrate.assert_up_to_date(db._engine)
     log.info("ecrf %s backend=%s model=%s db=%s", __version__, config.backend,
              config.llm_model if config.backend != "mock" else "recorded",
@@ -26,7 +27,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="eCRF Pipeline", version=__version__, lifespan=lifespan)
+app = FastAPI(title="eCRF Pipeline", version=__version__, lifespan=lifespan, **docs_settings(config))
 
 app.add_middleware(
     CORSMiddleware,

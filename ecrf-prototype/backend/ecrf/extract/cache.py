@@ -39,8 +39,12 @@ def get(key: str) -> tuple[str, dict] | None:
 
 
 def put(key: str, model: str, messages: list[dict], response_text: str, usage: dict) -> None:
+    """Store an answer. A forced re-run replaces the stored one, so a later
+    ordinary run gets the fresh answer rather than the one that was forced past."""
     with db.session() as s:
-        if s.scalars(select(LLMCall).where(LLMCall.key == key)).first():
+        row = s.scalars(select(LLMCall).where(LLMCall.key == key)).first()
+        if row is not None:
+            row.response_text, row.usage_json = response_text, usage
             return
         s.add(LLMCall(key=key, model=model, request_json={"messages": messages},
                       response_text=response_text, usage_json=usage))

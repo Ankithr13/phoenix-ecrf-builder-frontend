@@ -6,7 +6,7 @@ locked field definition, so there is one source of truth.
 
 Three rules live here:
   - a site enters data only for its own subjects, against a locked form
-  - a value the sponsor has approved cannot be changed by the site
+  - a value the sponsor has approved is frozen unless the sponsor reopens it
   - every change to a value writes a history row first
 """
 
@@ -27,6 +27,7 @@ from ecrf.storage.models import (
     Observation,
     ObservationHistory,
     Organisation,
+    Query,
     Subject,
     utcnow,
 )
@@ -112,7 +113,51 @@ def validate(field: FieldDef, value) -> str | None:
     return None
 
 
-def _check(fields: dict[str, FieldDef], readings: list[Reading], subj: Subject | None = None) -> dict:
+def _raw(o: Observation):
+    return o.value_num if o.value_num is not None else o.value_text
+
+
+def _recompute(fields: dict[str, FieldDef], merged: dict[tuple[str, int], object],
+               given: set[str], subj: Subject | None) -> list[Reading]:
+    """Derived fields the submission did not itself state, worked out from
+    the values now on file. Correcting a weight therefore moves the BMI."""
+    inputs: dict[str, tuple[float, str | None]] = {}
+    for (name, rep), value in merged.items():
+        f = fields.get(name)
+        if f is None or rep != 1 or f.type not in ("integer", "decimal") or value in (None, ""):
+            continue
+        key = derive.role_of(f, derive.INPUTS)
+        if key and key not in inputs:
+            try:
+                inputs[key] = (float(value), f.unit)
+            except (TypeError, ValueError):
+                continue
+    out = []
+    computed = derive.compute(inputs, subj.birth_year if subj else None, subj.sex if subj else None, date.today().year)
+    for d in computed:
+        for f in fields.values():
+            if f.name not in given and derive.role_of(f, derive.DERIVED) == d.key:
+                value = round(d.value) if f.type == "integer" else d.value
+                out.append(Reading(field_name=f.name, repeat_num=1, value=value))
+    return out
+
+
+def _prepare(s: Session, p, subj: Subject, visit: str, fields: dict[str, FieldDef], readings: list[Reading]):
+    """What is on file for this visit, the derived values that follow from
+    the submission, and every value as it would stand afterwards."""
+    rows = {(o.field_name, o.repeat_num): o for o in s.scalars(select(Observation).where(
+        Observation.protocol_id == p.id, Observation.subject_id == subj.code, Observation.visit == visit))}
+    merged: dict[tuple[str, int], object] = {k: _raw(o) for k, o in rows.items()}
+    merged.update({(r.field_name, r.repeat_num): r.value for r in readings})
+    recomputed = _recompute(fields, merged, {r.field_name for r in readings}, subj)
+    merged.update({(r.field_name, r.repeat_num): r.value for r in recomputed})
+    return rows, recomputed, [Reading(field_name=k[0], repeat_num=k[1], value=v) for k, v in merged.items()]
+
+
+def _check(fields: dict[str, FieldDef], readings: list[Reading], subj: Subject | None = None,
+           standing: list[Reading] | None = None) -> dict:
+    """`readings` are validated one by one; a derived value must then agree
+    with the inputs in `standing`, the values as they would be after saving."""
     errors = {}
     for r in readings:
         f = fields.get(r.field_name)
@@ -122,10 +167,9 @@ def _check(fields: dict[str, FieldDef], readings: list[Reading], subj: Subject |
         err = validate(f, r.value)
         if err:
             errors[f"{r.field_name}#{r.repeat_num}"] = err
-    # A derived value (BMI from weight and height, ...) must agree with the
-    # inputs entered beside it. The frontend fills these in; this is the check.
     if not errors:
-        errors.update(derive.check(fields, readings, subj.birth_year if subj else None,
+        errors.update(derive.check(fields, standing if standing is not None else readings,
+                                   subj.birth_year if subj else None,
                                    subj.sex if subj else None, date.today().year))
     return {"ok": not errors, "errors": errors}
 
@@ -171,46 +215,61 @@ def record_change(s: Session, o: Observation, num, text, by: str, reason: str | 
 
 # ------------------------------------------------------------- site side
 
+def save_readings(s: Session, cu: CurrentUser, p, v, subj: Subject, visit: str,
+                  fields: dict[str, FieldDef], readings: list[Reading], reason: str | None = None) -> int:
+    """The one path a value takes into the database, for data entry and for
+    a correction through a query alike: same validation, same yes/no
+    spelling, derived values recomputed, a history row for every change.
+
+    An approved value is frozen. It reopens only when the sponsor raises a
+    query on it, which sets 'queried'; an edit then takes it back to
+    'submitted', so it has to be approved again. A value that was recomputed
+    follows its inputs whatever its status, and needs approving again too."""
+    rows, recomputed, standing = _prepare(s, p, subj, visit, fields, readings)
+    check = _check(fields, [*readings, *recomputed], subj, standing)
+    if not check["ok"]:
+        raise HTTPException(422, {"errors": check["errors"]})
+
+    blocked = [f"{r.field_name}#{r.repeat_num}" for r in readings
+               if (o := rows.get((r.field_name, r.repeat_num))) is not None and o.status == "approved"]
+    if blocked:
+        raise HTTPException(409, {"approved": blocked,
+                                  "message": "These values have been approved by the sponsor and can "
+                                             "no longer be changed here. Ask the sponsor to raise a query."})
+
+    auto = {r.field_name for r in recomputed}
+    for r in [*readings, *recomputed]:
+        f = fields[r.field_name]
+        num, text = _split(f, r.value)
+        o = rows.get((r.field_name, r.repeat_num))
+        if o is None:
+            s.add(Observation(protocol_id=p.id, subject_id=subj.code, subject_ref=subj.id,
+                              ecrf_version_id=v.id, visit=visit, field_name=r.field_name,
+                              repeat_num=r.repeat_num, value_num=num, value_text=text,
+                              synthetic=True, status="submitted", entered_by=cu.user.email))
+            continue
+        why = "recalculated after a change to its inputs" if r.field_name in auto else reason
+        changed = record_change(s, o, num, text, cu.user.email, why)
+        if changed and o.approved_by:
+            o.status, o.approved_by, o.approved_at = "submitted", None, None
+    return len(readings)
+
+
+# ------------------------------------------------------------- site side
+
 @router.post("/validate")
 def validate_only(body: EntryRequest, cu: CurrentUser = Depends(require("data.enter")),
                   s: Session = Depends(db.get_session)):
-    _, _, subj, fields = _locked_fields(s, cu, body)
-    return _check(fields, body.readings, subj)
+    p, _, subj, fields = _locked_fields(s, cu, body)
+    _, recomputed, standing = _prepare(s, p, subj, body.visit, fields, body.readings)
+    return _check(fields, [*body.readings, *recomputed], subj, standing)
 
 
 @router.post("/enter")
 def enter(body: EntryRequest, cu: CurrentUser = Depends(require("data.enter")),
           s: Session = Depends(db.get_session)):
     p, v, subj, fields = _locked_fields(s, cu, body)
-    check = _check(fields, body.readings, subj)
-    if not check["ok"]:
-        raise HTTPException(422, {"errors": check["errors"]})
-    saved, blocked = 0, []
-    for r in body.readings:
-        f = fields[r.field_name]
-        num, text = _split(f, r.value)
-        existing = s.scalars(select(Observation).where(
-            Observation.protocol_id == p.id, Observation.subject_id == subj.code,
-            Observation.visit == body.visit, Observation.field_name == r.field_name,
-            Observation.repeat_num == r.repeat_num)).first()
-        if existing:
-            # Approved data belongs to the sponsor now. The site can change
-            # it again only through a query (stage 5), which sets 'queried'.
-            if existing.status == "approved":
-                blocked.append(f"{r.field_name}#{r.repeat_num}")
-                continue
-            record_change(s, existing, num, text, cu.user.email, None)
-        else:
-            s.add(Observation(protocol_id=p.id, subject_id=subj.code, subject_ref=subj.id,
-                              ecrf_version_id=v.id, visit=body.visit, field_name=r.field_name,
-                              repeat_num=r.repeat_num, value_num=num, value_text=text,
-                              synthetic=True, status="entered", entered_by=cu.user.email))
-        saved += 1
-    if blocked:
-        s.rollback()
-        raise HTTPException(409, {"approved": blocked,
-                                  "message": "These values have been approved by the sponsor and can "
-                                             "no longer be changed here. Ask the sponsor to raise a query."})
+    saved = save_readings(s, cu, p, v, subj, body.visit, fields, body.readings)
     s.commit()
     return {"saved": saved}
 
@@ -219,8 +278,11 @@ def enter(body: EntryRequest, cu: CurrentUser = Depends(require("data.enter")),
 def seed(protocol_id: int, cu: CurrentUser = Depends(require("data.seed")),
          s: Session = Depends(db.get_session)):
     """Load synthetic observations for the dashboard demo, spread across
-    the site organisations, about 70% of them already approved."""
+    the site organisations, all of them awaiting the sponsor's approval."""
     p = scope.protocol_or_404(s, cu, protocol_id)
+    v = db.locked_version(s, p.id)
+    if v is None:
+        raise HTTPException(409, "Lock the form before seeding; data only exists against a locked form")
     existing = s.scalars(select(Observation).where(Observation.protocol_id == protocol_id)).first()
     if existing:
         return {"seeded": 0, "already": True}
@@ -228,8 +290,7 @@ def seed(protocol_id: int, cu: CurrentUser = Depends(require("data.seed")),
                       .order_by(Organisation.code)).all()[:2]
     if not sites:
         raise HTTPException(409, "No site organisations exist to own the synthetic subjects")
-    v = db.latest_version(s, p.id)
-    n = seed_mod.seed(s, protocol_id, sites, v.id if v else None)
+    n = seed_mod.seed(s, protocol_id, sites, v.id)
     s.commit()
     return {"seeded": n, "already": False}
 
@@ -291,7 +352,9 @@ def approve_data(protocol_id: int, body: ApproveRequest,
     scope.protocol_or_404(s, cu, protocol_id)
     rows = s.scalars(select(Observation).where(Observation.protocol_id == protocol_id,
                                                 Observation.id.in_(body.observation_ids))).all()
-    blocked = [o.id for o in rows if o.status == "queried"]
+    live = set(s.scalars(select(Query.observation_id).where(
+        Query.observation_id.in_(body.observation_ids), Query.status != "closed")))
+    blocked = [o.id for o in rows if o.status == "queried" or (o.id in live and o.status != "approved")]
     if blocked:
         raise HTTPException(409, {"queried": blocked,
                                   "message": "Close the open queries on these values before approving them"})

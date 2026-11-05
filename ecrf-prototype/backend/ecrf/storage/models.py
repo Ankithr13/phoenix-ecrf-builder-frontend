@@ -79,7 +79,8 @@ class Protocol(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
     name: Mapped[str] = mapped_column(String(200))
-    filename: Mapped[str] = mapped_column(String(300))
+    filename: Mapped[str] = mapped_column(String(300))        # as uploaded, never used as a path
+    stored_filename: Mapped[str | None] = mapped_column(String(300), nullable=True)  # <uuid>.pdf
     text_hash: Mapped[str] = mapped_column(String(64))
     normalised: Mapped[str] = mapped_column(Text)
     sections: Mapped[list] = mapped_column(JSON)       # [{number,title,start,end,page}]
@@ -156,7 +157,7 @@ class Subject(Base):
     its own prefix, so a site can never address another site's patient.
 
     What is stored at registration is what a case report form may hold:
-    the study code, initials, year of birth, sex and the enrolment date.
+    the study code, year of birth, sex and the enrolment date.
     Never a name, full date of birth or any contact detail; the link from
     code to person lives in the site's own enrolment log, not here."""
 
@@ -167,7 +168,6 @@ class Subject(Base):
     protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
     site_org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
     code: Mapped[str] = mapped_column(String(50))
-    initials: Mapped[str | None] = mapped_column(String(5), nullable=True)
     birth_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sex: Mapped[str | None] = mapped_column(String(20), nullable=True)
     enrolled_on: Mapped[str | None] = mapped_column(String(10), nullable=True)  # ISO date
@@ -202,8 +202,8 @@ class Observation(Base):
     # keep working; subject_ref is the row it came from.
     subject_ref: Mapped[int | None] = mapped_column(ForeignKey("subject.id"), nullable=True)
     ecrf_version_id: Mapped[int | None] = mapped_column(ForeignKey("ecrf_version.id"), nullable=True)
-    # entered -> approved by the sponsor; queried while a query is open.
-    status: Mapped[str] = mapped_column(String(20), default="entered", server_default="entered")
+    # submitted -> approved by the sponsor; queried while a query is open.
+    status: Mapped[str] = mapped_column(String(20), default="submitted", server_default="submitted")
     approved_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -10,8 +10,8 @@ type Filter = "mine" | "open" | "answered" | "closed" | "";
 
 /* One page for both portals. Queries run both ways: a sponsor questions a
    value a site entered, a site asks the sponsor about a value or the form.
-   The other side answers; the side that raised it closes it. The server
-   says per row whose turn it is (can_answer / can_close / for_me), so this
+   The other side answers; the sponsor closes, whichever side asked. The
+   server says per row whose turn it is (can_answer / can_close / for_me), so this
    page never has to know which side it is on. */
 export default function Queries() {
   const { me } = useAuth();
@@ -67,7 +67,7 @@ export default function Queries() {
           <div className="muted small">
             {isSite
               ? "Questions from the sponsor about values entered here, and questions this site has asked the sponsor"
-              : "Questions raised about entered values, from either side. The side that asked closes it once satisfied."}
+              : "Questions raised about entered values, from either side. The sponsor closes each one once it is settled."}
           </div>
           {!composing && <button type="button" className="btn btn-primary" onClick={() => setComposing(true)}>New query</button>}
         </div>

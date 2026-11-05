@@ -3,7 +3,7 @@
    same-origin and travels with every request. */
 
 import type { NewQuery, SubjectCreate,
-  DashboardResponse, DataRow, DraftResponse, FieldChange, Health, HistoryRow, Me, Plan,
+  DashboardResponse, DataRow, DraftResponse, FieldChange, Health, Me, Plan,
   ProtocolListItem, QueryRow, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
 } from "./types";
 
@@ -53,14 +53,12 @@ export const api = {
     const fd = new FormData(); fd.append("file", file);
     return req<{ id: number; name: string; pages: number; already_loaded?: boolean }>("/api/protocols/upload", { method: "POST", body: fd });
   },
-  extract: (id: number, force = false) =>
-    req<{ version: number }>(`/api/protocols/${id}/extract${force ? "?force=true" : ""}`, { method: "POST" }),
   extractVisits: (id: number, force = false) =>
     req<Plan>(`/api/protocols/${id}/extract/visits${force ? "?force=true" : ""}`, { method: "POST" }),
   visits: (id: number) => req<Plan>(`/api/protocols/${id}/visits`),
   saveVisits: (id: number, visits: string[]) => req<Plan>(`/api/protocols/${id}/visits`, { method: "PUT", body: JSON.stringify({ visits }) }),
   extractFields: (id: number, force = false) =>
-    req<{ version: number }>(`/api/protocols/${id}/extract/fields${force ? "?force=true" : ""}`, { method: "POST" }),
+    req<{ version: number; replaced_draft: boolean }>(`/api/protocols/${id}/extract/fields${force ? "?force=true" : ""}`, { method: "POST" }),
   draft: (id: number) => req<DraftResponse>(`/api/protocols/${id}/draft`),
   versions: (id: number) => req<VersionRow[]>(`/api/protocols/${id}/versions`),
   section: (id: number, n: string) => req<{ number: string; title: string; page: number; text: string }>(`/api/protocols/${id}/section/${encodeURIComponent(n)}`),
@@ -71,7 +69,8 @@ export const api = {
 
   sites: (id: number) => req<SiteRow[]>(`/api/protocols/${id}/sites`),
   assignSite: (id: number, site_org_id: number) => req<{ assigned: boolean }>(`/api/protocols/${id}/sites`, post({ site_org_id })),
-  unassignSite: (id: number, site_org_id: number) => req<{ assigned: boolean }>(`/api/protocols/${id}/sites/${site_org_id}`, { method: "DELETE" }),
+  unassignSite: (id: number, site_org_id: number, force = false) =>
+    req<{ assigned: boolean }>(`/api/protocols/${id}/sites/${site_org_id}${force ? "?force=true" : ""}`, { method: "DELETE" }),
 
   studies: () => req<StudyListItem[]>("/api/studies"),
   subjects: (id: number) => req<SubjectRow[]>(`/api/studies/${id}/subjects`),
@@ -84,7 +83,6 @@ export const api = {
   },
   approveData: (id: number, observation_ids: number[]) =>
     req<{ approved: number }>(`/api/protocols/${id}/data/approve`, post({ observation_ids })),
-  history: (id: number, observationId: number) => req<HistoryRow[]>(`/api/protocols/${id}/data/${observationId}/history`),
 
   validate: (protocol_id: number, subject_id: string, visit: string, readings: Reading[]) =>
     req<{ ok: boolean; errors: Record<string, string> }>("/api/data/validate", post({ protocol_id, subject_id, visit, readings })),

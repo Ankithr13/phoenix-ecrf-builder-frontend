@@ -143,7 +143,7 @@ export default function Dashboard() {
                     <td>{st.label}</td>
                     <td className="num">{fmt(st.app, st.unit)}</td>
                     <td className="num">{fmt(st.independent, st.unit)}</td>
-                    <td><Badge kind={st.pass ? "pass" : "fail"} /></td>
+                    <td><Badge kind={st.status} /></td>
                   </tr>
                 ))}
               </tbody>

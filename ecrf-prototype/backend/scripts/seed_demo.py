@@ -4,7 +4,7 @@
     python scripts/seed_demo.py --if-empty only when the user table is empty
 
 The password comes from DEMO_PASSWORD (default demo1234) and is printed
-once. There is no sign-up page on purpose: accounts are provisioned, the
+once. In production this does nothing unless SEED_DEMO=1. There is no sign-up page on purpose: accounts are provisioned, the
 way invite-only business tools work."""
 
 import sys
@@ -21,6 +21,9 @@ from ecrf.storage.models import User
 
 
 def main() -> None:
+    if config.env == "prod" and not config.seed_demo:
+        print("ECRF_ENV=prod: demo accounts are created only when SEED_DEMO=1")
+        return
     with db.session() as s:
         if "--if-empty" in sys.argv and s.scalars(select(User)).first() is not None:
             return

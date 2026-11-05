@@ -1,6 +1,6 @@
 """Independently computed expected results.
 
-DO NOT import anything from ecrf/. Different code path on purpose. Reads
+This file imports nothing from the application package. Different code path on purpose. Reads
 the observation table with raw SQL and computes by hand. Only rows the
 sponsor has approved count, the same rule the app applies.
 

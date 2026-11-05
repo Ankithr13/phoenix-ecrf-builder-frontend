@@ -5,23 +5,21 @@ import type { SubjectCreate, SubjectRow } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 
 /* A site's patients on one study. Registration holds what a case report
-   form may hold: a study code, initials, year of birth, sex, enrolment
-   date. No name and no full date of birth; the code-to-person link stays
-   in the site's own enrolment log. The code is namespaced by the site
-   (BGH-…), typed or server-made, so a site cannot claim another site's
+   form may hold: a study code, year of birth, sex, enrolment date. No name,
+   no initials and no full date of birth; the code-to-person link stays in
+   the site's own enrolment log. The code is made by the server and
+   namespaced by the site (BGH-…), so a site cannot claim another site's
    patient. */
 
 const SEXES = ["", "Female", "Male", "Other", "Unknown"];
 
 interface Form {
-  code: string;
-  initials: string;
   birth_year: string;
   sex: string;
   enrolled_on: string;
   note: string;
 }
-const EMPTY: Form = { code: "", initials: "", birth_year: "", sex: "", enrolled_on: "", note: "" };
+const EMPTY: Form = { birth_year: "", sex: "", enrolled_on: "", note: "" };
 
 export default function Patients() {
   const id = Number(useParams().id);
@@ -45,16 +43,6 @@ export default function Patients() {
 
   const register = async () => {
     const body: SubjectCreate = {};
-    const code = form.code.trim().toUpperCase();
-    if (code) {
-      if (!code.startsWith(prefix)) { setProblem(`Subject IDs at this site start with ${prefix}`); return; }
-      body.code = code;
-    }
-    const ini = form.initials.trim().toUpperCase();
-    if (ini) {
-      if (!/^[A-Z]{2,4}$/.test(ini)) { setProblem("Initials are 2 to 4 letters."); return; }
-      body.initials = ini;
-    }
     if (form.birth_year.trim()) {
       const y = Number(form.birth_year);
       const now = new Date().getFullYear();
@@ -89,8 +77,8 @@ export default function Patients() {
       <div className="card">
         <div className="row row-between row-wrap">
           <p className="muted small">
-            Synthetic data only. A patient is registered by study code, initials, year of birth and sex:
-            never by name or full date of birth. The link from code to person is kept in the site's own enrolment log.
+            Synthetic data only. A patient is registered by a code the system makes, year of birth and sex:
+            never by name, initials or full date of birth. The link from code to person is kept in the site's own enrolment log.
           </p>
           {can("subject.create") && !open && (
             <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>Register patient</button>
@@ -99,16 +87,6 @@ export default function Patients() {
 
         {open && (
           <div className="register">
-            <label className="ctl">
-              Subject ID
-              <input className="input input-sm input-mono" value={form.code} placeholder={`${prefix}… (blank = next number)`}
-                     onChange={(e) => set({ code: e.target.value })} aria-label="Subject ID" />
-            </label>
-            <label className="ctl">
-              Initials
-              <input className="input input-sm input-mono" value={form.initials} placeholder="JD" maxLength={4}
-                     onChange={(e) => set({ initials: e.target.value })} aria-label="Initials" />
-            </label>
             <label className="ctl">
               Year of birth
               <input className="input input-sm input-mono" type="number" min={1900} max={new Date().getFullYear()} value={form.birth_year}
@@ -146,7 +124,7 @@ export default function Patients() {
           <table className="table">
             <thead>
               <tr>
-                <th>Subject ID</th><th>Initials</th><th>Born</th><th>Sex</th><th>Enrolled</th>
+                <th>Subject ID</th><th>Born</th><th>Sex</th><th>Enrolled</th>
                 <th className="num">Readings</th><th>Registered</th><th />
               </tr>
             </thead>
@@ -154,7 +132,6 @@ export default function Patients() {
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td className="mono strong">{r.code}</td>
-                  <td className="mono">{r.initials ?? "—"}</td>
                   <td className="mono">{r.birth_year ?? "—"}</td>
                   <td>{r.sex ?? "—"}</td>
                   <td className="mono small">{r.enrolled_on ?? "—"}</td>

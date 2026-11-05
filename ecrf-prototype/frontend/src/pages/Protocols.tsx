@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type { ProtocolListItem } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import { costText } from "../format";
 
 export default function Protocols() {
   const { can } = useAuth();
@@ -91,7 +92,7 @@ export default function Protocols() {
                   {p.summary && p.summary.est_cost_usd !== undefined && (
                     <span className="mono xs muted">
                       {p.summary.llm_calls_made} call{p.summary.llm_calls_made === 1 ? "" : "s"}
-                      {p.summary.llm_calls_from_cache ? ` + ${p.summary.llm_calls_from_cache} from cache` : ""} · ${p.summary.est_cost_usd.toFixed(4)}
+                      {p.summary.llm_calls_from_cache ? ` + ${p.summary.llm_calls_from_cache} from cache` : ""} · {costText(p.summary.est_cost_usd)}
                     </span>
                   )}
                   {p.summary && (

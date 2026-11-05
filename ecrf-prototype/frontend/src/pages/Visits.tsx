@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { Plan } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import { costText } from "../format";
 
 /* The one human step in extraction. Pass one proposes the visit list; a
    person fixes it here; pass two is paid for only once it is confirmed.
@@ -19,11 +20,13 @@ export default function Visits() {
   const [error, setError] = useState<string | null>(null);
   const [needsForce, setNeedsForce] = useState(false);
   const [newVisit, setNewVisit] = useState("");
+  const [hasDraft, setHasDraft] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const [d, p] = await Promise.all([api.draft(id), api.visits(id)]);
       setName(d.protocol.name);
+      setHasDraft(d.version !== null);
       setPlan(p);
       setVisits(p.visits);
       setError(null);
@@ -53,6 +56,7 @@ export default function Visits() {
   };
 
   const confirmAndExtract = async (force = false) => {
+    if (hasDraft && !force && !window.confirm("This protocol already has an unreviewed draft. Extracting again replaces it with a new version. Carry on?")) return;
     setBusy("fields"); setError(null); setNeedsForce(false);
     try {
       const p = await api.saveVisits(id, visits);
@@ -119,7 +123,7 @@ export default function Visits() {
             </div>
             <div className="stat">
               <div className="stat-label">Pass one so far</div>
-              <div className="stat-value">{usage ? `$${usage.est_cost_usd.toFixed(4)}` : "—"}</div>
+              <div className="stat-value">{usage ? costText(usage.est_cost_usd) : "—"}</div>
               <div className="stat-sub">
                 {usage ? `${usage.llm_calls_made} call${usage.llm_calls_made === 1 ? "" : "s"}${usage.llm_calls_from_cache ? `, ${usage.llm_calls_from_cache} from cache` : ""} · ${usage.input_tokens.toLocaleString()} in · ${usage.output_tokens.toLocaleString()} out` : ""}
               </div>

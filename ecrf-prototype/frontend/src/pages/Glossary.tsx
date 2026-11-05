@@ -57,8 +57,8 @@ const GROUPS: Group[] = [
     title: "Sites, patients and data",
     terms: [
       { word: "Assigned site", means: "A hospital the sponsor has put on the study. A site sees a study only when the form is locked and the site is assigned; otherwise the study does not exist for them." },
-      { word: "Subject ID", means: "The patient's study code, e.g. BGH-001. Namespaced by site so one site can never address another's patient. Patients are registered by code, initials, year of birth and sex, never by name." },
-      { word: "Entered", means: "A value a site typed in. It is not data yet." },
+      { word: "Subject ID", means: "The patient's study code, e.g. BGH-001. Namespaced by site so one site can never address another's patient. Patients are registered by that code, year of birth and sex, never by name, initials or full date of birth." },
+      { word: "Submitted", means: "A value a site typed in. It is not data yet." },
       { word: "Approved (value)", means: "The sponsor accepted the value on Data review. It is now frozen for the site and counts in the statistics." },
       { word: "Queried (value)", means: "A query is open on this value. It cannot be approved until the query is closed." },
       { word: "History", means: "Every change to a value: old value, new value, who, when, and why (a query, if there was one)." },
@@ -69,9 +69,9 @@ const GROUPS: Group[] = [
     title: "Queries",
     terms: [
       { word: "Query", means: "A question from one side to the other about a study, a patient, a visit or one value. Whoever asks, the other side answers, and the side that asked closes it.",
-        example: "Site: \"Which unit do you want for creatinine?\" Sponsor answers in words. Site closes." },
-      { word: "Open / Answered / Closed", means: "Open: waiting for the other side. Answered: waiting for the asker to close it. Closed: settled. A value-level query returns the value to Entered when closed, so it is approved again on purpose." },
-      { word: "My turn", means: "Queries where it is your move: open ones you should answer, answered ones you should close. The badge in the sidebar counts them." },
+        example: "Site: \"Which unit do you want for creatinine?\" Sponsor answers in words, then closes it." },
+      { word: "Open / Answered / Closed", means: "Open: waiting for the other side. Answered: waiting for the sponsor to close it. Closed: settled. A value-level query returns the value to Entered when closed, so it is approved again on purpose." },
+      { word: "My turn", means: "Queries where it is your move: open ones you should answer and, for the sponsor, answered ones to close. The badge in the sidebar counts them." },
       { word: "Corrected value", means: "A site answering a query about one value may attach the right number. It goes into the value's history with the query as the reason. Sponsors answer in words only." },
     ],
   },

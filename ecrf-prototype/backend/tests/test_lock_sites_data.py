@@ -149,7 +149,7 @@ def test_edits_write_history_and_approved_values_are_frozen(client, demo_account
     assert r.status_code == 422, "range check still applies"
 
     rows = approver.get(f"/api/protocols/{pid}/data").json()
-    assert len(rows) == 1 and rows[0]["value"] == "135" and rows[0]["status"] == "entered"
+    assert len(rows) == 1 and rows[0]["value"] == "135" and rows[0]["status"] == "submitted"
     assert rows[0]["site"] == "BGH" and rows[0]["entered_by"] == BGH
     hist = approver.get(f"/api/protocols/{pid}/data/{rows[0]['id']}/history").json()
     assert [(h["old_value"], h["new_value"], h["changed_by"]) for h in hist] == [("130", "135", BGH)]
@@ -166,23 +166,27 @@ def test_edits_write_history_and_approved_values_are_frozen(client, demo_account
 
 def test_stats_count_only_approved_rows_in_both_implementations(client, demo_accounts):
     pid = sponsor_draft()
-    login(client, BUILDER)
-    assert client.post(f"/api/data/seed/{pid}").json()["already"] is False
-    dash = client.get(f"/api/dashboard/{pid}").json()
+    approver = lock_and_assign(pid, "BGH", "MRC")
+    assert approver.post(f"/api/data/seed/{pid}").json()["already"] is False
+    dash = approver.get(f"/api/dashboard/{pid}").json()
+    assert dash["data"]["readings"] == 0 < dash["data"]["entered_total"], "nothing seeded is approved"
+
+    # Approving a subset moves both implementations together.
+    pending = [r["id"] for r in approver.get(f"/api/protocols/{pid}/data", params={"status": "submitted"}).json()]
+    approver.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": pending[::2]})
+    dash = approver.get(f"/api/dashboard/{pid}").json()
     assert 0 < dash["data"]["readings"] < dash["data"]["entered_total"]
     assert all(st["pass"] for st in dash["stats"]), "app and independent results must agree on approved rows"
     before = dash["data"]["readings"]
 
     # Approving the rest changes both implementations the same way.
-    login(client, APPROVER)
-    pending = [r["id"] for r in client.get(f"/api/protocols/{pid}/data", params={"status": "entered"}).json()]
-    client.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": pending})
-    dash = client.get(f"/api/dashboard/{pid}").json()
+    approver.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": pending[1::2]})
+    dash = approver.get(f"/api/dashboard/{pid}").json()
     assert dash["data"]["readings"] == dash["data"]["entered_total"] > before
     assert all(st["pass"] for st in dash["stats"])
 
     # The seeded subjects are real rows owned by the two demo sites.
-    rows = client.get(f"/api/protocols/{pid}/data", params={"site": "MRC"}).json()
+    rows = approver.get(f"/api/protocols/{pid}/data", params={"site": "MRC"}).json()
     assert rows and all(r["subject"].startswith("MRC-") for r in rows)
 
 
@@ -190,28 +194,25 @@ def test_patient_registration_details_and_rules(client, demo_accounts):
     pid = sponsor_draft()
     sponsor = lock_and_assign(pid, "BGH")
     bgh = site_client(BGH)
-    # Full registration with the site's own id.
+    # Full registration; the code always comes from the server.
     r = bgh.post(f"/api/studies/{pid}/subjects", json={
-        "code": "bgh-0101", "initials": "jd", "birth_year": 1975, "sex": "Female",
-        "enrolled_on": "2026-10-01", "note": "screened at clinic B"})
+        "birth_year": 1975, "sex": "Female", "enrolled_on": "2026-10-01", "note": "screened at clinic B"})
     assert r.status_code == 200, r.text
     row = r.json()
-    assert row["code"] == "BGH-0101" and row["initials"] == "JD" and row["birth_year"] == 1975
+    assert row["code"] == "BGH-001" and row["birth_year"] == 1975
     assert row["sex"] == "Female" and row["enrolled_on"] == "2026-10-01" and row["note"] == "screened at clinic B"
     # Empty body still works and the server numbers it.
     assert bgh.post(f"/api/studies/{pid}/subjects").json()["code"] == "BGH-002"
     # Rules.
-    assert bgh.post(f"/api/studies/{pid}/subjects", json={"code": "MRC-001"}).status_code == 422, "not this site's prefix"
-    assert bgh.post(f"/api/studies/{pid}/subjects", json={"code": "BGH-0101"}).status_code == 409, "duplicate"
-    assert bgh.post(f"/api/studies/{pid}/subjects", json={"initials": "J"}).status_code == 422
+    assert bgh.post(f"/api/studies/{pid}/subjects", json={"code": "BGH-0101"}).status_code == 422, "no typed codes"
     assert bgh.post(f"/api/studies/{pid}/subjects", json={"birth_year": 1850}).status_code == 422
     assert bgh.post(f"/api/studies/{pid}/subjects", json={"sex": "F"}).status_code == 422
     assert bgh.post(f"/api/studies/{pid}/subjects", json={"enrolled_on": "2099-01-01"}).status_code == 422
     assert bgh.post(f"/api/studies/{pid}/subjects", json={"enrolled_on": "01/10/2026"}).status_code == 422
     # Listed with the details, to the site and to the sponsor.
     codes = {x["code"]: x for x in bgh.get(f"/api/studies/{pid}/subjects").json()}
-    assert codes["BGH-0101"]["initials"] == "JD" and codes["BGH-002"]["initials"] is None
-    assert {x["code"] for x in sponsor.get(f"/api/studies/{pid}/subjects").json()} >= {"BGH-0101", "BGH-002"}
+    assert codes["BGH-001"]["birth_year"] == 1975 and codes["BGH-002"]["birth_year"] is None
+    assert {x["code"] for x in sponsor.get(f"/api/studies/{pid}/subjects").json()} >= {"BGH-001", "BGH-002"}
 
 
 def test_an_unanswered_yes_no_is_not_a_no():

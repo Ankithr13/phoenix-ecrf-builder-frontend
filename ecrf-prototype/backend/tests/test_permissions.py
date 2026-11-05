@@ -26,7 +26,8 @@ MATRIX = [
     ("POST", "/api/protocols/{id}/review", {"changes": []}, 200, 403, 401),
     ("POST", "/api/data/validate", ENTRY, 403, 404, 401),
     ("POST", "/api/data/enter", ENTRY, 403, 404, 401),
-    ("POST", "/api/data/seed/{id}", None, 200, 403, 401),
+    # refused on state: the sample is extracted but not locked
+    ("POST", "/api/data/seed/{id}", None, 409, 403, 401),
     ("GET", "/api/data/{id}/subjects", None, 200, 404, 401),
     ("GET", "/api/dashboard/calculations", None, 200, 403, 401),
     ("GET", "/api/dashboard/{id}", None, 200, 403, 401),
@@ -47,7 +48,8 @@ MATRIX = [
     # unknown id is a 404 for everyone signed in
     ("POST", "/api/data/999999/queries", {"text": "why"}, 404, 404, 401),
     ("POST", "/api/queries/999999/answer", {"text": "because"}, 404, 404, 401),
-    ("POST", "/api/queries/999999/close", None, 404, 404, 401),
+    # closing is the sponsor's alone
+    ("POST", "/api/queries/999999/close", None, 404, 403, 401),
     ("GET", "/api/auth/me", None, 200, 200, 401),
 ]
 

@@ -326,7 +326,7 @@ export default function DataEntry() {
       <div className="card mt-4">
         <div className="row row-between row-wrap">
           <p className="strong">On file for {subject}</p>
-          <p className="muted small">Ask the sponsor about any value; an approved value can only be changed through a query.</p>
+          <p className="muted small">Ask the sponsor about any value. An approved value can be changed only while the sponsor has a query open on it.</p>
         </div>
         {entered.length === 0 && (
           <p className="muted small mt-2">Nothing saved for this patient yet. Save readings above; each one then appears here with an <em>Ask the sponsor</em> link. You can also start a query from the Queries page.</p>

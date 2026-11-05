@@ -65,7 +65,8 @@ def fake_llm(monkeypatch):
 
     monkeypatch.setattr(oc_mod, "OpenAI", FakeOpenAI)
     monkeypatch.setattr(base_mod, "config", replace(
-        config, llm_api_key="test-key", llm_base_url="https://api.openai.com/v1", llm_model="gpt-test"))
+        config, llm_api_key="test-key", llm_base_url="https://api.openai.com/v1", llm_model="gpt-test",
+        price_input_per_m=0.10, price_cached_input_per_m=0.01, price_output_per_m=0.50))
     calls_obj = SimpleNamespace(calls=calls, state=state)
     return calls_obj
 
@@ -115,8 +116,7 @@ def test_usage_is_summed_and_priced(client, demo_accounts, fake_llm):
     n = 6
     assert s["input_tokens"] == n * 1000 and s["cached_input_tokens"] == n * 800
     assert s["output_tokens"] == n * 50 and s["reasoning_tokens"] == n * 5
-    expected = (n * 200 * config.price_input_per_m + n * 800 * config.price_cached_input_per_m
-                + n * 50 * config.price_output_per_m) / 1e6
+    expected = (n * 200 * 0.10 + n * 800 * 0.01 + n * 50 * 0.50) / 1e6
     assert s["est_cost_usd"] == round(expected, 4)
 
 

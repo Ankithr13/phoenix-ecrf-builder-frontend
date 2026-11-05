@@ -3,20 +3,21 @@
 A sponsor questions what a site entered; a site asks the sponsor about a
 value, a visit, a patient or the study as a whole. The other side
 answers (only a site may attach a corrected value, because data entry is
-the site's job) and the side that raised it closes it.
+the site's job) and the sponsor closes it, whichever side raised it.
 
 Every query belongs to one protocol and, so that a site only ever sees
 its own traffic, to one site: the site that raised it, the site of the
 patient it is about, or the site a sponsor chose to ask. When a query is
-about one entered value that value is 'queried' while the query is open
-or answered and cannot be approved; closing returns it to 'entered'."""
+about one entered value that value cannot be approved while the query is
+live; closing returns a queried value to 'submitted'. A site asking about a
+value the sponsor already approved leaves the approval alone."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ecrf.api.data import EntryRequest, Reading, _locked_fields, record_change, shown, validate
+from ecrf.api.data import EntryRequest, Reading, _locked_fields, save_readings, shown
 from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
 from ecrf.storage import db
@@ -73,7 +74,7 @@ def _row(s: Session, q: Query, cu: CurrentUser | None = None) -> dict:
     site = s.get(Organisation, q.site_org_id) if q.site_org_id else None
     mine = cu is not None and cu.org.type == q.raised_by_org
     can_answer = cu is not None and q.status != "closed" and not mine
-    can_close = cu is not None and q.status != "closed" and mine
+    can_close = cu is not None and q.status != "closed" and cu.can("query.close")
     return {
         "id": q.id, "protocol_id": q.protocol_id, "protocol_name": p.name if p else None,
         "about": _about(q),
@@ -103,7 +104,7 @@ def _visible_queries(s: Session, cu: CurrentUser, protocol_id: int):
 
 def _visible_query(s: Session, cu: CurrentUser, query_id: int) -> Query:
     q = s.get(Query, query_id)
-    if q is None or not scope.visible_protocols(cu).where(Protocol.id == q.protocol_id).column_descriptions:
+    if q is None:
         raise HTTPException(404, "query not found")
     if s.scalars(scope.visible_protocols(cu).where(Protocol.id == q.protocol_id)).first() is None:
         raise HTTPException(404, "query not found")
@@ -154,7 +155,9 @@ def _create(s: Session, cu: CurrentUser, body: NewQueryRequest) -> Query:
     q = Query(protocol_id=p.id, site_org_id=site_id, subject_ref=subj.id if subj else None,
               visit=visit if (visit and not o) else None, observation_id=o.id if o else None,
               raised_by=cu.user.email, raised_by_org=cu.org.type, text=body.text.strip(), status="open")
-    if o is not None:
+    # A site's question must not undo the sponsor's approval; only a question
+    # from the sponsor reopens an approved value.
+    if o is not None and (cu.org.type == "sponsor" or o.status != "approved"):
         o.status = "queried"
     s.add(q)
     s.commit()
@@ -203,19 +206,13 @@ def answer_query(query_id: int, body: AnswerRequest,
         raise HTTPException(422, "this query is not about one value, so there is nothing to correct")
     if has_value:
         o = s.get(Observation, q.observation_id)
-        req = EntryRequest(protocol_id=o.protocol_id, subject_id=o.subject_id, visit=o.visit,
-                           readings=[Reading(field_name=o.field_name, repeat_num=o.repeat_num,
-                                             value=body.new_value)])
-        _, _, _, fields = _locked_fields(s, cu, req)
-        f = fields.get(o.field_name)
-        if f is None:
+        req = EntryRequest(protocol_id=o.protocol_id, subject_id=o.subject_id, visit=o.visit, readings=[])
+        p, v, subj, fields = _locked_fields(s, cu, req)
+        if fields.get(o.field_name) is None:
             raise HTTPException(404, "field is no longer on the locked form")
-        err = validate(f, body.new_value)
-        if err:
-            raise HTTPException(422, {"errors": {f"{o.field_name}#{o.repeat_num}": err}})
-        num = float(body.new_value) if f.type in ("integer", "decimal") else None
-        text = None if num is not None else str(body.new_value)
-        record_change(s, o, num, text, cu.user.email, reason=f"query {q.id}: {q.text}")
+        save_readings(s, cu, p, v, subj, o.visit, fields,
+                      [Reading(field_name=o.field_name, repeat_num=o.repeat_num, value=body.new_value)],
+                      reason=f"query {q.id}: {q.text}")
     q.status, q.answer_text, q.answered_by, q.answered_at = "answered", body.text.strip(), cu.user.email, utcnow()
     s.commit()
     return _row(s, q, cu)
@@ -224,19 +221,18 @@ def answer_query(query_id: int, body: AnswerRequest,
 @router.post("/api/queries/{query_id}/close")
 def close_query(query_id: int, cu: CurrentUser = Depends(require("query.close")),
                 s: Session = Depends(db.get_session)):
-    """The side that raised it closes it, once the answer satisfies them."""
+    """Only the sponsor closes, whichever side raised it. The permission is
+    the rule: a site has no route to end a question about its own data."""
     q = _visible_query(s, cu, query_id)
     if q.status == "closed":
         return _row(s, q, cu)
-    if cu.org.type != q.raised_by_org:
-        raise HTTPException(403, "only the side that raised a query closes it")
     q.status, q.closed_by, q.closed_at = "closed", cu.user.email, utcnow()
-    # Back to 'entered': the value was questioned, so it is approved again
+    # Back to 'submitted': the value was questioned, so it is approved again
     # deliberately rather than inheriting an approval from before.
     if q.observation_id:
         o = s.get(Observation, q.observation_id)
         if o is not None and o.status == "queried":
-            o.status, o.approved_by, o.approved_at = "entered", None, None
+            o.status, o.approved_by, o.approved_at = "submitted", None, None
     s.commit()
     return _row(s, q, cu)
 

@@ -47,7 +47,6 @@ class FieldDef(BaseModel):
     status: Status = "draft"
     verdict: Verdict = "unchecked"
     match_score: float | None = None
-    section_ok: bool | None = None
     cdash: str | None = None
     domain: str | None = None
     # Attributes the CDASH library filled in because the protocol was

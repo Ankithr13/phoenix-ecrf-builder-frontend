@@ -127,13 +127,6 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
           </button>
           <Badge kind={field.verdict} />
           <span className="mono small muted">{field.match_score ?? "–"}%</span>
-          {/* field.section_ok is deliberately NOT shown. Section detection
-              treats table-of-contents lines as sections and finds some
-              section numbers twice, so the check reported a mismatch for
-              roughly half of all fields on a long protocol, most of them
-              wrongly. The backend still computes it; put it back on screen
-              only once ingest.py stops mistaking contents lines for
-              sections. */}
         </div>
       </div>
 

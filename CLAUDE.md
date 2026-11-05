@@ -40,11 +40,12 @@ Breaking any of these breaks the point of the project.
 
 ## Things that have already bitten us
 
-- **Running the tests wipes the dev database.** `run.sh test` deletes
-  `backend/ecrf.db`. If uvicorn is running it keeps a handle on the deleted
-  file and every later write fails with "attempt to write a readonly
-  database", surfacing as a bare HTTP 500 on upload. Stop the server first,
-  or point the tests at another `DATABASE_URL`.
+- **Tests use a temporary database.** `tests/conftest.py` points
+  `DATABASE_URL` and `ECRF_UPLOAD_DIR` at a temp folder before anything from
+  `ecrf` is imported, so `run.sh test` no longer touches `backend/ecrf.db`.
+  An earlier version deleted it, and a running uvicorn kept a handle on the
+  deleted file. If you see "attempt to write a readonly database", a database
+  file was replaced under a running server.
 - **Providers may count reserved output tokens against a per-minute
   limit.** A request whose prompt is only 5,500 tokens was billed as 8,228
   and rejected, because no `max_tokens` was set and the full default output
@@ -73,9 +74,9 @@ Breaking any of these breaks the point of the project.
   field citing it. On one 76 page protocol, 325 fields cited 129 distinct
   quotes and one sentence was cited 18 times.
 - Section detection in `ingest.split_sections` treats table-of-contents
-  lines as sections and finds some section numbers twice, so the section
-  cross-check reported a mismatch for roughly half the fields on a long
-  protocol, most of them wrongly. It is computed but not displayed.
+  lines as sections and finds some section numbers twice. A section
+  cross-check built on it reported a mismatch for roughly half the fields on
+  a long protocol, most of them wrongly, so it was removed.
 - Roughly half the generated fields come back flagged on a real protocol,
   almost always because the protocol states no unit or range. That is
   correct behaviour. Three code steps now fill the gap after verification,

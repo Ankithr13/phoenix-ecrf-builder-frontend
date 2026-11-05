@@ -27,11 +27,12 @@ PERMISSIONS: dict[str, frozenset[str]] = {
         "form.lock", "site.assign", "data.view", "data.approve",
         "query.raise", "query.answer", "query.close", "stats.view", "data.seed",
     }),
-    # Queries run both ways. Who may answer or close a given query depends
-    # on which side raised it, and that is checked in the queries module.
+    # Queries run both ways, and who may answer depends on which side raised
+    # it, which is checked in the queries module. Closing is the sponsor's:
+    # a site must not be able to end a question about its own data.
     "site_staff": frozenset({
         "study.view", "subject.create", "data.enter", "data.view",
-        "query.raise", "query.answer", "query.close",
+        "query.raise", "query.answer",
     }),
 }
 

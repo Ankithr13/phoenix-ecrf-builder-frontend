@@ -67,29 +67,9 @@ def locate(quote: str, text: str) -> tuple[Verdict, float, int]:
     return "approximate", score, al.dest_start
 
 
-def section_contains(doc: Document, section_number: str, offset: int) -> bool | None:
-    """Does the quote's offset fall inside the claimed section? None if the
-    section number is unknown to us."""
-    if offset < 0 or not section_number:
-        return None
-    # offsets from _norm'd text differ slightly from raw; use proportional
-    # mapping, which is good enough to place a quote in a section.
-    ratio = len(doc.text) / max(1, len(_norm(doc.text)))
-    raw_off = int(offset * ratio)
-    for s in doc.sections:
-        if s.number == section_number:
-            return s.start - 50 <= raw_off <= s.end + 50
-    # Try parent section, e.g. 7.3.2 claimed, 7.3 exists
-    parent = section_number.rsplit(".", 1)[0] if "." in section_number else ""
-    for s in doc.sections:
-        if parent and s.number == parent:
-            return s.start - 50 <= raw_off <= s.end + 50
-    return None
-
-
 def check_field(field: FieldDef, doc: Document, threshold: int) -> FieldDef:
     field.source.quote = clean_quote(field.source.quote)
-    verdict, score, off = locate(field.source.quote, doc.text)
+    verdict, score, _ = locate(field.source.quote, doc.text)
     # The score is rounded BEFORE the comparison, so the number the reviewer
     # sees is the number the decision was made on. Comparing the raw value
     # let a field scoring 89.96 be rejected and then displayed as 90.0%.
@@ -101,7 +81,6 @@ def check_field(field: FieldDef, doc: Document, threshold: int) -> FieldDef:
         verdict = "rejected"
     field.verdict = verdict
     field.match_score = score
-    field.section_ok = section_contains(doc, field.source.section, off) if verdict != "rejected" else None
     if verdict == "rejected":
         field.status = "rejected"
     elif field.issue != "none":

@@ -46,7 +46,7 @@ def test_full_flow_raise_answer_with_correction_close_approve(client, demo_accou
     assert approver.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]}).status_code == 409
     assert [x["id"] for x in approver.get("/api/queries", params={"status": "answered"}).json()] == [q["id"]]
     r = approver.post(f"/api/queries/{q['id']}/close")
-    assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["observation_status"] == "entered"
+    assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["observation_status"] == "submitted"
 
     assert approver.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]}).json() == {"approved": 1}
     final = approver.get(f"/api/protocols/{pid}/data").json()[0]
@@ -80,24 +80,24 @@ def test_builder_can_raise_and_close_too(client, demo_accounts):
     assert builder.post(f"/api/queries/{q['id']}/close").json()["status"] == "closed"
 
 
-def test_site_raises_sponsor_answers_site_closes(client, demo_accounts):
+def test_site_raises_sponsor_answers_sponsor_closes(client, demo_accounts):
     _, sponsor, bgh, row = _setup()
     q = bgh.post(f"/api/data/{row['id']}/queries", json={"text": "Form says mmHg but our device reports kPa. Which do you want?"}).json()
     assert q["raised_by_org"] == "site" and q["status"] == "open" and q["observation_status"] == "queried"
-    assert q["can_close"] is True and q["can_answer"] is False, "the site raised it, so the site closes it"
+    assert q["can_close"] is False and q["can_answer"] is False, "only the sponsor closes"
     # Not the site's turn to answer its own question.
     assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "me"}).status_code == 403
     # The sponsor sees it as waiting for them.
     mine = next(x for x in sponsor.get("/api/queries").json() if x["id"] == q["id"])
-    assert mine["for_me"] is True and mine["can_answer"] is True and mine["can_close"] is False
+    assert mine["for_me"] is True and mine["can_answer"] is True and mine["can_close"] is True
     # A sponsor answers in words; it may not change the entered value.
     assert sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "x", "new_value": 120}).status_code == 403
     r = sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "mmHg, as on the form. Convert and re-enter."})
     assert r.status_code == 200 and r.json()["status"] == "answered"
-    # Only the raiser closes.
-    assert sponsor.post(f"/api/queries/{q['id']}/close").status_code == 403
-    r = bgh.post(f"/api/queries/{q['id']}/close")
-    assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["observation_status"] == "entered"
+    # The site cannot close, even a query it raised; the sponsor does.
+    assert bgh.post(f"/api/queries/{q['id']}/close").status_code == 403
+    r = sponsor.post(f"/api/queries/{q['id']}/close")
+    assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["observation_status"] == "submitted"
     # The other site cannot raise a query on a BGH value.
     assert site_client(MRC).post(f"/api/data/{row['id']}/queries", json={"text": "?"}).status_code == 404
 
@@ -118,12 +118,12 @@ def test_queries_about_a_study_a_patient_or_a_visit(client, demo_accounts):
     # Site asks about the study as a whole: no patient, no value.
     q = bgh.post("/api/queries", json={"protocol_id": pid, "text": "Which visit window applies to Week 4?"}).json()
     assert q["about"] == "study" and q["site"] == "BGH" and q["subject"] is None and q["value"] is None
-    # Sponsor sees it, answers in words, cannot attach a value, site closes.
+    # Sponsor sees it, answers in words, cannot attach a value, and closes.
     assert any(x["id"] == q["id"] and x["for_me"] for x in sponsor.get("/api/queries").json())
     assert sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "x", "new_value": 1}).status_code == 403
     assert sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "Plus or minus 3 days."}).status_code == 200
     assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "ok", "new_value": 5}).status_code in (403, 422)
-    assert bgh.post(f"/api/queries/{q['id']}/close").status_code == 200
+    assert sponsor.post(f"/api/queries/{q['id']}/close").status_code == 200
     # The other site never sees BGH's study-level question.
     assert all(x["id"] != q["id"] for x in mrc.get("/api/queries").json())
     assert mrc.post(f"/api/queries/{q['id']}/answer", json={"text": "?"}).status_code == 404

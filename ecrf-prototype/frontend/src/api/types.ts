@@ -26,7 +26,6 @@ export interface FieldDef {
   status: Status;
   verdict: Verdict;
   match_score: number | null;
-  section_ok: boolean | null;
   cdash: string | null;
   domain: string | null;
   // what the CDASH library filled in because the protocol was silent
@@ -68,7 +67,7 @@ export interface Summary {
   cached_input_tokens?: number;
   output_tokens?: number;
   reasoning_tokens?: number;
-  est_cost_usd?: number;
+  est_cost_usd?: number | null;
 }
 
 export interface PlanUsage {
@@ -78,7 +77,7 @@ export interface PlanUsage {
   cached_input_tokens: number;
   output_tokens: number;
   reasoning_tokens: number;
-  est_cost_usd: number;
+  est_cost_usd: number | null;
 }
 
 export interface Plan {
@@ -184,6 +183,8 @@ export interface StatResult {
   // null when the statistic could not be computed for this protocol
   app: number | Record<string, number> | null;
   independent: number | Record<string, number> | null;
+  // not_available when either side could not compute it; never a pass
+  status: "pass" | "fail" | "not_available";
   pass: boolean;
 }
 
@@ -236,25 +237,22 @@ export interface SubjectRow {
   created_by: string;
   created_at: string;
   readings: number;
-  initials: string | null;
   birth_year: number | null;
   sex: string | null;
   enrolled_on: string | null;
   note: string | null;
 }
 
-/* Registration. Everything optional; the server makes the code when none
-   is given. No name, no full date of birth: a CRF is pseudonymous. */
+/* Registration. Everything optional; the code always comes from the server.
+   No name, no initials, no full date of birth: a CRF is pseudonymous. */
 export interface SubjectCreate {
-  code?: string;
-  initials?: string;
   birth_year?: number;
   sex?: string;
   enrolled_on?: string;
   note?: string;
 }
 
-export type ObservationStatus = "entered" | "approved" | "queried";
+export type ObservationStatus = "submitted" | "approved" | "queried";
 
 export interface DataRow {
   id: number;
@@ -269,14 +267,6 @@ export interface DataRow {
   entered_at: string;
   updated_at: string | null;
   approved_by: string | null;
-}
-
-export interface HistoryRow {
-  old_value: string | null;
-  new_value: string | null;
-  changed_by: string;
-  changed_at: string;
-  reason: string | null;
 }
 
 export interface Health {

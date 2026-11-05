@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Status, Verdict } from "../api/types";
 
-export type BadgeKind = Status | Verdict | "pass" | "fail";
+export type BadgeKind = Status | Verdict | "pass" | "fail" | "not_available";
 
 const VARIANTS: Record<BadgeKind, { cls: string; label: string }> = {
   exact: { cls: "badge-teal", label: "exact" },
@@ -13,6 +13,7 @@ const VARIANTS: Record<BadgeKind, { cls: string; label: string }> = {
   draft: { cls: "badge-draft", label: "draft" },
   pass: { cls: "badge-teal", label: "PASS" },
   fail: { cls: "badge-rust", label: "FAIL" },
+  not_available: { cls: "badge-draft", label: "not available" },
 };
 
 export default function Badge({ kind, children }: { kind: BadgeKind; children?: ReactNode }) {

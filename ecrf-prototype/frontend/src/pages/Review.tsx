@@ -5,6 +5,7 @@ import type { DraftResponse, FieldChange, FieldDef, VersionRow } from "../api/ty
 import FieldCard from "../components/FieldCard";
 import Stat from "../components/Stat";
 import { useAuth } from "../auth/useAuth";
+import { costText } from "../format";
 
 type SectionView = { number: string; title: string; page: number | null; text: string; located_by?: "number" | "title" | "text" };
 
@@ -184,7 +185,7 @@ export default function Review() {
           <div className="mono small muted">
             v{resp.version} · {draft.backend} · {draft.model} · hash {resp.protocol.hash} · threshold {s.threshold}
             {s.est_cost_usd !== undefined && (
-              <> · {s.llm_calls_made} call{s.llm_calls_made === 1 ? "" : "s"}{s.llm_calls_from_cache ? ` + ${s.llm_calls_from_cache} cached` : ""} · ${s.est_cost_usd.toFixed(4)}{s.strategy ? ` · ${s.strategy}` : ""}</>
+              <> · {s.llm_calls_made} call{s.llm_calls_made === 1 ? "" : "s"}{s.llm_calls_from_cache ? ` + ${s.llm_calls_from_cache} cached` : ""} · {costText(s.est_cost_usd)}{s.strategy ? ` · ${s.strategy}` : ""}</>
             )}
           </div>
           {!locked && can("form.lock") && (

@@ -34,7 +34,11 @@ class Usage:
                   "output_tokens", "reasoning_tokens"):
             setattr(self, k, getattr(self, k) + getattr(other, k))
 
-    def cost_usd(self) -> float:
+    def cost_usd(self) -> float | None:
+        """None when any price is not configured. A guessed price would look
+        exactly like a real one on screen."""
+        if None in (config.price_input_per_m, config.price_cached_input_per_m, config.price_output_per_m):
+            return None
         fresh = max(0, self.input_tokens - self.cached_input_tokens)
         return round(
             fresh * config.price_input_per_m / 1e6

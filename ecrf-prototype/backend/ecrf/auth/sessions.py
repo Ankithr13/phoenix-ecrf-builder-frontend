@@ -1,10 +1,11 @@
 """Cookie sessions.
 
 The browser holds a random token in an httpOnly cookie; the database holds
-only its sha256. Expiry and revocation are checked on every request, and a
+only a keyed hash of it (HMAC-SHA256 with SECRET_KEY). Expiry and revocation are checked on every request, and a
 disabled account is refused even with a live session."""
 
 import hashlib
+import hmac
 import secrets
 import time
 from collections import defaultdict, deque
@@ -27,7 +28,7 @@ _failures: dict[str, deque] = defaultdict(deque)
 
 
 def _hash(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
+    return hmac.new(config.secret_key.encode(), token.encode(), hashlib.sha256).hexdigest()
 
 
 def too_many_failures(email: str) -> bool:

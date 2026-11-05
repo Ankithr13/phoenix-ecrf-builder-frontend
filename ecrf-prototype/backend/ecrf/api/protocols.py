@@ -3,8 +3,11 @@
 Every route needs a signed-in user. What they may do comes from the one
 permission table; what they may see comes from the scope helpers."""
 
+import os
 import re
 import shutil
+import tempfile
+import uuid
 from pathlib import Path
 from typing import Literal
 
@@ -75,31 +78,39 @@ def list_protocols(cu: CurrentUser = Depends(require("protocol.view")),
 async def upload(file: UploadFile = File(...),
                  cu: CurrentUser = Depends(require("protocol.upload")),
                  s: Session = Depends(db.get_session)):
-    if not file.filename.lower().endswith(".pdf"):
+    # The name only ever labels the protocol. The file is stored under a
+    # generated name, so nothing a client sends can choose a path.
+    original = os.path.basename((file.filename or "").replace("\\", "/"))
+    if not original.lower().endswith(".pdf") or original.lower() == ".pdf":
         raise HTTPException(400, "Only PDF protocols are supported in the prototype")
-    dest = UPLOAD_DIR / file.filename
-    with dest.open("wb") as f:
-        shutil.copyfileobj(file.file, f)
-    try:
-        doc = ingest.load(str(dest))
-    except ingest.ScannedPDFError as e:
-        dest.unlink(missing_ok=True)
-        raise HTTPException(422, str(e)) from e
 
-    # The same document uploaded twice must not become two protocols that
-    # drift apart under review. Match on the hash of the normalised text, so
-    # a renamed file still counts as the same protocol.
-    existing = s.scalars(select(Protocol).where(
-        Protocol.text_hash == doc.hash, Protocol.org_id == cu.org.id)).first()
-    if existing:
-        if dest.name != existing.filename:
-            dest.unlink(missing_ok=True)
-        return {"id": existing.id, "name": existing.name, "pages": existing.pages,
-                "tokens_estimate": existing.tokens_estimate, "already_loaded": True}
+    # Every check runs on a temporary copy. A file reaches the upload folder
+    # only once it is known to be a new, readable protocol, so a failed or
+    # duplicate upload can never touch a stored PDF.
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = Path(tmp) / "upload.pdf"
+        with probe.open("wb") as f:
+            shutil.copyfileobj(file.file, f)
+        try:
+            doc = ingest.load(str(probe))
+        except ingest.ScannedPDFError as e:
+            raise HTTPException(422, str(e)) from e
 
-    name = Path(file.filename).stem.replace("_", " ")
+        # The same document uploaded twice must not become two protocols that
+        # drift apart under review. Match on the hash of the normalised text,
+        # so a renamed file still counts as the same protocol.
+        existing = s.scalars(select(Protocol).where(
+            Protocol.text_hash == doc.hash, Protocol.org_id == cu.org.id)).first()
+        if existing:
+            return {"id": existing.id, "name": existing.name, "pages": existing.pages,
+                    "tokens_estimate": existing.tokens_estimate, "already_loaded": True}
+
+        stored = f"{uuid.uuid4().hex}.pdf"
+        shutil.move(str(probe), UPLOAD_DIR / stored)
+
     p = Protocol(
-        name=name, filename=file.filename, text_hash=doc.hash, normalised=doc.text,
+        name=Path(original).stem.replace("_", " "), filename=original, stored_filename=stored,
+        text_hash=doc.hash, normalised=doc.text,
         sections=[{"number": x.number, "title": x.title, "page": x.page_start,
                    "start": x.start, "end": x.end} for x in doc.sections],
         pages=doc.pages, tokens_estimate=doc.tokens_estimate,
@@ -207,6 +218,13 @@ def _guard_extract(s: Session, protocol_id: int, force: bool) -> None:
                  f"kept and a new version is created.")
 
 
+def _replaces_draft(s: Session, protocol_id: int) -> bool:
+    """True when this extraction supersedes a draft nobody has reviewed. It
+    is allowed without force, and the response says so."""
+    latest = db.latest_version(s, protocol_id)
+    return latest is not None and not _reviewed(latest)
+
+
 def _plan_response(p: Protocol) -> dict:
     plan = p.extraction_plan or {}
     return {"visits": plan.get("visits", []), "forms": plan.get("forms", []),
@@ -224,15 +242,16 @@ def extract(protocol_id: int, backend: str | None = None, force: bool = False,
     the two-step route below is what the UI uses."""
     p = scope.protocol_or_404(s, cu, protocol_id)
     _guard_extract(s, protocol_id, force)
+    replaced = _replaces_draft(s, protocol_id)
     doc = _doc_from_protocol(p)
     try:
-        draft = pipeline.run(str(UPLOAD_DIR / p.filename), protocol_id, backend=backend,
+        draft = pipeline.run(str(UPLOAD_DIR / (p.stored_filename or p.filename)), protocol_id, backend=backend,
                              doc=doc, force=force)
     except Exception as e:  # surface provider errors plainly
         raise HTTPException(502, f"extraction failed: {type(e).__name__}: {e}") from e
     v = db.save_version(s, p, draft.model_dump(), cu.user.email, note="initial extraction")
     s.commit()
-    return {"version": v.version, "summary": draft.summary}
+    return {"version": v.version, "summary": draft.summary, "replaced_draft": replaced}
 
 
 # ------------------------------------------------- two-step extraction
@@ -302,6 +321,7 @@ def extract_fields(protocol_id: int, backend: str | None = None, force: bool = F
     calls = visits + 1 still reads correctly."""
     p = scope.protocol_or_404(s, cu, protocol_id)
     _guard_extract(s, protocol_id, force)
+    replaced = _replaces_draft(s, protocol_id)
     if not p.extraction_plan or not p.extraction_plan.get("visits"):
         raise HTTPException(409, "Extract the visits first")
     plan = ExtractionPlan(visits=p.extraction_plan["visits"], forms=p.extraction_plan.get("forms", []))
@@ -315,7 +335,7 @@ def extract_fields(protocol_id: int, backend: str | None = None, force: bool = F
         raise HTTPException(502, f"extraction failed: {type(e).__name__}: {e}") from e
     v = db.save_version(s, p, draft.model_dump(), cu.user.email, note="initial extraction")
     s.commit()
-    return {"version": v.version, "summary": draft.summary}
+    return {"version": v.version, "summary": draft.summary, "replaced_draft": replaced}
 
 
 # --------------------------------------------------------------- draft

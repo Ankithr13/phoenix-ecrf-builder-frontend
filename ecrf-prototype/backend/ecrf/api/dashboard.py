@@ -44,15 +44,22 @@ def _jsonable(v):
     return v
 
 
-def _close(a, b) -> bool:
+def _missing(v) -> bool:
+    return v is None or (isinstance(v, float) and not math.isfinite(v))
+
+
+def _status(a, b) -> str:
+    """Pass needs a number on both sides that agree. Two blanks agreeing with
+    each other prove nothing, so a statistic that could not be computed is
+    not available, never a pass."""
+    if _missing(a) or _missing(b):
+        return "not_available"
     if isinstance(a, dict) and isinstance(b, dict):
-        return a == b
+        return "pass" if a == b else "fail"
     try:
-        if math.isnan(a) and math.isnan(b):
-            return True
-        return abs(float(a) - float(b)) < TOLERANCE
+        return "pass" if abs(float(a) - float(b)) < TOLERANCE else "fail"
     except (TypeError, ValueError):
-        return False
+        return "fail"
 
 
 @router.get("/calculations")
@@ -88,12 +95,11 @@ def dashboard(protocol_id: int, cu: CurrentUser = Depends(require("stats.view"))
                                            "subjects_per_visit": "subjects_per_visit",
                                            "percent_missing": "percent_missing"}[name])
             ind_val = ind_fn(config.database_url, protocol_id)
+            status = _status(app_val, ind_val)
             stats.append({
                 "name": name, "label": meta["label"], "unit": meta["unit"], "kind": meta["kind"],
-                # The pass/fail comparison runs on the raw values, so two NaNs
-                # still agree with each other; only the response is sanitised.
                 "app": _jsonable(app_val), "independent": _jsonable(ind_val),
-                "pass": _close(app_val, ind_val),
+                "status": status, "pass": status == "pass",
             })
         subjects = int(df.subject_id.nunique())
         readings = len(df)
@@ -108,14 +114,15 @@ def dashboard(protocol_id: int, cu: CurrentUser = Depends(require("stats.view"))
 
 
 @router.post("/{protocol_id}/unsupported")
-def unsupported(protocol_id: int, name: str, cu: CurrentUser = Depends(require("stats.view"))):
-    """Exists only to demonstrate the refusal. Anything not in the
-    registry is rejected, never approximated."""
-    try:
-        registry.run(name, registry.load_frame(next(db.get_session()), protocol_id))
-    except registry.UnsupportedAnalysis as e:
-        raise HTTPException(
-            403, f"'{name}' is not an approved calculation. The approved set is: "
-                 f"{', '.join(registry.CALCULATIONS)}. Adding one means writing, testing "
-                 f"and independently verifying it first.") from e
-    return {"error": "should not reach here"}
+def unsupported(protocol_id: int, name: str, cu: CurrentUser = Depends(require("stats.view")),
+                s: Session = Depends(db.get_session)):
+    """Exists only to demonstrate the refusal. Anything not in the registry
+    is refused, never approximated. A registered name is not what this route
+    is for, so it is a bad request rather than a pretend answer."""
+    scope.protocol_or_404(s, cu, protocol_id)
+    if name in registry.CALCULATIONS:
+        raise HTTPException(400, f"'{name}' is an approved calculation; read it from the dashboard.")
+    raise HTTPException(
+        403, f"'{name}' is not an approved calculation. The approved set is: "
+             f"{', '.join(registry.CALCULATIONS)}. Adding one means writing, testing "
+             f"and independently verifying it first.")

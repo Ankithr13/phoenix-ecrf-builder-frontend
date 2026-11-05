@@ -48,8 +48,9 @@ def test_reextraction_is_refused_after_review_unless_forced(client, demo_account
     if True:
         pid = c.post("/api/protocols/sample").json()["id"]
         assert c.post(f"/api/protocols/{pid}/extract").status_code == 200
-        # A second extraction with no review in between is fine.
-        assert c.post(f"/api/protocols/{pid}/extract").status_code == 200
+        # A second extraction with no review in between is fine, and says so.
+        r = c.post(f"/api/protocols/{pid}/extract")
+        assert r.status_code == 200 and r.json()["replaced_draft"] is True
         c.post(f"/api/protocols/{pid}/review", json={
             "changes": [{"visit": "Week 4", "name": "Systolic Blood Pressure", "status": "approved"}]})
         r = c.post(f"/api/protocols/{pid}/extract")

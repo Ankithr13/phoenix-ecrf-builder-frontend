@@ -77,7 +77,8 @@ frontend/
   src/api/         types.ts mirrors the backend schema; client.ts owns URLs
   src/styles/      tokens.css is the only place colours and type are defined
   src/components/  Layout, Badge, FieldCard, Stat, charts/
-  src/pages/       Protocols, Review, DataEntry, Dashboard
+  src/pages/       Login, Protocols, Visits, Review, Sites, DataReview, Dashboard,
+                   Queries, Studies, Patients, DataEntry, Glossary
   public/logo.svg  REPLACE with the Phoenix Clinical logo
 ```
 

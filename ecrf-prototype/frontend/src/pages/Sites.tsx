@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import type { DraftResponse, SiteRow } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 
@@ -26,8 +26,17 @@ export default function Sites() {
   const toggle = async (row: SiteRow) => {
     setBusy(row.org_id); setError(null);
     try {
-      if (row.assigned) await api.unassignSite(id, row.org_id);
-      else await api.assignSite(id, row.org_id);
+      if (!row.assigned) await api.assignSite(id, row.org_id);
+      else {
+        try { await api.unassignSite(id, row.org_id); }
+        catch (e) {
+          const detail = e instanceof ApiError && e.status === 409 ? (e.detail as { message?: string }) : null;
+          if (!detail?.message) throw e;
+          if (window.confirm(`${detail.message.split(" Add ?force")[0]} Unassign ${row.code} anyway?`)) {
+            await api.unassignSite(id, row.org_id, true);
+          }
+        }
+      }
       await load();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(null); }

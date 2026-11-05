@@ -5,7 +5,7 @@ import type { DataRow, ObservationStatus } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 
 const STATUS_CHIP: Record<ObservationStatus, string> = {
-  entered: "chip-amber", approved: "chip-teal", queried: "chip-rust",
+  submitted: "chip-amber", approved: "chip-teal", queried: "chip-rust",
 };
 
 /* The sponsor's view of everything sites have entered. Approving moves a
@@ -35,7 +35,7 @@ export default function DataReview() {
   const shown = useMemo(() => (rows ?? []).filter((r) =>
     (!site || r.site === site) && (!visit || r.visit === visit) && (!status || r.status === status)), [rows, site, visit, status]);
   const counts = useMemo(() => {
-    const c = { entered: 0, approved: 0, queried: 0 };
+    const c = { submitted: 0, approved: 0, queried: 0 };
     for (const r of rows ?? []) c[r.status] += 1;
     return c;
   }, [rows]);
@@ -43,7 +43,7 @@ export default function DataReview() {
   const toggle = (rid: number) => setSelected((prev) => {
     const n = new Set(prev); if (n.has(rid)) n.delete(rid); else n.add(rid); return n;
   });
-  const selectable = shown.filter((r) => r.status === "entered");
+  const selectable = shown.filter((r) => r.status === "submitted");
   const allSelected = selectable.length > 0 && selectable.every((r) => selected.has(r.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((r) => r.id)));
 
@@ -84,7 +84,7 @@ export default function DataReview() {
       <div className="page-head">
         <h1 className="page-title">Data review</h1>
         <div className="muted small">
-          <span className="mono">{counts.approved}</span> approved · <span className="mono">{counts.entered}</span> awaiting review
+          <span className="mono">{counts.approved}</span> approved · <span className="mono">{counts.submitted}</span> awaiting review
           {counts.queried > 0 && <> · <span className="mono">{counts.queried}</span> queried</>}
         </div>
       </div>
@@ -114,7 +114,7 @@ export default function DataReview() {
             </select>
             <select className="input" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
               <option value="">All statuses</option>
-              <option value="entered">Awaiting review</option>
+              <option value="submitted">Awaiting review</option>
               <option value="approved">Approved</option>
               <option value="queried">Queried</option>
             </select>
@@ -140,7 +140,7 @@ export default function DataReview() {
                 <tr key={r.id}>
                   {can("data.approve") && (
                     <td className="chk">
-                      {r.status === "entered" && (
+                      {r.status === "submitted" && (
                         <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Select ${r.field} for ${r.subject}`} />
                       )}
                     </td>
@@ -150,7 +150,7 @@ export default function DataReview() {
                   <td>{r.visit}</td>
                   <td>{r.field}{r.repeat > 1 ? <span className="muted"> · {r.repeat}</span> : null}</td>
                   <td className="num mono">{r.value ?? "—"}</td>
-                  <td><span className={`pill ${STATUS_CHIP[r.status]}`}>{r.status === "entered" ? "awaiting review" : r.status}</span></td>
+                  <td><span className={`pill ${STATUS_CHIP[r.status]}`}>{r.status === "submitted" ? "awaiting review" : r.status}</span></td>
                   <td className="small muted">{r.entered_by}</td>
                   {can("query.raise") && (
                     <td className="num">

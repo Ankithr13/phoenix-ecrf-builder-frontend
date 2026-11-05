@@ -53,9 +53,16 @@ def test_full_flow(client, demo_accounts):
             "readings": [{"field_name": "Systolic Blood Pressure", "value": 1420}]})
         assert r.status_code == 403
 
-        c.post(f"/api/data/seed/{pid}")
+        # Seeding needs a locked form, and seeded rows wait for approval.
+        assert c.post(f"/api/data/seed/{pid}").status_code == 409
+        assert c.post(f"/api/protocols/{pid}/review", json={"changes": [], "action": "approve_all_remaining"}).status_code == 200
+        assert c.post(f"/api/protocols/{pid}/lock").status_code == 200
+        assert c.post(f"/api/data/seed/{pid}").json()["seeded"] > 0
+        assert c.get(f"/api/dashboard/{pid}").json()["data"]["readings"] == 0
+        rows = [r["id"] for r in c.get(f"/api/protocols/{pid}/data").json()]
+        c.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": rows})
         dash = c.get(f"/api/dashboard/{pid}").json()
-        assert all(s["pass"] for s in dash["stats"]), "app and independent results must agree"
+        assert dash["stats"] and all(s["pass"] for s in dash["stats"]), "app and independent results must agree"
 
         r = c.post(f"/api/dashboard/{pid}/unsupported?name=breakdown_by_age")
         assert r.status_code == 403
