@@ -3,7 +3,7 @@
    same-origin and travels with every request. */
 
 import type { NewQuery, SubjectCreate,
-  DashboardResponse, DataRow, DraftResponse, FieldChange, Health, HistoryRow, Me, Plan,
+  DashboardResponse, DataRow, DraftResponse, EcrfStatusOverview, FieldChange, Health, HistoryRow, Me, Plan,
   ProtocolListItem, ProtocolUploadResult, QueryRow, Reading, SiteRow, SponsorStudy, StudyCreate,
   StudyListItem, SubjectRow, VersionRow, WorkspaceOverview,
 } from "./types";
@@ -50,6 +50,7 @@ export const api = {
 
   sponsorStudies: () => req<SponsorStudy[]>("/api/sponsor/studies"),
   workspaceDashboard: () => req<WorkspaceOverview>("/api/sponsor/dashboard"),
+  ecrfStatus: () => req<EcrfStatusOverview>("/api/sponsor/ecrf-status"),
   sponsorStudy: (id: number) => req<SponsorStudy>(`/api/sponsor/studies/${id}`),
   createStudy: (body: StudyCreate) => req<SponsorStudy>("/api/sponsor/studies", post(body)),
   assignProtocolStudy: (protocolId: number, studyId: number | null) =>

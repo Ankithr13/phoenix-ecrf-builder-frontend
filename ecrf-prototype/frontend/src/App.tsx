@@ -6,6 +6,7 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import DataEntry from "./pages/DataEntry";
 import DataReview from "./pages/DataReview";
+import EcrfStatus from "./pages/EcrfStatus";
 import Login from "./pages/Login";
 import Patients from "./pages/Patients";
 import Protocols from "./pages/Protocols";
@@ -69,6 +70,7 @@ export default function App() {
             <Route path="/sponsor/protocols" element={<Protocols />} />
             <Route path="/sponsor/upload" element={<ProtocolUpload />} />
             <Route path="/sponsor/ecrfs" element={<Protocols destination="review" />} />
+            <Route path="/sponsor/ecrf-status" element={<EcrfStatus />} />
             <Route path="/sponsor/data" element={<Protocols destination="data" />} />
             <Route path="/sponsor/reports" element={<Protocols destination="dashboard" />} />
             <Route path="/sponsor/queries" element={<Queries />} />

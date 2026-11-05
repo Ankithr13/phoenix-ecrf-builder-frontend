@@ -41,6 +41,7 @@ export default function Sites() {
       <div className="page-head">
         <h1 className="page-title">{draft?.protocol.name ?? "Sites"}</h1>
         <div className="muted small">Sites</div>
+        <Link className="btn btn-secondary btn-sm" to={`/sponsor/ecrf-status?protocol=${id}`}>View eCRF status</Link>
       </div>
 
       {!locked && (

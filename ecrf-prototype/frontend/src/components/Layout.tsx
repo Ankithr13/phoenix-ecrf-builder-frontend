@@ -56,6 +56,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const workspaceItems: NavigationItem[] = sponsor ? [
     ...(can("protocol.upload") ? [{ label: "Upload Protocol", icon: "upload", to: "/sponsor/upload" } as NavigationItem] : []),
     { label: "eCRF Management", icon: "forms", to: id ? `/sponsor/p/${id}/review` : "/sponsor/ecrfs", active: pathname === "/sponsor/ecrfs" || /^\/sponsor\/p\/\d+\/review$/.test(pathname) },
+    { label: "eCRF Status", icon: "progress", to: "/sponsor/ecrf-status" },
     { label: "Clinical Data Review", icon: "data", to: id ? `/sponsor/p/${id}/data` : "/sponsor/data", active: pathname === "/sponsor/data" || /^\/sponsor\/p\/\d+\/data$/.test(pathname) },
     { label: "Analytics & Reports", icon: "reports", to: id ? `/sponsor/p/${id}/dashboard` : "/sponsor/reports", active: pathname === "/sponsor/reports" || /^\/sponsor\/p\/\d+\/dashboard$/.test(pathname) },
     { label: "Queries", icon: "queries", to: "/sponsor/queries", badge },

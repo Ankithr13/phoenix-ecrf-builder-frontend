@@ -11,6 +11,7 @@ from ecrf.api import (
     auth,
     dashboard,
     data,
+    ecrf_status,
     protocols,
     queries,
     sites,
@@ -55,6 +56,7 @@ app.include_router(queries.router)
 app.include_router(data.router)
 app.include_router(dashboard.router)
 app.include_router(workspace.router)
+app.include_router(ecrf_status.router)
 
 
 @app.get("/api/health")

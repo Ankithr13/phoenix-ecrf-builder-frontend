@@ -1,0 +1,54 @@
+.ecrf-status-page .workspace-breadcrumb a { color: var(--sidebar-subtle); text-decoration: none; }
+.ecrf-refreshed { color: var(--sidebar-muted); font-size: var(--text-xs); }
+.ecrf-status-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s-3); margin-bottom: var(--s-5); }
+.ecrf-status-filters label { display: flex; flex: 1 1 160px; flex-direction: column; gap: var(--s-2); color: var(--sidebar-muted); font-size: var(--text-xs); min-width: 0; }
+.ecrf-status-filters select, .ecrf-status-filters input { width: 100%; min-width: 0; padding: var(--s-3); border: 1px solid var(--sidebar-line); border-radius: var(--radius); background: var(--card); color: var(--sidebar-ink); font: inherit; }
+.ecrf-status-filters select:focus-visible, .ecrf-status-filters input:focus-visible { outline: 0; box-shadow: var(--sidebar-ring); }
+.ecrf-status-filters .ecrf-status-search { flex-basis: 270px; }
+.ecrf-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-4); margin: var(--s-6) 0 var(--s-4); }
+.ecrf-section-heading h2 { font-size: var(--text-lg); margin-bottom: var(--s-2); }
+.ecrf-section-heading p, .ecrf-section-heading > span { color: var(--sidebar-muted); font-size: var(--text-xs); }
+.ecrf-hospital-card { border: 1px solid var(--sidebar-line); border-radius: var(--radius-lg); background: var(--card); box-shadow: var(--shadow-1); margin-bottom: var(--s-4); overflow: hidden; }
+.ecrf-hospital-heading { display: flex; align-items: center; gap: var(--s-5); flex-wrap: wrap; padding: var(--s-5); }
+.ecrf-hospital-name { display: flex; align-items: center; gap: var(--s-3); flex: 1 1 220px; min-width: 0; }
+.ecrf-hospital-name h3 { font-size: var(--text-md); overflow-wrap: anywhere; }
+.ecrf-hospital-name p { margin-top: var(--s-1); color: var(--sidebar-muted); font-size: var(--text-xs); }
+.ecrf-hospital-symbol { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 42px; height: 42px; border-radius: var(--radius); color: var(--sidebar-teal); background: var(--sidebar-active); }
+.ecrf-hospital-summary { display: flex; align-items: center; gap: var(--s-5); flex-wrap: wrap; }
+.ecrf-hospital-summary > div { display: flex; flex-direction: column; gap: var(--s-1); }
+.ecrf-hospital-summary strong { font-size: var(--text-sm); }
+.ecrf-hospital-summary span { color: var(--sidebar-muted); font-size: 11px; }
+.ecrf-details-toggle { display: flex; align-items: center; gap: var(--s-2); border: 1px solid var(--sidebar-line); border-radius: var(--radius); background: var(--card); color: var(--sidebar-teal); font-size: var(--text-xs); font-weight: 600; padding: var(--s-3); white-space: nowrap; }
+.ecrf-details-toggle:hover { background: var(--sidebar-active); }
+.ecrf-details-toggle .workspace-icon { width: 14px; height: 14px; }
+.ecrf-details-toggle[aria-expanded="true"] .workspace-icon { transform: rotate(90deg); }
+.ecrf-hospital-protocols[hidden] { display: none; }
+.ecrf-hospital-protocols { border-top: 1px solid var(--sidebar-line); padding: var(--s-4); background: var(--sidebar-surface); }
+.ecrf-protocol-panel { border: 1px solid var(--sidebar-line); border-radius: var(--radius); background: var(--card); overflow: hidden; }
+.ecrf-protocol-panel + .ecrf-protocol-panel { margin-top: var(--s-4); }
+.ecrf-protocol-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-4); padding: var(--s-4); flex-wrap: wrap; }
+.ecrf-study-label { color: var(--sidebar-teal); font-size: 11px; margin-bottom: var(--s-2); }
+.ecrf-protocol-heading h4 { font-size: var(--text-sm); overflow-wrap: anywhere; }
+.ecrf-protocol-heading h4 + p { font-size: 11px; margin-top: var(--s-2); color: var(--sidebar-muted); }
+.ecrf-patient-table { min-width: 680px; }
+.ecrf-patient-table tbody th { min-width: 100px; }
+.ecrf-patient-table td { vertical-align: top; }
+.ecrf-entry-status { display: inline-flex; padding: var(--s-1) var(--s-2); border-radius: var(--s-1); font-size: 11px; white-space: nowrap; }
+.ecrf-entry-status.has_entries { color: var(--teal-ink); background: var(--teal-bg); }
+.ecrf-entry-status.no_entries { color: var(--sidebar-muted); background: var(--sidebar-line); }
+.ecrf-visit-details { min-width: 210px; }
+.ecrf-visit-details summary { cursor: pointer; color: var(--sidebar-teal); line-height: 1.7; }
+.ecrf-visit-details ul { padding: 0; margin: var(--s-3) 0 0; list-style: none; }
+.ecrf-visit-details li { padding: var(--s-2) 0; border-top: 1px solid var(--sidebar-line); }
+.ecrf-visit-details li > div { display: flex; justify-content: space-between; gap: var(--s-3); align-items: center; }
+.ecrf-visit-details li strong { color: var(--sidebar-ink); font-weight: 500; }
+.ecrf-visit-date { display: block; margin-top: var(--s-1); font-size: 10px; }
+.ecrf-no-patients { padding: var(--s-4); color: var(--sidebar-muted); font-size: var(--text-xs); border-top: 1px solid var(--sidebar-line); }
+.ecrf-status-footnote { margin-top: var(--s-4); font-size: var(--text-xs); color: var(--sidebar-muted); line-height: 1.7; }
+@media (max-width: 760px) {
+  .ecrf-status-filters label { flex-basis: 45%; }
+  .ecrf-status-filters .ecrf-status-search { flex-basis: 100%; }
+  .ecrf-hospital-heading { padding: var(--s-4); gap: var(--s-4); }
+  .ecrf-hospital-name, .ecrf-hospital-summary { flex-basis: 100%; }
+  .ecrf-hospital-protocols { padding: var(--s-3); }
+}

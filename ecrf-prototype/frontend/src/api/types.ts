@@ -174,6 +174,48 @@ export interface ProtocolUploadResult {
   already_loaded?: boolean;
 }
 
+export interface EcrfVisitStatus {
+  visit: string;
+  has_entries: boolean;
+  last_hospital_update: string | null;
+}
+
+export interface EcrfPatientStatus {
+  subject_id: number;
+  subject_code: string;
+  registered_at: string | null;
+  latest_visits: string[];
+  last_hospital_update: string | null;
+  visits: EcrfVisitStatus[];
+}
+
+export interface EcrfProtocolStatus {
+  protocol_id: number;
+  protocol_name: string;
+  study_id: number | null;
+  study_name: string | null;
+  study_code: string | null;
+  assigned: boolean;
+  locked_version: number | null;
+  patient_count: number;
+  patients_with_entries: number;
+  last_hospital_update: string | null;
+  patients: EcrfPatientStatus[];
+}
+
+export interface HospitalEcrfStatus {
+  site_id: number;
+  site_name: string;
+  site_code: string;
+  protocols: EcrfProtocolStatus[];
+}
+
+export interface EcrfStatusOverview {
+  hospitals: HospitalEcrfStatus[];
+  studies: { id: number; name: string; code: string }[];
+  protocols: { id: number; name: string; study_id: number | null }[];
+}
+
 export interface DraftResponse {
   protocol: { id: number; name: string; pages: number; tokens_estimate: number; hash: string };
   version: number | null;
