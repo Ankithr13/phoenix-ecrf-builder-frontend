@@ -8,6 +8,7 @@ import DataEntry from "./pages/DataEntry";
 import DataReview from "./pages/DataReview";
 import EcrfStatus from "./pages/EcrfStatus";
 import Login from "./pages/Login";
+import Notifications from "./pages/Notifications";
 import Patients from "./pages/Patients";
 import Protocols from "./pages/Protocols";
 import ProtocolUpload from "./pages/ProtocolUpload";
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="/sponsor/data" element={<Protocols destination="data" />} />
             <Route path="/sponsor/reports" element={<Protocols destination="dashboard" />} />
             <Route path="/sponsor/queries" element={<Queries />} />
+            <Route path="/sponsor/notifications" element={<Notifications />} />
             <Route path="/sponsor/p/:id/visits" element={<Visits />} />
             <Route path="/sponsor/p/:id/review" element={<Review />} />
             <Route path="/sponsor/p/:id/sites" element={<Sites />} />

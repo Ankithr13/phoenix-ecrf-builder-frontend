@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { QueryRow, QueryStatus } from "../api/types";
 import { useAuth } from "../auth/useAuth";
@@ -15,6 +16,8 @@ type Filter = "mine" | "open" | "answered" | "closed" | "";
    page never has to know which side it is on. */
 export default function Queries() {
   const { me } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const selectedQuery = params.get("query");
   const [rows, setRows] = useState<QueryRow[] | null>(null);
   const [filter, setFilter] = useState<Filter>("mine");
   const [answers, setAnswers] = useState<Record<number, { text: string; value: string }>>({});
@@ -31,7 +34,8 @@ export default function Queries() {
 
   const isSite = me?.org.type === "site";
   const pass = (q: QueryRow, f: Filter) => (f === "mine" ? q.for_me : !f || q.status === f);
-  const shown = (rows ?? []).filter((q) => pass(q, filter));
+  const activeFilter = selectedQuery ? "" : filter;
+  const shown = (rows ?? []).filter((q) => selectedQuery ? String(q.id) === selectedQuery : pass(q, activeFilter));
   const draft = (id: number) => answers[id] ?? { text: "", value: "" };
   const setDraft = (id: number, patch: Partial<{ text: string; value: string }>) =>
     setAnswers((a) => ({ ...a, [id]: { ...draft(id), ...patch } }));
@@ -75,18 +79,20 @@ export default function Queries() {
 
       {composing && (
         <div className="mb-3">
-          <NewQuery onDone={() => { setComposing(false); setFilter(""); load(); }} onCancel={() => setComposing(false)} />
+          <NewQuery onDone={() => { setComposing(false); setParams({}); setFilter(""); load(); }} onCancel={() => setComposing(false)} />
         </div>
       )}
 
       <div className="row row-wrap mb-3">
         {(["mine", "open", "answered", "closed", ""] as const).map((f) => (
-          <button key={f || "all"} type="button" className={`tab${filter === f ? " active" : ""}`} onClick={() => setFilter(f)}>
+            <button key={f || "all"} type="button" className={`tab${activeFilter === f ? " active" : ""}`} onClick={() => { setParams({}); setFilter(f); }}>
             {f === "mine" ? "my turn" : f || "all"}
             <span className="tab-count">{(rows ?? []).filter((q) => pass(q, f)).length}</span>
           </button>
         ))}
       </div>
+
+      {selectedQuery && <div className="query-notification-context mb-3">Showing query #{selectedQuery} from a notification. <button className="btn btn-secondary btn-sm" type="button" onClick={() => { setParams({}); setFilter(""); }}>Show all queries</button></div>}
 
       {shown.length === 0 && <div className="card"><p className="muted small">Nothing here.</p></div>}
 

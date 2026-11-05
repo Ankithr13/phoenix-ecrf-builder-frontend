@@ -51,6 +51,10 @@ export default function EcrfStatus() {
   const hospital = params.get("hospital") ?? "";
   const status = params.get("status") ?? "";
   const search = params.get("search") ?? "";
+  useEffect(() => {
+    const siteId = Number(hospital);
+    if (siteId > 0) setExpanded((previous) => new Set([...previous, siteId]));
+  }, [hospital]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -138,7 +142,7 @@ export default function EcrfStatus() {
                   const searchMatchesForm = `${item.site_name} ${item.site_code} ${form.study_name ?? ""} ${form.study_code ?? ""} ${form.protocol_name}`.toLowerCase().includes(query);
                   const visiblePatients = form.patients.filter((patient) => matchesPatient(patient, status) && (searchMatchesForm || patient.subject_code.toLowerCase().includes(query)));
                   return <section className="ecrf-protocol-panel" key={form.protocol_id} aria-labelledby={`protocol-title-${item.site_id}-${form.protocol_id}`}>
-                    <div className="ecrf-protocol-heading"><div><p className="ecrf-study-label">{form.study_name ?? "Unassigned protocol"}{form.study_code ? ` · ${form.study_code}` : ""}</p><h4 id={`protocol-title-${item.site_id}-${form.protocol_id}`}>{form.protocol_name}</h4><p>{form.patient_count} patient registration{form.patient_count === 1 ? "" : "s"} · {form.patients_with_entries} with entries{!form.assigned && " · No longer assigned"}</p></div><span className={`ecrf-entry-status ${entryStatus.tone}`}>{entryStatus.label}</span></div>
+                    <div className="ecrf-protocol-heading"><div><p className="ecrf-study-label">{form.study_name ?? "Unassigned protocol"}{form.study_code ? ` · ${form.study_code}` : ""}</p><h4 id={`protocol-title-${item.site_id}-${form.protocol_id}`}>{form.protocol_name}</h4><p>{form.patient_count} patient registration{form.patient_count === 1 ? "" : "s"} · {form.patients_with_entries} with entries{!form.assigned && " · No longer assigned"}</p>{form.submission.state !== "not_submitted" && <span className={`submission-pill ${form.submission.state}`}>{form.submission.state === "submitted" ? "Hospital submitted for review" : "Changed since submission"}{form.submission.submitted_at && ` · ${activityLabel(form.submission.submitted_at)}`}</span>}</div><span className={`ecrf-entry-status ${entryStatus.tone}`}>{entryStatus.label}</span></div>
                     {visiblePatients.length === 0 ? <p className="ecrf-no-patients">{form.patient_count ? "No patient updates match this filter." : "Waiting for the hospital to register its first patient."}</p> : <div className="workspace-table-wrap"><table className="workspace-table ecrf-patient-table"><caption className="workspace-visually-hidden">Hospital updates for {item.site_name}, {form.protocol_name}</caption><thead><tr><th scope="col">Patient code</th><th scope="col">Latest visit updated</th><th scope="col">Visit updates</th><th scope="col">Last hospital update</th></tr></thead><tbody>{visiblePatients.map((patient) => <tr key={patient.subject_id}>
                       <th scope="row" className="mono">{patient.subject_code}</th>
                       <td>{patient.latest_visits.length ? patient.latest_visits.join(", ") : "No visit entries yet"}</td>

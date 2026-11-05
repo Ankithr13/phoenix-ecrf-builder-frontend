@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/useAuth";
 import SidebarIcon, { type IconName } from "./Icon";
+import NotificationBell from "./NotificationBell";
 
 const ID_IN_PATH = /^\/(sponsor\/p|site\/s)\/(\d+)/;
 
@@ -82,6 +83,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <NavLink className="brand" to={sponsor ? "/sponsor" : "/site"} onClick={closeMenu} aria-label="Phoenix Clinical home">
             <img className="brand-logo" src="/logo.png" alt="Phoenix Clinical Research" />
           </NavLink>
+          {sponsor && me && <NotificationBell key={me.user.id} />}
           <button type="button" className="sidebar-toggle" aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} aria-controls="workspace-navigation" onClick={() => setMenuOpen(!menuOpen)}>
             <SidebarIcon name={menuOpen ? "close" : "menu"} />
           </button>

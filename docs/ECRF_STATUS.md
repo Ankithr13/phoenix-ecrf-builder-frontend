@@ -68,6 +68,11 @@ time. It does not poll, seed records, call a model or change assignments.
 Existing review and query pages retain their full functionality. No new
 dependency or migration is needed.
 
+The notification feature adds an explicit whole-hospital/protocol
+submission declaration, displayed separately from the entry updates.
+See [NOTIFICATIONS.md](NOTIFICATIONS.md) for submission scope, notifications
+and migration 0011. Submitting never infers a current week or schedule score.
+
 ## Validation
 
 Backend: `pytest tests/test_ecrf_status.py -q` and `ruff check .`.

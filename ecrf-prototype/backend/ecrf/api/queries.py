@@ -21,6 +21,7 @@ from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
 from ecrf.storage import db
 from ecrf.storage.models import (
+    Notification,
     Observation,
     Organisation,
     Protocol,
@@ -162,6 +163,10 @@ def _create(s: Session, cu: CurrentUser, body: NewQueryRequest) -> Query:
     if o is not None:
         o.status = "queried"
     s.add(q)
+    s.flush()
+    if cu.org.type == "site":
+        s.add(Notification(org_id=p.org_id, protocol_id=p.id, site_org_id=cu.org.id,
+                           kind="hospital_query", query_id=q.id, event_key=f"query:{q.id}"))
     s.commit()
     return q
 

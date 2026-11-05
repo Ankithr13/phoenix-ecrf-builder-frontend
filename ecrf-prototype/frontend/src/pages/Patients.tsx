@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { SubjectCreate, SubjectRow } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import HospitalSubmission from "../components/HospitalSubmission";
 
 /* A site's patients on one study. Registration holds what a case report
    form may hold: a study code, initials, year of birth, sex, enrolment
@@ -85,6 +86,8 @@ export default function Patients() {
         <h1 className="page-title">Patients</h1>
         <div className="muted small">{me?.org.name} · subject IDs start with {prefix}</div>
       </div>
+
+      {can("ecrf.submit") && rows && <HospitalSubmission protocolId={id} patientCount={rows.length} />}
 
       <div className="card">
         <div className="row row-between row-wrap">

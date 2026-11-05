@@ -3,7 +3,7 @@
    same-origin and travels with every request. */
 
 import type { NewQuery, SubjectCreate,
-  DashboardResponse, DataRow, DraftResponse, EcrfStatusOverview, FieldChange, Health, HistoryRow, Me, Plan,
+  DashboardResponse, DataRow, DraftResponse, EcrfStatusOverview, FieldChange, Health, HistoryRow, HospitalSubmissionStatus, Me, NotificationPage, Plan,
   ProtocolListItem, ProtocolUploadResult, QueryRow, Reading, SiteRow, SponsorStudy, StudyCreate,
   StudyListItem, SubjectRow, VersionRow, WorkspaceOverview,
 } from "./types";
@@ -51,6 +51,14 @@ export const api = {
   sponsorStudies: () => req<SponsorStudy[]>("/api/sponsor/studies"),
   workspaceDashboard: () => req<WorkspaceOverview>("/api/sponsor/dashboard"),
   ecrfStatus: () => req<EcrfStatusOverview>("/api/sponsor/ecrf-status"),
+  notifications: (filters: { before_id?: number; unread_only?: boolean; limit?: number } = {}) => {
+    const query = new URLSearchParams(Object.entries(filters).map(([name, value]) => [name, String(value)]));
+    return req<NotificationPage>(`/api/notifications${query.size ? `?${query}` : ""}`);
+  },
+  readNotification: (id: number) => req<{ read: boolean }>(`/api/notifications/${id}/read`, { method: "POST" }),
+  readAllNotifications: (throughId: number) => req<{ read: boolean }>("/api/notifications/read-all", post({ through_id: throughId })),
+  hospitalSubmission: (protocolId: number) => req<HospitalSubmissionStatus>(`/api/studies/${protocolId}/submission`),
+  submitHospitalEcrf: (protocolId: number) => req<HospitalSubmissionStatus>(`/api/studies/${protocolId}/submission`, post({ confirmed: true })),
   sponsorStudy: (id: number) => req<SponsorStudy>(`/api/sponsor/studies/${id}`),
   createStudy: (body: StudyCreate) => req<SponsorStudy>("/api/sponsor/studies", post(body)),
   assignProtocolStudy: (protocolId: number, studyId: number | null) =>

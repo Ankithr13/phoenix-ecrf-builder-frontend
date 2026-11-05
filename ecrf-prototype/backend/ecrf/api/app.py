@@ -12,11 +12,13 @@ from ecrf.api import (
     dashboard,
     data,
     ecrf_status,
+    notifications,
     protocols,
     queries,
     sites,
     studies,
     study_management,
+    submissions,
     workspace,
 )
 from ecrf.config import config
@@ -57,6 +59,8 @@ app.include_router(data.router)
 app.include_router(dashboard.router)
 app.include_router(workspace.router)
 app.include_router(ecrf_status.router)
+app.include_router(notifications.router)
+app.include_router(submissions.router)
 
 
 @app.get("/api/health")

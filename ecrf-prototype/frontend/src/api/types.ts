@@ -201,6 +201,36 @@ export interface EcrfProtocolStatus {
   patients_with_entries: number;
   last_hospital_update: string | null;
   patients: EcrfPatientStatus[];
+  submission: HospitalSubmissionStatus;
+}
+
+export interface HospitalSubmissionStatus {
+  state: "not_submitted" | "submitted" | "changed";
+  submission_id: number | null;
+  submitted_at: string | null;
+  submitted_by: string | null;
+  patient_count: number;
+  can_submit: boolean;
+}
+
+export interface NotificationItem {
+  id: number;
+  kind: "hospital_query" | "ecrf_submitted";
+  title: string;
+  hospital_name: string;
+  protocol_name: string;
+  protocol_id: number;
+  site_id: number;
+  query_id: number | null;
+  created_at: string;
+  read_at: string | null;
+  destination: string;
+}
+
+export interface NotificationPage {
+  items: NotificationItem[];
+  unread_count: number;
+  next_before_id: number | null;
 }
 
 export interface HospitalEcrfStatus {

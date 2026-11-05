@@ -19,6 +19,7 @@ from ecrf.storage.models import (
     Subject,
     User,
 )
+from ecrf.submissions import submission_status
 
 router = APIRouter(prefix="/api/sponsor/ecrf-status", tags=["eCRF status"])
 
@@ -143,6 +144,7 @@ def overview(current: CurrentUser = Depends(require("stats.view")),
                                              for patient in patients),
                 "last_hospital_update": _iso(latest_update),
                 "patients": patients,
+                "submission": submission_status(session, protocol.id, site_id, version),
             })
     return {
         "hospitals": sorted(hospital_rows.values(), key=lambda hospital: (hospital["site_name"].casefold(), hospital["site_id"])),

@@ -16,6 +16,7 @@ const PATHS = {
   close: "M6 6l12 12M6 18 18 6",
   search: "M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15ZM16 16l5 5",
   refresh: "M20 7v5h-5M4 17v-5h5M6.1 6a8 8 0 0 1 13.1 3M4.8 15A8 8 0 0 0 18 18",
+  bell: "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4",
 };
 
 export type IconName = keyof typeof PATHS;

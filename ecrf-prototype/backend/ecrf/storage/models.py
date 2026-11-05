@@ -273,3 +273,39 @@ class Query(Base):
     answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     closed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class HospitalSubmission(Base):
+    __tablename__ = "hospital_submission"
+    __table_args__ = (UniqueConstraint("protocol_id", "site_org_id", "snapshot_hash", name="uq_hospital_submission_snapshot"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
+    site_org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
+    ecrf_version_id: Mapped[int] = mapped_column(ForeignKey("ecrf_version.id"))
+    snapshot_hash: Mapped[str] = mapped_column(String(64))
+    patient_count: Mapped[int] = mapped_column(Integer)
+    submitted_by: Mapped[str] = mapped_column(String(200))
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Notification(Base):
+    __tablename__ = "notification"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"), index=True)
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
+    site_org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
+    kind: Mapped[str] = mapped_column(String(40))
+    event_key: Mapped[str] = mapped_column(String(100), unique=True)
+    query_id: Mapped[int | None] = mapped_column(ForeignKey("query.id"), nullable=True)
+    submission_id: Mapped[int | None] = mapped_column(ForeignKey("hospital_submission.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class NotificationRead(Base):
+    __tablename__ = "notification_read"
+
+    notification_id: Mapped[int] = mapped_column(ForeignKey("notification.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), primary_key=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
