@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { DataRow, ObservationStatus, StudyLockState } from "../api/types";
 import { useAuth } from "../auth/useAuth";
@@ -26,6 +26,8 @@ export default function DataReview() {
   const [drawer, setDrawer] = useState<{ title: string; lines: HistoryLine[] | null } | null>(null);
   const [needsMonitor, setNeedsMonitor] = useState(false);
   const [lockState, setLockState] = useState<StudyLockState | null>(null);
+  const [params, setParams] = useSearchParams();
+  const subject = params.get("subject");
 
   const load = useCallback(async () => {
     try {
@@ -42,7 +44,7 @@ export default function DataReview() {
   const sites = useMemo(() => Array.from(new Set((rows ?? []).map((r) => r.site ?? ""))).filter(Boolean).sort(), [rows]);
   const visits = useMemo(() => Array.from(new Set((rows ?? []).map((r) => r.visit))), [rows]);
   const shown = useMemo(() => (rows ?? []).filter((r) =>
-    (!site || r.site === site) && (!visit || r.visit === visit) && (!status || (status === "queried" ? r.open_query_count > 0 : r.status === status))), [rows, site, visit, status]);
+    (!subject || r.subject === subject) && (!site || r.site === site) && (!visit || r.visit === visit) && (!status || (status === "queried" ? r.open_query_count > 0 : r.status === status))), [rows, subject, site, visit, status]);
   const counts = useMemo(() => {
     const c = { waiting: 0, approved: 0, queried: 0 };
     for (const r of rows ?? []) {
@@ -169,6 +171,9 @@ export default function DataReview() {
         </div>
       )}
 
+      {subject && (
+        <p className="small mb-3">Showing {subject} only. <button type="button" className="btn-link small" onClick={() => setParams({})}>Show everyone</button></p>
+      )}
       {rows && rows.length > 0 && (
         <div className="card">
           <div className="row row-wrap filters mb-3">

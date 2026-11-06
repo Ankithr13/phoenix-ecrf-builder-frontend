@@ -2,7 +2,7 @@
    else. Vite proxies /api to the backend in dev, so the session cookie is
    same-origin and travels with every request. */
 
-import type { AccessEvent, AdminOrg, AdminUser, CdashEntry, ChainRow, CheckWarning, EditCheck, FieldComment, FormHistoryRow, HistoryRow, LabRange, NewQuery, NotificationRow, Role, SignoffRow, StudyLockState, SubjectCreate,
+import type { AccessEvent, AdminOrg, AdminUser, CdashEntry, ChainRow, CheckWarning, EditCheck, FieldComment, FormHistoryRow, HistoryRow, LabRange, ListingResponse, NewQuery, NotificationRow, PageStatus, Queries360, Role, SapItem, SapItemIn, SapResponse, SignoffRow, StudyLockState, SubjectCreate,
   DashboardResponse, DataRow, DraftResponse, FieldChange, Health, Me, Plan,
   ProtocolListItem, QueryRow, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
 } from "./types";
@@ -36,6 +36,24 @@ async function req<T>(path: string, init: RequestInit = {}, opts: { allow401?: b
     throw new ApiError(r.status, detail);
   }
   return r.json() as Promise<T>;
+}
+
+/* A file from the server, saved through the browser. The session cookie goes
+   with the fetch, which a plain link in a new tab cannot promise for errors. */
+async function download(path: string, filename: string): Promise<void> {
+  const r = await fetch(path, { credentials: "include" });
+  if (!r.ok) {
+    let detail: unknown = r.statusText;
+    try { detail = (await r.json()).detail; } catch { /* ignore */ }
+    if (r.status === 401 && onUnauthorized) onUnauthorized();
+    throw new ApiError(r.status, detail);
+  }
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
@@ -133,6 +151,23 @@ export const api = {
   seed: (id: number) => req<{ seeded: number; already: boolean }>(`/api/data/seed/${id}`, { method: "POST" }),
 
   dashboard: (id: number) => req<DashboardResponse>(`/api/dashboard/${id}`),
+  queries360: (id: number, filters: { site?: string; raised_by?: string } = {}) => {
+    const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => !!v) as [string, string][]);
+    return req<Queries360>(`/api/dashboard/${id}/queries${q.toString() ? `?${q}` : ""}`);
+  },
+  pageStatus: (id: number) => req<PageStatus>(`/api/dashboard/${id}/page-status`),
+
+  sap: (id: number) => req<SapResponse>(`/api/protocols/${id}/sap`),
+  sapAdd: (id: number, body: SapItemIn) => req<SapItem>(`/api/protocols/${id}/sap`, post(body)),
+  sapUpdate: (id: number, itemId: number, body: SapItemIn) =>
+    req<SapItem>(`/api/protocols/${id}/sap/${itemId}`, { method: "PUT", body: JSON.stringify(body) }),
+  sapDelete: (id: number, itemId: number) => req<{ deleted: number }>(`/api/protocols/${id}/sap/${itemId}`, { method: "DELETE" }),
+
+  listingForms: (id: number) => req<{ forms: string[] }>(`/api/listing/${id}`),
+  listing: (id: number, form: string) => req<ListingResponse>(`/api/listing/${id}/${encodeURIComponent(form)}`),
+  listingExport: (id: number, form: string) => download(`/api/listing/${id}/${encodeURIComponent(form)}/export`, `listing_${id}_${form}.csv`),
+  blankPdf: (id: number) => download(`/api/protocols/${id}/pdf/blank`, `blank_ecrf_${id}.pdf`),
+  casebookPdf: (subjectRef: number, code: string) => download(`/api/subjects/${subjectRef}/pdf`, `casebook_${code}.pdf`),
 
   queries: (status?: string) => req<QueryRow[]>(`/api/queries${status ? `?status=${status}` : ""}`),
   raiseQuery: (observationId: number, text: string) => req<QueryRow>(`/api/data/${observationId}/queries`, post({ text })),

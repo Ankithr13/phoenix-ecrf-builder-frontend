@@ -5,7 +5,7 @@ import type { Health } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { ROLE_LABEL } from "../format";
 
-const ID_IN_PATH = /^\/(sponsor\/p|site\/s)\/(\d+)/;
+const ID_IN_PATH = /^\/(?:sponsor\/p|site\/s|listing)\/(\d+)/;
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
@@ -38,7 +38,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   const badge = openItems > 0 ? <span className="nav-badge">{openItems}</span> : null;
   const m = pathname.match(ID_IN_PATH);
-  const id = m ? m[2] : null;
+  const id = m ? m[1] : null;
   const sponsor = me?.org.type === "sponsor";
   const pillState = health ? "" : healthError ? " offline" : " pending";
 
@@ -80,6 +80,8 @@ export default function Layout({ children }: { children: ReactNode }) {
                   {(can("form.edit") || can("protocol.lock")) && <NavLink to={`/sponsor/p/${id}/checks`}>Edit checks</NavLink>}
                   {can("sites.assign") && <NavLink to={`/sponsor/p/${id}/sites`}>Sites</NavLink>}
                   {can("listing.view") && <NavLink to={`/sponsor/p/${id}/data`}>Data review</NavLink>}
+                  {can("listing.view") && <NavLink to={`/listing/${id}`}>Data listing</NavLink>}
+                  {can("dashboard.view") && <NavLink to={`/sponsor/p/${id}/sap`}>Analysis plan</NavLink>}
                   {can("dashboard.view") && <NavLink to={`/sponsor/p/${id}/dashboard`}>Dashboard</NavLink>}
                   <NavLink to={`/sponsor/p/${id}/notifications`}>Study notifications</NavLink>
                 </div>
@@ -94,6 +96,8 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <div className="nav-group">
                   <div className="nav-group-label">study {id}</div>
                   <NavLink to={`/site/s/${id}/patients`}>Patients</NavLink>
+                  {can("listing.view") && <NavLink to={`/listing/${id}`}>Data listing</NavLink>}
+                  {can("dashboard.view") && <NavLink to={`/site/s/${id}/dashboard`}>Dashboard</NavLink>}
                   <NavLink to={`/site/s/${id}/notifications`}>Study notifications</NavLink>
                 </div>
               )}

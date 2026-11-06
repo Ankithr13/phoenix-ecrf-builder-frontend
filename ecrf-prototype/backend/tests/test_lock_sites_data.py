@@ -44,6 +44,16 @@ def lock_and_assign(pid: int, *sites: str):
     return c
 
 
+def add_endpoint(dm, pid: int) -> dict:
+    """One row of the statistical analysis plan: systolic, Day 1 to Week 12."""
+    forms = dm.get(f"/api/protocols/{pid}/draft").json()["draft"]["forms"]
+    field_id = next(f["field_id"] for form in forms if form["visit"] == "Day 1" for f in form["fields"] if f["name"] == SBP)
+    r = dm.post(f"/api/protocols/{pid}/sap", json={"label": "Change in systolic BP", "kind": "endpoint", "field_id": field_id,
+                                                   "baseline_visit_id": "Day 1", "analysis_visit_id": "Week 12", "unit": "mmHg"})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
 def site_client(email: str):
     c = fresh_client()
     c.__enter__()
@@ -184,6 +194,7 @@ def test_stats_count_only_approved_rows_in_both_implementations(client, demo_acc
     pid = sponsor_draft()
     approver = lock_and_assign(pid, "BGH", "MRC")
     assert approver.post(f"/api/data/seed/{pid}").json()["already"] is False
+    add_endpoint(approver, pid)
     dash = approver.get(f"/api/dashboard/{pid}").json()
     assert dash["data"]["readings"] == 0 < dash["data"]["entered_total"], "nothing seeded is approved"
 

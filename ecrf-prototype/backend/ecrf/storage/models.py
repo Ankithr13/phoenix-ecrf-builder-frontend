@@ -403,3 +403,25 @@ class Notification(Base):
     body: Mapped[str] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SapItem(Base):
+    """One row of the statistical analysis plan: which field and which visits a
+    fixed calculation works on. It mirrors the client's traceability matrix.
+    Visits have no table of their own, so the two visit columns hold the visit's
+    name, as observation.visit does."""
+
+    __tablename__ = "sap_item"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
+    label: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(20))  # endpoint, safety, disposition or baseline
+    field_id: Mapped[str] = mapped_column(String(32))
+    baseline_visit_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    analysis_visit_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # {"on": "change" or "analysis", "op": "<=", "value": -10}
+    responder_rule: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    method: Mapped[str | None] = mapped_column(Text, nullable=True)
+

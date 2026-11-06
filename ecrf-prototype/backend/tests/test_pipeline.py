@@ -4,6 +4,7 @@ conftest.py sets the backend and a temporary database before this imports."""
 import os
 
 from conftest import APPROVER, BUILDER, login
+from test_lock_sites_data import add_endpoint
 
 from ecrf.ingest import load
 from ecrf.verify import locate
@@ -62,6 +63,7 @@ def test_full_flow(client, demo_accounts):
         assert c.get(f"/api/dashboard/{pid}").json()["data"]["readings"] == 0
         rows = [r["id"] for r in c.get(f"/api/protocols/{pid}/data").json()]
         c.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": rows})
+        add_endpoint(c, pid)
         dash = c.get(f"/api/dashboard/{pid}").json()
         assert dash["stats"] and all(s["pass"] for s in dash["stats"]), "app and independent results must agree"
 

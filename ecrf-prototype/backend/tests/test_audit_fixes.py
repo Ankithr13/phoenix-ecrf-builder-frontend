@@ -8,7 +8,15 @@ import pytest
 from conftest import APPROVER, BGH, BUILDER, login
 from sqlalchemy import inspect, select
 from test_cost import _run, fake_llm  # noqa: F401
-from test_lock_sites_data import _org_id, entry, lock_and_assign, site_client, sponsor_draft, submit
+from test_lock_sites_data import (
+    _org_id,
+    add_endpoint,
+    entry,
+    lock_and_assign,
+    site_client,
+    sponsor_draft,
+    submit,
+)
 
 import ecrf.extract.base as base_mod
 from ecrf.api import dashboard as dash_mod
@@ -164,9 +172,10 @@ def test_null_stat_is_not_available_not_pass():
 def test_null_stat_on_the_dashboard_is_grey(client, demo_accounts):
     pid, sponsor, _, row = _entered()
     sponsor.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]})
+    add_endpoint(sponsor, pid)
     stats = {s["name"]: s for s in sponsor.get(f"/api/dashboard/{pid}").json()["stats"]}
-    assert stats["mean_change_systolic"]["status"] == "not_available"
-    assert stats["mean_change_systolic"]["pass"] is False
+    assert stats["change_from_baseline"]["status"] == "not_available"
+    assert stats["change_from_baseline"]["pass"] is False
 
 
 def test_seed_refuses_without_locked_form(client, demo_accounts):

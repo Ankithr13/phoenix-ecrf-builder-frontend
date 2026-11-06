@@ -6,7 +6,7 @@ Stage 3. Roles, admin panel, approval chain: done
 Stage 4. Foundation form, field comments, form audit trail: done
 Stage 5. Data entry rules and edit checks: done
 Stage 6. Query lifecycle, notifications, investigator sign-off: done
-Stage 7. Dashboard metrics, SAP mapping, biostatistics, PDF: todo
+Stage 7. Dashboard metrics, SAP mapping, biostatistics, PDF: done
 Stage 8. Documentation and the regression run: todo
 
 Client documents: `docs/client/` is not present, so the summaries inside SPRINT3.md are the source.
@@ -142,3 +142,37 @@ Choices to confirm:
 - **Sign-off is blocked by any open query on the patient**, not only those on that visit.
 - `form_locked` also fires when a site is assigned after the lock, because a site assigned later would otherwise never hear.
 - A person's own notifications are left out of the read-only walk in `test_permissions`, because they are not study data.
+
+## Stage 7 acceptance
+
+Tests: 276 passed, 1 skipped (the same skip). 262 from Stage 6 plus the 14 listed for this stage.
+
+1. Remove the hard-coding: done. `test_calculations_have_no_hardcoded_fields`. `stats/seed.py` still names visits and fields because it makes the demo data; it computes nothing.
+2. SAP mapping: done. `test_sap_item_crud_needs_dm`, migration `0015_sap_item.py`, `pages/Sap.tsx`
+3. Registry: done. `stats/registry.py`, `test_descriptive_matches_verifier`, `test_change_from_baseline_matches_verifier_including_ci`, `test_responder_rate_with_wilson_ci`, `test_teae_count_uses_first_visit_date`, `test_percent_missing_uses_form_definition`, `test_unsupported_still_refused`
+4. Independent verifier: done. `verification/expected_results.py` uses SQL, `statistics` and `scipy.stats`, with no `ecrf/` import, and the same 0.01 tolerance. It reaches some results differently on purpose: the CI and p by formula where the app calls `ttest_rel`, and Wilson through `binomtest` where the app uses the formula. The tests also check the values against numbers worked by hand.
+5. Dashboard, three tabs: done. `test_queries_360_by_week`, `test_page_status_counts`, `pages/Dashboard.tsx`, `components/charts/LineChart.tsx`
+6. Data listing: done. `test_listing_is_scoped_and_export_is_logged`, `pages/Listing.tsx`, route `/listing/<protocol>/<form>`
+7. Blank eCRF PDF: done. `test_blank_pdf_renders_and_contains_every_field`, `ecrf/pdf.py`
+8. Subject casebook PDF: done. `test_casebook_pdf_contains_signoff_block`, `ecrf/pdf.py`
+9. Dashboard scope: done. `test_site_dashboard_is_own_site_only`
+
+Both PDFs, opened for the mock protocol PHX-401-201 with seeded data:
+
+- **Blank eCRF:** 7 pages. Each page has a header with the protocol title, version 2 and the lock date, and a page number in the footer. Each visit starts a new page, with Foundation first. Under each field are its type, unit, range, codelist and CDASH code, then an answer line, then the protocol quote in small type. Foundation and visit date fields say they are standard fields and not quoted from the protocol.
+- **Casebook for BGH-001:** 2 pages. The title block has the subject, protocol, form version, site, generation time and "Synthetic data only". Each visit is listed, including those with nothing entered. Each value shows its reading number, unit, status, answer type, edit count and open query count. Open query text follows the table, then "Investigator sign-off: not signed." or who signed and when, with the meaning statement.
+
+Also walked through in a browser: added an endpoint and a safety row on the plan page, saw PASS on every result the seeded data supports, and "not available" in grey on the adverse event count, since the seed has no AE or visit dates. A site coordinator saw only BGH with 10 subjects. The read-only role has no Add button, no listing and no export.
+
+Choices to confirm:
+
+- **"One page per visit" means each visit starts a new page.** A visit with more fields than fit carries on to the next page, rather than shrinking the type.
+- **Averaging repeats within a visit** is kept from the earlier code, which took it from the sample protocol. It now applies to every field. A real SAP may say otherwise.
+- **"First dosing" has no field of its own.** A safety row's baseline visit is the way to point at the dosing visit; without one, each subject's first visit date is used. The denominator is subjects with such a date.
+- **A safety row's field is the AE start date**, because that is what the window compares. A protocol with no AE start date field cannot have a TEAE count.
+- **Percent missing counts "not done" and "not applicable" as missing**, since they hold no value. The denominator is all registered subjects in the viewer's scope.
+- **The casebook needs `listing.view`, not only `report.pdf`.** It shows values row by row, and the read-only role and the builder may not see those. They can still get the blank eCRF.
+- **Casebook downloads are also written to the access log**, the same as a listing export. The sprint asked for that only on the listing.
+- **Column names:** `baseline_visit_id` and `analysis_visit_id` hold the visit's name, because visits have no table of their own. The access log's column is `action`, and an export is `action = "export"`.
+- **Query trend:** each week shows where queries stood at that week's end, reconstructed from their timestamps. A query that was cancelled drops out from the week it was cancelled.
+- **The old "subjects per visit" chart is gone**, because the sprint's registry does not list it. Page status covers the same ground.

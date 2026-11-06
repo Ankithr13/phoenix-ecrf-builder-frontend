@@ -10,12 +10,14 @@ import Dashboard from "./pages/Dashboard";
 import DataEntry from "./pages/DataEntry";
 import DataReview from "./pages/DataReview";
 import Glossary from "./pages/Glossary";
+import Listing from "./pages/Listing";
 import Login from "./pages/Login";
 import Notifications from "./pages/Notifications";
 import Patients from "./pages/Patients";
 import Protocols from "./pages/Protocols";
 import Queries from "./pages/Queries";
 import Review from "./pages/Review";
+import Sap from "./pages/Sap";
 import Sites from "./pages/Sites";
 import Studies from "./pages/Studies";
 import Visits from "./pages/Visits";
@@ -67,6 +69,7 @@ export default function App() {
           <Route path="/glossary" element={<Layout><Glossary /></Layout>} />
           <Route path="/admin" element={<Layout><Admin /></Layout>} />
           <Route path="/notifications" element={<Layout><Notifications /></Layout>} />
+          <Route path="/listing/:id/:form?" element={<Layout><Listing /></Layout>} />
 
           <Route element={<Portal type="sponsor" />}>
             <Route path="/sponsor" element={<Protocols />} />
@@ -77,6 +80,7 @@ export default function App() {
             <Route path="/sponsor/p/:id/sites" element={<Sites />} />
             <Route path="/sponsor/p/:id/data" element={<DataReview />} />
             <Route path="/sponsor/p/:id/dashboard" element={<Dashboard />} />
+            <Route path="/sponsor/p/:id/sap" element={<Sap />} />
             <Route path="/sponsor/p/:id/notifications" element={<Notifications />} />
           </Route>
 
@@ -85,6 +89,7 @@ export default function App() {
             <Route path="/site/queries" element={<Queries />} />
             <Route path="/site/s/:id/patients" element={<Patients />} />
             <Route path="/site/s/:id/patients/:subject" element={<DataEntry />} />
+            <Route path="/site/s/:id/dashboard" element={<Dashboard />} />
             <Route path="/site/s/:id/notifications" element={<Notifications />} />
           </Route>
 

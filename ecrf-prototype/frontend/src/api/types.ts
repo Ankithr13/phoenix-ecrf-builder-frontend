@@ -295,17 +295,83 @@ export interface Reading {
   completion_reason?: string | null;
 }
 
+export type StatValue = number | null | { [key: string]: StatValue };
+
 export interface StatResult {
+  item_id: number;
+  item_label: string;
+  item_kind: string;
+  unit: string | null;
+  baseline: string | null;
+  analysis: string | null;
+  method: string | null;
   name: string;
   label: string;
-  unit: string;
-  kind: "scalar" | "by_visit";
-  // null when the statistic could not be computed for this protocol
-  app: number | Record<string, number> | null;
-  independent: number | Record<string, number> | null;
+  // null when the statistic could not be computed
+  app: { [key: string]: StatValue } | null;
+  independent: { [key: string]: StatValue } | null;
   // not_available when either side could not compute it; never a pass
   status: "pass" | "fail" | "not_available";
   pass: boolean;
+}
+
+export interface Queries360 {
+  counts: Record<"open" | "answered" | "closed" | "cancelled", number>;
+  weeks: { week: string; open: number; answered: number; closed: number }[];
+  by_site: { site: string; open: number; answered: number; closed: number; cancelled: number }[];
+  sites: string[];
+}
+
+export interface PageStatusNumbers {
+  expected: number;
+  not_started: number;
+  draft: number;
+  submitted: number;
+  monitor_reviewed: number;
+  approved: number;
+  signed: number;
+  needs_review: number;
+  needs_approval: number;
+  needs_signoff: number;
+  open_queries: number;
+}
+
+export interface PageStatus {
+  locked: boolean;
+  visits: number;
+  sites: (PageStatusNumbers & { site: string; site_name: string; subjects: (PageStatusNumbers & { id: number; code: string })[] })[];
+}
+
+export interface ResponderRule { on: "change" | "analysis"; op: string; value: number }
+
+export interface SapItemIn {
+  label: string;
+  kind: string;
+  field_id: string;
+  baseline_visit_id: string | null;
+  analysis_visit_id: string | null;
+  unit: string | null;
+  responder_rule: ResponderRule | null;
+  method: string | null;
+}
+
+export interface SapItem extends SapItemIn {
+  id: number;
+  field: string | null;
+}
+
+export interface SapResponse {
+  items: SapItem[];
+  kinds: string[];
+  operators: string[];
+  visits: string[];
+  fields: { field_id: string; name: string; visit: string; type: string; unit: string | null }[];
+}
+
+export interface ListingResponse {
+  form: string;
+  columns: string[];
+  rows: { subject: string; site: string | null; visit: string; repeat: number; status: string; values: Record<string, string | null> }[];
 }
 
 export interface DashboardResponse {

@@ -3,7 +3,7 @@
 **This directory must not import from `ecrf/`.**
 
 Every statistic the application reports is recomputed here from the raw
-`observation` table, using plain SQL and arithmetic that shares nothing with
+tables, using plain SQL, the statistics module and scipy.stats, sharing nothing with
 the pipeline. The dashboard shows both numbers side by side with a pass or
 fail marker.
 

@@ -524,6 +524,11 @@ export default function DataEntry() {
       <div className="card mt-4">
         <div className="row row-between row-wrap">
           <p className="strong">On file for {subject}</p>
+          {can("listing.view") && patient && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+              api.casebookPdf(patient.id, patient.code).catch((e) => setMessage({ kind: "error", text: (e as Error).message }));
+            }}>Casebook PDF</button>
+          )}
           <p className="muted small">Ask the sponsor about any value. An approved value can be changed only while the sponsor has a query open on it.</p>
         </div>
         {rows.length === 0 && <p className="muted small mt-2">Nothing saved for this patient yet.</p>}
