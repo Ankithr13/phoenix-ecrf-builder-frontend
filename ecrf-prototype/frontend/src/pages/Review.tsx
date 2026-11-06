@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useBlocker, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { DraftResponse, FieldChange, FieldDef, VersionRow } from "../api/types";
 import FieldCard from "../components/FieldCard";
 import Stat from "../components/Stat";
 import { useAuth } from "../auth/useAuth";
+import ReviewDialog from "../components/ReviewDialog";
+import { NavigationContext } from "../navigation/context";
+import "../styles/review-workflow.css";
 
 type SectionView = { number: string; title: string; page: number | null; text: string; located_by?: "number" | "title" | "text" };
 
@@ -37,7 +40,14 @@ function formatSection(text: string): { kind: "p" | "li" | "h"; text: string }[]
 const key = (visit: string, name: string) => `${visit}\u0000${name}`;
 
 export default function Review() {
-  const id = Number(useParams().id);
+  const { id } = useParams();
+  return <ReviewEditor key={id} id={Number(id)} />;
+}
+
+function ReviewEditor({ id }: { id: number }) {
+  const navigate = useNavigate();
+  const navigation = useContext(NavigationContext);
+  const registerLeaveGuard = navigation?.registerLeaveGuard;
   const { can } = useAuth();
   const [resp, setResp] = useState<DraftResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,15 +62,59 @@ export default function Review() {
   const [fIssue, setFIssue] = useState<string>("");
   const [fSuggest, setFSuggest] = useState<"" | "protocol" | "library" | "heuristic" | "none">("");
   const [fText, setFText] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [editors, setEditors] = useState<string[]>([]);
+  const [editorReset, setEditorReset] = useState(0);
+  const [needsReload, setNeedsReload] = useState(false);
+  const [confirmation, setConfirmation] = useState<"lock" | "discard" | "approve_all_remaining" | "approve_suggested" | "guesses" | null>(null);
+  const [externalExit, setExternalExit] = useState<(() => void) | null>(null);
+  const [queuedExit, setQueuedExit] = useState<(() => void) | null>(null);
+  const inFlight = useRef(false);
+  const busy = saving || locking;
+  const pending = Object.keys(changes).length;
+  const dirty = pending > 0 || note.length > 0 || editors.length > 0;
+  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+    (dirty || busy) && (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search));
+
+  useEffect(() => {
+    if (!dirty && !busy) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty, busy]);
+
+  useEffect(() => {
+    registerLeaveGuard?.((action) => {
+      if (dirty || busy) setExternalExit(() => action);
+      else action();
+    });
+    return () => registerLeaveGuard?.(null);
+  }, [registerLeaveGuard, dirty, busy]);
+
+  useEffect(() => {
+    if (!queuedExit || dirty || busy) return;
+    setQueuedExit(null);
+    queuedExit();
+  }, [queuedExit, dirty, busy]);
+
+  const editingChanged = useCallback((editorId: string, editing: boolean) => {
+    setEditors((previous) => {
+      if (editing === previous.includes(editorId)) return previous;
+      return editing ? [...previous, editorId] : previous.filter((existing) => existing !== editorId);
+    });
+  }, []);
 
   const load = useCallback(async () => {
     try {
       const r = await api.draft(id);
       setResp(r);
       setError(null);
+      setNeedsReload(false);
       setActive((a) => (a && r.draft?.forms.some((f) => f.visit === a) ? a : r.draft?.forms[0]?.visit ?? null));
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     }
   }, [id]);
 
@@ -72,6 +126,7 @@ export default function Review() {
   };
 
   const onChange = (visit: string, name: string, change: Partial<FieldChange>) => {
+    setMessage(null);
     setChanges((prev) => {
       const k = key(visit, name);
       return { ...prev, [k]: { ...(prev[k] ?? { visit, name }), ...change } };
@@ -79,25 +134,64 @@ export default function Review() {
   };
 
   const save = async (action: "save" | "approve_all_remaining" | "approve_suggested", includeGuesses = false) => {
-    setSaving(true); setError(null);
+    if (inFlight.current || editors.length > 0 || needsReload) return false;
+    inFlight.current = true;
+    setSaving(true); setError(null); setMessage(null);
     try {
       await api.review(id, Object.values(changes), note.trim() || undefined, action, includeGuesses);
       setChanges({});
       setNote("");
-      await load();
+      setNeedsReload(true);
+      const refreshed = await load();
+      setMessage(refreshed ? "Draft saved. Saving does not lock the form or grant hospitals access." : "Your draft was saved, but its latest details could not be loaded. Retry loading before editing again.");
       if (versions) await loadVersions();
+      return refreshed;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   };
 
   const lock = async () => {
-    setLocking(true); setError(null);
-    try { await api.lock(id); await load(); if (versions) await loadVersions(); }
+    if (inFlight.current || dirty || needsReload) return;
+    inFlight.current = true;
+    setLocking(true); setError(null); setMessage(null); setConfirmation(null);
+    try {
+      await api.lock(id);
+      setNeedsReload(true);
+      const refreshed = await load();
+      setMessage(refreshed ? "Form finalized and locked. Manage hospital access in Sites." : "The form was locked, but its latest details could not be loaded. Retry loading to view it.");
+      if (versions) await loadVersions();
+    }
     catch (e) { setError((e as Error).message); }
-    finally { setLocking(false); }
+    finally { inFlight.current = false; setLocking(false); }
+  };
+
+  const discard = () => {
+    setChanges({}); setNote(""); setEditors([]);
+    setEditorReset((previous) => previous + 1);
+    setMessage("Unsaved edits discarded. The uploaded protocol and saved versions are unchanged.");
+    setError(null);
+    setConfirmation(null);
+  };
+  const stay = () => {
+    if (blocker.state === "blocked") blocker.reset();
+    setExternalExit(null);
+    setConfirmation(null);
+  };
+  const finishExit = () => {
+    if (blocker.state === "blocked") blocker.proceed();
+    else if (externalExit) setQueuedExit(() => externalExit);
+    setExternalExit(null);
+  };
+  const saveAndExit = async () => {
+    if (!dirty || await save("save")) {
+      if (blocker.state === "blocked" || externalExit) finishExit();
+      else setQueuedExit(() => () => navigate("/sponsor/ecrfs?stage=needs_review"));
+    }
   };
 
   const showSection = async (n: string) => {
@@ -108,7 +202,6 @@ export default function Review() {
 
   const draft = resp?.draft ?? null;
   const form = useMemo(() => draft?.forms.find((f) => f.visit === active) ?? null, [draft, active]);
-  const pending = Object.keys(changes).length;
 
   // Merge pending local edits into the field so the card reflects them.
   const merged = (f: FieldDef, visit: string): FieldDef => {
@@ -175,11 +268,40 @@ export default function Review() {
   const countBy = (pred: (f: FieldDef) => boolean) => (form ? form.fields.map((f) => merged(f, form.visit)).filter(pred).length : 0);
   const blockers = resp.lock_blockers ?? { draft: 0, flagged: 0 };
   const left = blockers.draft + blockers.flagged;
+  const editorOpen = editors.length > 0;
+  const controlsDisabled = busy || needsReload;
+  const leaving = blocker.state === "blocked" || externalExit !== null;
+  const fieldCounts = draft.forms.flatMap((visit) => visit.fields.map((field) => merged(field, visit.visit)))
+    .reduce((counts, field) => ({ ...counts, [field.status]: counts[field.status] + 1 }), { draft: 0, flagged: 0, approved: 0, rejected: 0 });
 
   return (
     <div className="page">
       <div className="page-head">
+        <Link className="inline small" to="/sponsor/ecrfs">← eCRF Management</Link>
         <h1 className="page-title">{resp.protocol.name}</h1>
+        <section className="card review-workflow" aria-label="Review progress">
+          <h2 className="section-title">{locked ? "Locked eCRF" : left > 0 || dirty ? "Draft — review incomplete" : "Draft — ready to finalize"}</h2>
+          <p className="muted small">Review each visit, apply your edits, then save a draft or finalize once every field has a decision. Drafts stay available in Studies and eCRF Management.</p>
+          <div className="review-workflow-counts">
+            <span className="pill">v{resp.version}</span>
+            <span className="pill">{fieldCounts.draft} draft</span>
+            <span className="pill chip-amber">{fieldCounts.flagged} flagged</span>
+            <span className="pill chip-teal">{fieldCounts.approved} approved</span>
+            <span className="pill">{fieldCounts.rejected} rejected</span>
+          </div>
+          <p className="muted small">Counts include applied, unsaved edits. Finalization uses the saved version.</p>
+          {resp.created_at && <p className="muted small">Version saved {new Date(resp.created_at).toLocaleString()} by {resp.created_by}</p>}
+          {message && <p className="small mt-3" role="status">{message}</p>}
+          {needsReload && <button className="btn btn-secondary mt-3" type="button" onClick={() => void load()} disabled={busy}>Retry loading saved form</button>}
+          {editorOpen && <p className="review-editor-hint small" role="status">Apply or cancel the open field editor before saving, changing visits or filtering. Applied edits still need Save draft.</p>}
+          {!locked && can("form.edit") && <div className="review-workflow-actions">
+            <button type="button" className="btn btn-primary" onClick={() => void save("save")} disabled={controlsDisabled || editorOpen || !dirty}>{saving ? "Saving…" : "Save draft"}</button>
+            <button type="button" className="btn btn-secondary" onClick={() => void saveAndExit()} disabled={controlsDisabled || editorOpen}>Save draft & exit</button>
+            <button type="button" className="btn btn-secondary" onClick={() => setConfirmation("discard")} disabled={busy || !dirty}>Discard unsaved changes</button>
+          </div>}
+          {locked && can("site.assign") && <Link className="btn btn-secondary mt-3" to={`/sponsor/p/${id}/sites`}>Manage hospital access</Link>}
+        </section>
+        <details className="panel mb-4"><summary>Extraction details</summary><div className="panel-body">
         <div className="row row-wrap row-between">
           <div className="mono small muted">
             v{resp.version} · {draft.backend} · {draft.model} · hash {resp.protocol.hash} · threshold {s.threshold}
@@ -187,6 +309,8 @@ export default function Review() {
               <> · {s.llm_calls_made} call{s.llm_calls_made === 1 ? "" : "s"}{s.llm_calls_from_cache ? ` + ${s.llm_calls_from_cache} cached` : ""} · ${s.est_cost_usd.toFixed(4)}{s.strategy ? ` · ${s.strategy}` : ""}</>
             )}
           </div>
+        </div>
+        </div></details>
           {!locked && can("form.lock") && (
             <div className="row">
               {left > 0 && (
@@ -197,15 +321,14 @@ export default function Review() {
                 </span>
               )}
               <button
-                type="button" className="btn btn-teal btn-sm" onClick={lock}
-                disabled={locking || left > 0 || pending > 0}
-                title={pending > 0 ? "Save your pending changes first" : left > 0 ? "Every field must be approved or rejected first" : "Freeze this version for sites"}
+                type="button" className="btn btn-teal btn-sm" onClick={() => setConfirmation("lock")}
+                disabled={controlsDisabled || left > 0 || dirty}
+                title={dirty ? "Apply and save your pending changes first" : left > 0 ? "Every field must be approved or rejected first" : "Freeze this version for sites"}
               >
-                {locking ? "Locking…" : "Lock form"}
+                {locking ? "Locking…" : "Finalize & lock"}
               </button>
             </div>
           )}
-        </div>
       </div>
 
       {!locked && can("form.lock") && (resp.lock_warnings ?? []).length > 0 && (
@@ -232,6 +355,9 @@ export default function Review() {
         </div>
       )}
 
+      <details className="panel mb-4">
+        <summary>Verification results & dropped fields ({draft.rejections.length})</summary>
+        <div className="panel-body">
       <div className="grid-3">
         <Stat label="Fields kept" value={s.fields_kept} sub={`of ${s.fields_generated} generated across ${s.visits} visits`} />
         <Stat label="Dropped by verification" value={s.rejected} tone={s.rejected > 0 ? "rust" : "default"} sub="quote not found in protocol" />
@@ -262,6 +388,9 @@ export default function Review() {
         </div>
       )}
 
+        </div>
+      </details>
+
       <div className="mt-5">
         <div className="tabs" role="tablist">
           {draft.forms.map((f) => (
@@ -271,6 +400,7 @@ export default function Review() {
               role="tab"
               aria-selected={f.visit === active}
               className={`tab${f.visit === active ? " active" : ""}`}
+              disabled={editorOpen || controlsDisabled}
               onClick={() => setActive(f.visit)}
             >
               {f.visit}<span className="tab-count">{f.fields.length}</span>
@@ -282,7 +412,7 @@ export default function Review() {
           <>
             {form.fields.length === 0 && <p className="muted">No fields survived verification for this visit.</p>}
             {form.fields.length > 0 && (
-              <div className="filter-bar">
+              <fieldset className="filter-bar review-controls" disabled={editorOpen || controlsDisabled}>
                 <div className="row row-wrap">
                   {([
                     ["all", "All", () => true],
@@ -319,16 +449,18 @@ export default function Review() {
                     <button type="button" className="btn-link" onClick={() => { setFStatus("all"); setFIssue(""); setFSuggest(""); setFText(""); }}>clear</button>
                   )}
                 </div>
-              </div>
+              </fieldset>
             )}
             {form.fields.length > 0 && visible.length === 0 && <p className="muted small">No fields match the filter.</p>}
             {visible.map(({ original, field: f }) => (
               <FieldCard
-                key={`${form.visit}-${original}`}
+                key={`${editorReset}-${form.visit}-${original}`}
                 field={f}
                 onChange={(c) => onChange(form.visit, original, c)}
                 onShowSection={showSection}
-                readOnly={locked}
+                readOnly={locked || !can("form.edit") || controlsDisabled}
+                editorId={key(form.visit, original)}
+                onEditingChange={editingChanged}
               />
             ))}
 
@@ -368,24 +500,26 @@ export default function Review() {
         </div>
       </details>
 
-      {error && <p className="error mt-3">{error}</p>}
+      {error && <p className="error mt-3" role="alert">{error}</p>}
 
-      {can("form.edit") && !locked && <div className="sticky-bar">
+      {can("form.edit") && !locked && <div className="sticky-bar review-save-bar">
         <span className="small muted">
           <span className="mono">{pending}</span> pending change{pending === 1 ? "" : "s"}
         </span>
         <input
           className="input grow"
           placeholder="Review note (optional)"
+          aria-label="Review note (optional)"
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          disabled={controlsDisabled}
+          onChange={(e) => { setNote(e.target.value); setMessage(null); }}
         />
-        <button type="button" className="btn btn-primary" onClick={() => save("save")} disabled={saving || pending === 0}>
-          {saving ? "Saving…" : "Save review"}
+        <button type="button" className="btn btn-primary" onClick={() => void save("save")} disabled={controlsDisabled || editorOpen || !dirty}>
+          {saving ? "Saving…" : "Save draft"}
         </button>
         {suggestedCount > 0 && (
           <button
-            type="button" className="btn btn-secondary" onClick={() => save("approve_suggested")} disabled={saving}
+            type="button" className="btn btn-secondary" onClick={() => setConfirmation("approve_suggested")} disabled={controlsDisabled || editorOpen}
             title="Flagged only because the protocol gave no unit, range or choices and the CDASH library has a standard one. Approving accepts the library's values."
           >
             Accept {suggestedCount} library suggestion{suggestedCount === 1 ? "" : "s"}
@@ -393,16 +527,40 @@ export default function Review() {
         )}
         {guessedCount > 0 && (
           <button
-            type="button" className="btn btn-secondary" onClick={() => save("approve_suggested", true)} disabled={saving}
+            type="button" className="btn btn-secondary" onClick={() => setConfirmation("guesses")} disabled={controlsDisabled || editorOpen}
             title="Also approves fields whose range was guessed from the unit or name. Look at them first: they are plausibility limits, not clinical ranges."
           >
             Accept {guessedCount} guessed range{guessedCount === 1 ? "" : "s"} too
           </button>
         )}
-        <button type="button" className="btn btn-secondary" onClick={() => save("approve_all_remaining")} disabled={saving}>
-          Approve all remaining
+        <button type="button" className="btn btn-secondary" onClick={() => setConfirmation("approve_all_remaining")} disabled={controlsDisabled || editorOpen || fieldCounts.draft === 0}>
+          Approve remaining draft fields
         </button>
       </div>}
+
+      {(leaving || confirmation) && <ReviewDialog title={leaving ? "Leave this review?" : confirmation === "lock" ? "Finalize and lock this form?" : confirmation === "discard" ? "Discard unsaved changes?" : "Confirm bulk approval"} onStay={stay}>
+        {leaving ? <>
+          <p>{busy ? "A save or lock is in progress. Wait until it finishes before leaving." : "You have unsaved review work. Save a draft to continue later, discard only unsaved changes, or stay here."}</p>
+          {editorOpen && <p className="review-editor-hint small">Choose Stay, then apply or cancel the open field editor before saving. Discard will also remove edits still inside that editor.</p>}
+          <div className="review-dialog-actions">
+            <button type="button" className="btn btn-secondary" onClick={stay} autoFocus>Stay</button>
+            <button type="button" className="btn btn-primary" onClick={() => void saveAndExit()} disabled={controlsDisabled || editorOpen || !can("form.edit")}>Save draft & leave</button>
+            <button type="button" className="btn btn-danger" onClick={() => { discard(); finishExit(); }} disabled={busy}>Discard changes & leave</button>
+          </div>
+        </> : confirmation === "discard" ? <>
+          <p>This removes only edits since your last save, including any open field editor. It does not delete the protocol or any saved version.</p>
+          <div className="review-dialog-actions"><button type="button" className="btn btn-secondary" onClick={stay} autoFocus>Keep editing</button><button type="button" className="btn btn-danger" onClick={discard} disabled={busy}>Discard unsaved changes</button></div>
+        </> : confirmation === "lock" ? <>
+          <p>Lock saved version {resp.version} of {resp.protocol.name}. This freezes the form and prevents further edits. Hospital assignments are managed separately in Sites.</p>
+          <p className="muted small mt-3">Review the warnings above before confirming. Locking does not declare hospital data complete.</p>
+          <div className="review-dialog-actions"><button type="button" className="btn btn-secondary" onClick={stay} autoFocus>Keep reviewing</button><button type="button" className="btn btn-teal" onClick={() => void lock()} disabled={controlsDisabled || dirty || left > 0}>Confirm finalize & lock</button></div>
+        </> : <>
+          <p>{confirmation === "approve_all_remaining" ? "Approve all remaining draft fields across every visit, not just the current filter. Flagged and rejected fields will not be approved by this action." : confirmation === "guesses" ? "Accept library suggestions and guessed ranges across every visit. Guessed ranges are plausibility limits, not protocol-defined clinical ranges." : "Accept library suggestions across every visit, not just the current filter. These values are not stated in the protocol."}</p>
+          <p className="muted small mt-3">This explicitly records approvals and saves your applied edits. Ordinary Save draft does not approve remaining fields.</p>
+          <div className="review-dialog-actions"><button type="button" className="btn btn-secondary" onClick={stay} autoFocus>Keep reviewing</button><button type="button" className="btn btn-teal" disabled={controlsDisabled || editorOpen} onClick={async () => { if (await save(confirmation === "approve_all_remaining" ? "approve_all_remaining" : "approve_suggested", confirmation === "guesses")) setConfirmation(null); }}>{saving ? "Saving…" : "Confirm approval & save"}</button></div>
+        </>}
+        {error && <p className="error mt-3" role="alert">{error}</p>}
+      </ReviewDialog>}
 
       {section && (
         <aside className="side-panel" aria-label="Protocol section">

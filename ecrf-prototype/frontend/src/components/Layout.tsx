@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/useAuth";
@@ -41,6 +41,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const navigation = useNavigationState();
   const navRef = useRef<HTMLElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
+  const leaveGuard = useRef<((action: () => void) => void) | null>(null);
+  const registerLeaveGuard = useCallback((guard: ((action: () => void) => void) | null) => { leaveGuard.current = guard; }, []);
   const id = navigation.protocolId;
   useEffect(() => { navRef.current?.scrollTo({ top: 0 }); }, [id, navigation.studyId]);
   useEffect(() => { setMenuOpen(false); }, [pathname]);
@@ -85,7 +87,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   ] : [{ label: "Patients", icon: "patients", to: `/site/s/${id}/patients` }] : [];
 
   return (
-    <NavigationContext.Provider value={{ ...navigation, actionsContainer }}>
+    <NavigationContext.Provider value={{ ...navigation, actionsContainer, registerLeaveGuard }}>
     <div className="shell">
       <aside className={`sidebar${menuOpen ? " sidebar-open" : ""}`} onKeyDown={(event) => { if (event.key === "Escape" && menuOpen) { closeMenu(); toggleRef.current?.focus(); } }}>
         <div className="sidebar-heading">
@@ -147,7 +149,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <div className="identity-user">{me.user.name}</div>
                   <div className="identity-org" title={me.org.name}>{ROLE_LABEL[me.role] ?? me.role} · {me.org.name}</div>
                 </div>
-                <button type="button" className="identity-out" onClick={signOut} aria-label="Sign out" title="Sign out">
+                <button type="button" className="identity-out" onClick={() => { const action = () => { void signOut(); }; if (leaveGuard.current) leaveGuard.current(action); else action(); }} aria-label="Sign out" title="Sign out">
                   <SidebarIcon name="signOut" />
                 </button>
               </div>

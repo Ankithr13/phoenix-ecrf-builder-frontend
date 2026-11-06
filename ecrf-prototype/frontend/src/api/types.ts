@@ -119,6 +119,7 @@ export interface ProtocolListItem {
   uploaded_at: string;
   latest_version: number | null;
   state: "draft" | "locked" | null;
+  review_blockers: { draft: number; flagged: number } | null;
   summary: Summary | null;
   plan: Plan | null;
   study_id: number | null;

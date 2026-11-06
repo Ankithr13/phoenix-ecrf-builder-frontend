@@ -11,6 +11,7 @@ export interface NavigationState {
   error: boolean;
   retry: () => void;
   actionsContainer: HTMLDivElement | null;
+  registerLeaveGuard: (guard: ((action: () => void) => void) | null) => void;
 }
 
 export const NavigationContext = createContext<NavigationState | null>(null);

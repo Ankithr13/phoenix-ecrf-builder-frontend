@@ -7,6 +7,8 @@ interface Props {
   onChange: (change: Partial<FieldChange>) => void;
   onShowSection: (section: string) => void;
   readOnly?: boolean;
+  editorId?: string;
+  onEditingChange?: (id: string, editing: boolean) => void;
 }
 
 const TYPES: FieldType[] = ["integer", "decimal", "text", "date", "choice", "boolean"];
@@ -53,13 +55,18 @@ function formFrom(f: FieldDef): Form {
   };
 }
 
-export default function FieldCard({ field, onChange, onShowSection, readOnly = false }: Props) {
+export default function FieldCard({ field, onChange, onShowSection, readOnly = false, editorId, onEditingChange }: Props) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Form>(() => formFrom(field));
   const [problem, setProblem] = useState<string | null>(null);
 
   // Resync when the draft is reloaded (e.g. after a save) and the editor is closed.
   useEffect(() => { if (!editing) setForm(formFrom(field)); }, [field, editing]);
+  useEffect(() => {
+    if (editorId === undefined || !onEditingChange) return;
+    onEditingChange(editorId, editing);
+    return () => onEditingChange(editorId, false);
+  }, [editorId, editing, onEditingChange]);
 
   const numeric = form.type === "integer" || form.type === "decimal";
   const set = (patch: Partial<Form>) => { setForm((p) => ({ ...p, ...patch })); setProblem(null); };
