@@ -73,7 +73,6 @@ export const api = {
     if (filters.unassigned) query.set("unassigned", "true");
     return req<ProtocolListItem[]>(`/api/protocols${query.size ? `?${query}` : ""}`);
   },
-  loadSample: (studyId: number) => req<ProtocolUploadResult>(`/api/protocols/sample?study_id=${studyId}`, { method: "POST" }),
   upload: (file: File, studyId: number) => {
     const formData = new FormData();
     formData.append("file", file);
