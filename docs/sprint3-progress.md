@@ -1,7 +1,7 @@
 # Sprint 3 progress
 
 Stage 1. Fixes from the audit: done
-Stage 2. Put it online: todo
+Stage 2. Put it online: skipped (by Tarushi, to test locally first; all of its work was removed)
 Stage 3. Roles, admin panel, approval chain: todo
 Stage 4. Foundation form, field comments, form audit trail: todo
 Stage 5. Data entry rules and edit checks: todo
@@ -37,3 +37,9 @@ Choices to confirm:
 - The sprint rule says patients are identified by server-generated codes, so typed subject IDs are gone too, not only initials. The registration body now refuses unknown keys.
 - The status `entered` became `submitted` here, not in Stage 5, because item 6 needs `submitted` now.
 - A real `.env` using the old `PRICE_*` names now shows "cost not configured" until renamed to `LLM_PRICE_*`.
+
+## Stage 2
+
+Skipped on request. The Dockerfile, Railway config, deploy notes, frontend serving, `PORT` and `CORS_ORIGINS` settings, health changes, Postgres test and the verifier's move to SQLAlchemy were all removed before being committed. Stage 1's `ECRF_ENV` and `SECRET_KEY` handling stays, because it is committed Stage 1 work.
+
+For when this comes back: running the migrations on real Postgres 16 found that a `%` in `DATABASE_URL`, such as a URL-encoded password, crashes `migrate.alembic_config` through configparser interpolation. The fix is to double the `%` before `set_main_option`.

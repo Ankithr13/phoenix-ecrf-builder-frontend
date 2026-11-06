@@ -68,7 +68,7 @@ const GROUPS: Group[] = [
   {
     title: "Queries",
     terms: [
-      { word: "Query", means: "A question from one side to the other about a study, a patient, a visit or one value. Whoever asks, the other side answers, and the side that asked closes it.",
+      { word: "Query", means: "A question from one side to the other about a study, a patient, a visit or one value. Whoever asks, the other side answers, and the sponsor closes it.",
         example: "Site: \"Which unit do you want for creatinine?\" Sponsor answers in words, then closes it." },
       { word: "Open / Answered / Closed", means: "Open: waiting for the other side. Answered: waiting for the sponsor to close it. Closed: settled. A value-level query returns the value to Entered when closed, so it is approved again on purpose." },
       { word: "My turn", means: "Queries where it is your move: open ones you should answer and, for the sponsor, answered ones to close. The badge in the sidebar counts them." },
