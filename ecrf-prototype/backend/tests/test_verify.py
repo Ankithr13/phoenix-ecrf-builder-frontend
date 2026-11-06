@@ -143,17 +143,17 @@ def test_reviewer_can_edit_every_attribute_and_rename(client, demo_accounts):
     pid = c.post("/api/protocols/sample").json()["id"]
     c.post(f"/api/protocols/{pid}/extract")
     before = c.get(f"/api/protocols/{pid}/draft").json()["draft"]
-    visit = before["forms"][0]["visit"]
-    f = before["forms"][0]["fields"][0]
-    other = before["forms"][0]["fields"][1]["name"]
+    visit = before["forms"][1]["visit"]
+    f = before["forms"][1]["fields"][0]
+    other = before["forms"][1]["fields"][1]["name"]
     r = c.post(f"/api/protocols/{pid}/review", json={"changes": [{
         "visit": visit, "name": f["name"], "new_name": "Renamed Field", "type": "choice",
         "unit": "", "choices": ["Yes", " No ", ""], "required": False, "repeats": 2, "status": "approved"}]})
     assert r.status_code == 200, r.text
     after = c.get(f"/api/protocols/{pid}/draft").json()["draft"]
-    names = [x["name"] for x in after["forms"][0]["fields"]]
+    names = [x["name"] for x in after["forms"][1]["fields"]]
     assert "Renamed Field" in names and f["name"] not in names
-    g = next(x for x in after["forms"][0]["fields"] if x["name"] == "Renamed Field")
+    g = next(x for x in after["forms"][1]["fields"] if x["name"] == "Renamed Field")
     assert g["type"] == "choice" and g["unit"] is None and g["choices"] == ["Yes", "No"]
     assert g["required"] is False and g["repeats"] == 2 and g["status"] == "approved"
     assert g["source"] == f["source"], "the quote is the model's, a reviewer cannot change it"

@@ -15,6 +15,8 @@ export const INPUTS: Table = {
   qt: { codes: ["QT"], pattern: /\bqt\b(?!c)|\bqt interval\b|\buncorrected qt\b/ },
   rr: { codes: ["RR"], pattern: /\brr interval\b/ },
   creat: { codes: ["CREAT"], pattern: /\b(serum )?creatinine\b/ },
+  birth_year: { codes: ["BRTHDTC"], pattern: /\byear of birth\b/ },
+  consent_date: { codes: ["RFICDTC"], pattern: /\bconsent date\b/ },
 };
 export const DERIVED: Table = {
   bmi: { codes: ["BMI"], pattern: /\bbmi\b|body mass index/ },
@@ -23,10 +25,11 @@ export const DERIVED: Table = {
   pulse_pressure: { codes: [], pattern: /\bpulse pressure\b/ },
   qtcf: { codes: [], pattern: /\bqtcf\b|fridericia/ },  // by name only: the library files QTc and QTcB under QTCF
   egfr: { codes: ["EGFR"], pattern: /\begfr\b|glomerular filtration/ },
+  age_at_consent: { codes: [], pattern: /\bage at consent\b/ },
 };
 export const LABEL: Record<string, string> = {
   bmi: "BMI", bsa: "Body surface area", map: "Mean arterial pressure", pulse_pressure: "Pulse pressure",
-  qtcf: "QTcF", egfr: "eGFR (CKD-EPI 2021)",
+  qtcf: "QTcF", egfr: "eGFR (CKD-EPI 2021)", age_at_consent: "Age at consent",
 };
 
 export interface Derived { key: string; value: number; unit: string; from: string }
@@ -83,6 +86,9 @@ export function compute(
       const egfr = 142 * Math.min(r, 1) ** alpha * Math.max(r, 1) ** -1.2 * 0.9938 ** age * (subject.sex === "Female" ? 1.012 : 1);
       out.push({ key: "egfr", value: Math.round(egfr), unit: "mL/min/1.73m2", from: `creatinine ${scr} mg/dL, age ${age}, ${subject.sex.toLowerCase()}` });
     }
+  }
+  if (g("birth_year") !== undefined && g("consent_date") !== undefined) {
+    out.push({ key: "age_at_consent", value: g("consent_date") - g("birth_year"), unit: "years", from: `born ${g("birth_year")}, consent ${g("consent_date")}` });
   }
   return out;
 }

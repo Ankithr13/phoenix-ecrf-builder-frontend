@@ -2,7 +2,7 @@
    else. Vite proxies /api to the backend in dev, so the session cookie is
    same-origin and travels with every request. */
 
-import type { AccessEvent, AdminOrg, AdminUser, ChainRow, NewQuery, Role, SubjectCreate,
+import type { AccessEvent, AdminOrg, AdminUser, CdashEntry, ChainRow, FieldComment, FormHistoryRow, HistoryRow, NewQuery, Role, SubjectCreate,
   DashboardResponse, DataRow, DraftResponse, FieldChange, Health, Me, Plan,
   ProtocolListItem, QueryRow, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
 } from "./types";
@@ -85,6 +85,12 @@ export const api = {
   review: (id: number, changes: FieldChange[], note?: string, action: "save" | "approve_all_remaining" | "approve_suggested" = "save", include_guesses = false) =>
     req<{ version: number; applied: number }>(`/api/protocols/${id}/review`, post({ changes, note, action, include_guesses })),
 
+  comments: (id: number) => req<FieldComment[]>(`/api/protocols/${id}/comments`),
+  addComment: (id: number, field_id: string, body: string) => req<FieldComment>(`/api/protocols/${id}/comments`, post({ field_id, body })),
+  resolveComment: (id: number, commentId: number) => req<FieldComment>(`/api/protocols/${id}/comments/${commentId}/resolve`, { method: "POST" }),
+  formHistory: (id: number, fieldId: string) => req<FormHistoryRow[]>(`/api/protocols/${id}/form-history?field_id=${encodeURIComponent(fieldId)}`),
+  cdashLibrary: () => req<CdashEntry[]>("/api/protocols/library/cdash"),
+
   lock: (id: number) => req<{ version: number; state: string; locked_by: string }>(`/api/protocols/${id}/lock`, { method: "POST" }),
 
   sites: (id: number) => req<SiteRow[]>(`/api/protocols/${id}/sites`),
@@ -103,6 +109,8 @@ export const api = {
   },
   approveData: (id: number, observation_ids: number[]) =>
     req<{ approved: number }>(`/api/protocols/${id}/data/approve`, post({ observation_ids })),
+
+  history: (id: number, observationId: number) => req<HistoryRow[]>(`/api/protocols/${id}/data/${observationId}/history`),
 
   validate: (protocol_id: number, subject_id: string, visit: string, readings: Reading[]) =>
     req<{ ok: boolean; errors: Record<string, string> }>("/api/data/validate", post({ protocol_id, subject_id, visit, readings })),

@@ -4,14 +4,21 @@ One definition. It produces the JSON schema sent to the model AND the
 validation the API applies, so the two cannot drift apart.
 """
 
+import hashlib
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 FieldType = Literal["integer", "decimal", "text", "date", "choice", "boolean"]
 Issue = Literal["none", "missing", "conflicting", "ambiguous", "unsupported"]
 Status = Literal["draft", "approved", "flagged", "rejected"]
 Verdict = Literal["exact", "approximate", "rejected", "unchecked"]
+
+
+def make_field_id(visit: str, name: str) -> str:
+    """Deterministic, so extracting again keeps the id, and with it the
+    comments, for a field that comes back under the same visit and name."""
+    return hashlib.sha256(f"{visit}\0{name}".encode()).hexdigest()[:16]
 
 
 class Source(BaseModel):
@@ -59,6 +66,13 @@ class FieldDef(BaseModel):
     # supplied them, "heuristic" when a plausibility guess from the unit or
     # name did. None when nothing was filled in.
     suggested_from: Literal["protocol", "library", "heuristic"] | None = None
+    # Stable across versions and renames, so comments and history stay attached.
+    field_id: str = ""
+    # "foundation" fields are put there by code, not proposed by the model, and
+    # are the only ones the quote check skips.
+    origin: Literal["model", "foundation"] = "model"
+    # False on a foundation field the study has chosen not to collect.
+    collected: bool = True
 
 
 class VisitForm(BaseModel):
@@ -113,6 +127,14 @@ class DraftECRF(BaseModel):
     forms: list[VisitForm]
     rejections: list[Rejection] = []
     summary: dict = {}
+
+    @model_validator(mode="after")
+    def _assign_field_ids(self):
+        for form in self.forms:
+            for f in form.fields:
+                if not f.field_id:
+                    f.field_id = make_field_id(form.visit, f.name)
+        return self
 
 
 # Schemas handed to the model. Only the model-facing fields.

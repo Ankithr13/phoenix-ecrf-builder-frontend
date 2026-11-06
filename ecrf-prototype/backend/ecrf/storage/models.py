@@ -175,6 +175,43 @@ class ECRFVersion(Base):
     locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class FieldComment(Base):
+    """A reviewer's note on one field. Keyed by the stable field_id, so a
+    comment survives new versions and a rename."""
+
+    __tablename__ = "field_comment"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
+    version: Mapped[int] = mapped_column(Integer)
+    field_id: Mapped[str] = mapped_column(String(32))
+    author: Mapped[str] = mapped_column(String(100))
+    body: Mapped[str] = mapped_column(String(2000))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
+class FormFieldHistory(Base):
+    """One row per change to one attribute of one field: the old value, the new
+    one, who, when and why. Versions hold whole snapshots; this says what moved
+    between them. field_id is empty for a change to the form itself, such as
+    the lock."""
+
+    __tablename__ = "form_field_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
+    version: Mapped[int] = mapped_column(Integer)
+    field_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    attribute: Mapped[str] = mapped_column(String(40))
+    old_value: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    new_value: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    by: Mapped[str] = mapped_column(String(100))
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
 class ProtocolSite(Base):
     """A site organisation assigned to a (locked) protocol."""
 

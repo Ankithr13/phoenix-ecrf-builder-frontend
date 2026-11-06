@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ecrf import cdash, ingest, pipeline
+from ecrf import cdash, foundation, ingest, pipeline
 from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
 from ecrf.config import config
@@ -24,7 +24,7 @@ from ecrf.extract import get_extractor
 from ecrf.extract.base import Usage
 from ecrf.schema import DraftECRF, ExtractionPlan, FieldType, Status
 from ecrf.storage import db
-from ecrf.storage.models import ECRFVersion, Protocol, utcnow
+from ecrf.storage.models import ECRFVersion, FieldComment, FormFieldHistory, Protocol, utcnow
 
 router = APIRouter(prefix="/api/protocols", tags=["protocols"])
 
@@ -52,6 +52,13 @@ def _doc_from_protocol(p: Protocol) -> ingest.Document:
 
 
 # ----------------------------------------------------------------- list
+
+@router.get("/library/cdash")
+def cdash_library(cu: CurrentUser = Depends(require("form.edit"))):
+    """Every code in the library, for choosing one by name on the Review page."""
+    return [{"cdash": e.get("cdash"), "name": e["name"], "domain": dom}
+            for dom, d in cdash.library().items() for e in d["fields"] if e.get("cdash")]
+
 
 @router.get("")
 def list_protocols(cu: CurrentUser = Depends(require("protocol.view")),
@@ -172,7 +179,7 @@ def _lock_warnings(content: dict) -> list[dict]:
     choice_no_list, num_no_range, num_no_unit = [], [], []
     for form in content.get("forms", []):
         for f in form.get("fields", []):
-            if f.get("status") != "approved":
+            if f.get("status") != "approved" or f.get("origin") == "foundation":
                 continue
             tag = f"{form['visit']}: {f['name']}"
             if f.get("type") == "choice" and not f.get("choices"):
@@ -298,6 +305,8 @@ def put_visits(protocol_id: int, body: VisitsRequest,
     p = scope.protocol_or_404(s, cu, protocol_id)
     _guard_extract(s, protocol_id, force=True)
     visits = [v.strip() for v in body.visits if v.strip()]
+    if foundation.VISIT in visits:
+        raise HTTPException(422, f"{foundation.VISIT} is added to every protocol automatically")
     if len(set(visits)) != len(visits):
         raise HTTPException(422, "visit names must be unique")
     if not visits:
@@ -430,11 +439,30 @@ class FieldChange(BaseModel):
     required: bool | None = None
     repeats: int | None = None
     choices: list[str] | None = None
+    # Stored as a comment on the field.
     reviewer_note: str | None = None
+    collected: bool | None = None
+    cdash: str | None = None
 
 
 # Reviewer-editable attributes, applied in this order.
 _EDITABLE = ("type", "unit", "min", "max", "required", "repeats", "choices")
+# Foundation fields are fixed: later checks bind to them.
+_FOUNDATION_FIXED = ("new_name", "type")
+
+
+def _text(value) -> str | None:
+    if value is None:
+        return None
+    return ", ".join(str(x) for x in value) if isinstance(value, list) else str(value)
+
+
+def _library_entry(code: str) -> tuple[str, dict] | None:
+    for dom, d in cdash.library().items():
+        for entry in d["fields"]:
+            if entry.get("cdash") == code:
+                return dom, entry
+    return None
 
 
 class ReviewRequest(BaseModel):
@@ -461,12 +489,37 @@ def review(protocol_id: int, body: ReviewRequest,
 
     by_key = {(f.visit, fld.name): fld for f in draft.forms for fld in f.fields}
     applied = 0
+    # (field_id, attribute, old, new, reason), written once the version exists.
+    moved: list[tuple[str, str, str | None, str | None, str | None]] = []
+    notes: list[tuple[str, str]] = []
+
+    def record(fld, attr: str, old, new, reason: str | None = None) -> None:
+        if _text(old) != _text(new):
+            moved.append((fld.field_id, attr, _text(old), _text(new), reason or body.note))
+
     for ch in body.changes:
         fld = by_key.get((ch.visit, ch.name))
         if not fld:
             continue
         if ch.repeats is not None and ch.repeats < 1:
             raise HTTPException(422, f"{ch.name}: repeats must be at least 1")
+        if fld.origin == "foundation":
+            if ch.status == "rejected":
+                raise HTTPException(422, f"{ch.name} is a foundation field and cannot be removed")
+            if any(getattr(ch, a) is not None and getattr(ch, a) != getattr(fld, "name" if a == "new_name" else a)
+                   for a in _FOUNDATION_FIXED):
+                raise HTTPException(422, f"{ch.name} is a foundation field; its name and type are fixed")
+        if ch.collected is not None and ch.collected != fld.collected:
+            if fld.origin != "foundation" or fld.name not in foundation.OPTIONAL:
+                raise HTTPException(422, f"Only {' and '.join(foundation.OPTIONAL)} can be marked as not collected")
+            record(fld, "collected", fld.collected, ch.collected)
+            fld.collected = ch.collected
+        if ch.cdash is not None and ch.cdash != fld.cdash:
+            hit = _library_entry(ch.cdash)
+            if hit is None:
+                raise HTTPException(422, f"{ch.cdash} is not a code in the CDASH library")
+            record(fld, "cdash", fld.cdash, ch.cdash)
+            fld.domain, fld.cdash = hit[0], ch.cdash
         edited = []
         for attr in _EDITABLE:
             val = getattr(ch, attr)
@@ -475,6 +528,7 @@ def review(protocol_id: int, body: ReviewRequest,
                     val = None
                 if attr == "choices":
                     val = [c.strip() for c in val if c.strip()] or None
+                record(fld, attr, getattr(fld, attr), val)
                 setattr(fld, attr, val)
                 edited.append(attr)
         if fld.min is not None and fld.max is not None and fld.min > fld.max:
@@ -485,6 +539,7 @@ def review(protocol_id: int, body: ReviewRequest,
         if new_name and new_name != fld.name:
             if (ch.visit, new_name) in by_key:
                 raise HTTPException(422, f"{ch.visit} already has a field called {new_name}")
+            record(fld, "name", fld.name, new_name)
             del by_key[(ch.visit, fld.name)]
             fld.name = new_name
             by_key[(ch.visit, new_name)] = fld
@@ -494,14 +549,18 @@ def review(protocol_id: int, body: ReviewRequest,
             if not fld.suggested:
                 fld.suggested_from = None
         if ch.status is not None:
+            record(fld, "status", fld.status, ch.status)
             fld.status = ch.status
         if ch.status == "approved":
             fld.issue = "none"
+        if ch.reviewer_note and ch.reviewer_note.strip():
+            notes.append((fld.field_id, ch.reviewer_note.strip()))
         applied += 1
 
     if body.action == "approve_all_remaining":
         for fld in by_key.values():
             if fld.status == "draft":
+                record(fld, "status", "draft", "approved", "approve all remaining")
                 fld.status = "approved"
     if body.action == "approve_suggested":
         # Flagged only because the protocol was silent on something the
@@ -512,14 +571,98 @@ def review(protocol_id: int, body: ReviewRequest,
                 continue
             if fld.suggested_from == "heuristic" and not body.include_guesses:
                 continue
+            record(fld, "status", "flagged", "approved", f"accepted {fld.suggested_from} suggestion")
             fld.status, fld.issue = "approved", "none"
             applied += 1
 
     draft.version = v.version + 1
     nv = db.save_version(s, p, draft.model_dump(), cu.user.email,
                          note=body.note or f"review: {applied} change(s)")
+    for field_id, attr, old, new, reason in moved:
+        s.add(FormFieldHistory(protocol_id=p.id, version=nv.version, field_id=field_id, attribute=attr,
+                               old_value=old, new_value=new, by=cu.user.email, reason=reason))
+    for field_id, note in notes:
+        s.add(FieldComment(protocol_id=p.id, version=nv.version, field_id=field_id, author=cu.user.email, body=note))
     s.commit()
     return {"version": nv.version, "applied": applied}
+
+
+# ----------------------------------------------- comments and form history
+
+class CommentCreate(BaseModel):
+    field_id: str
+    body: str
+
+
+def _comment_row(c: FieldComment) -> dict:
+    return {"id": c.id, "version": c.version, "field_id": c.field_id, "author": c.author, "body": c.body,
+            "created_at": c.created_at.isoformat(),
+            "resolved_at": c.resolved_at.isoformat() if c.resolved_at else None, "resolved_by": c.resolved_by}
+
+
+def _field_ids(s: Session, protocol_id: int) -> set[str]:
+    v = db.latest_version(s, protocol_id)
+    if v is None:
+        return set()
+    return {f.field_id for form in DraftECRF.model_validate(v.content).forms for f in form.fields}
+
+
+@router.get("/{protocol_id}/comments")
+def list_comments(protocol_id: int, cu: CurrentUser = Depends(require("protocol.view")),
+                  s: Session = Depends(db.get_session)):
+    """The sponsor's working notes on the form. A site sees the locked form,
+    not the conversation that produced it."""
+    scope.require_sponsor_side(cu)
+    scope.protocol_or_404(s, cu, protocol_id)
+    rows = s.scalars(select(FieldComment).where(FieldComment.protocol_id == protocol_id)
+                     .order_by(FieldComment.created_at, FieldComment.id))
+    return [_comment_row(c) for c in rows]
+
+
+@router.post("/{protocol_id}/comments")
+def add_comment(protocol_id: int, body: CommentCreate,
+                cu: CurrentUser = Depends(require("form.edit", "protocol.lock")),
+                s: Session = Depends(db.get_session)):
+    scope.protocol_or_404(s, cu, protocol_id)
+    text = body.body.strip()
+    if not text:
+        raise HTTPException(422, "A comment needs some text")
+    if body.field_id not in _field_ids(s, protocol_id):
+        raise HTTPException(404, "field not found")
+    c = FieldComment(protocol_id=protocol_id, version=db.latest_version(s, protocol_id).version,
+                     field_id=body.field_id, author=cu.user.email, body=text[:2000])
+    s.add(c)
+    s.commit()
+    return _comment_row(c)
+
+
+@router.post("/{protocol_id}/comments/{comment_id}/resolve")
+def resolve_comment(protocol_id: int, comment_id: int,
+                    cu: CurrentUser = Depends(require("form.edit", "protocol.lock")),
+                    s: Session = Depends(db.get_session)):
+    scope.protocol_or_404(s, cu, protocol_id)
+    c = s.get(FieldComment, comment_id)
+    if c is None or c.protocol_id != protocol_id:
+        raise HTTPException(404, "comment not found")
+    if c.resolved_at is None:
+        c.resolved_at, c.resolved_by = utcnow(), cu.user.email
+        s.commit()
+    return _comment_row(c)
+
+
+@router.get("/{protocol_id}/form-history")
+def form_history(protocol_id: int, field_id: str | None = None,
+                 cu: CurrentUser = Depends(require("protocol.view")),
+                 s: Session = Depends(db.get_session)):
+    scope.require_sponsor_side(cu)
+    scope.protocol_or_404(s, cu, protocol_id)
+    q = select(FormFieldHistory).where(FormFieldHistory.protocol_id == protocol_id)
+    if field_id:
+        q = q.where(FormFieldHistory.field_id == field_id)
+    rows = s.scalars(q.order_by(FormFieldHistory.at.desc(), FormFieldHistory.id.desc()))
+    return [{"id": h.id, "version": h.version, "field_id": h.field_id, "attribute": h.attribute,
+             "old_value": h.old_value, "new_value": h.new_value, "by": h.by, "at": h.at.isoformat(),
+             "reason": h.reason} for h in rows]
 
 
 # ---------------------------------------------------------------- lock
@@ -542,6 +685,8 @@ def lock(protocol_id: int, cu: CurrentUser = Depends(require("protocol.lock")),
             409, f"{left['draft']} draft and {left['flagged']} flagged field(s) still need a "
                  f"decision before the form can be locked")
     v.state, v.locked_by, v.locked_at = "locked", cu.user.email, utcnow()
+    s.add(FormFieldHistory(protocol_id=protocol_id, version=v.version, field_id=None, attribute="state",
+                           old_value="draft", new_value="locked", by=cu.user.email))
     s.commit()
     return {"version": v.version, "state": "locked", "locked_by": v.locked_by,
             "locked_at": v.locked_at.isoformat()}

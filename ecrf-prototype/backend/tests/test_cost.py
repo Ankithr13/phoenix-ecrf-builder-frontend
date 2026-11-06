@@ -176,7 +176,7 @@ def test_two_step_extraction_lets_a_person_fix_the_visits(client, demo_accounts)
     r = client.post(f"/api/protocols/{pid}/extract/fields")
     assert r.status_code == 200
     draft = client.get(f"/api/protocols/{pid}/draft").json()["draft"]
-    assert [f["visit"] for f in draft["forms"]] == edited
+    assert [f["visit"] for f in draft["forms"]] == ["Foundation", *edited]
     assert draft["summary"]["visits"] == 4 and draft["summary"]["llm_calls_made"] == 0  # mock
 
 

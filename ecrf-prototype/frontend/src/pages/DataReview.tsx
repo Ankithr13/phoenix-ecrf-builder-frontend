@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { DataRow, ObservationStatus } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import HistoryDrawer, { HistoryButton, type HistoryLine } from "../components/HistoryDrawer";
 
 const STATUS_CHIP: Record<ObservationStatus, string> = {
   submitted: "chip-amber", approved: "chip-teal", queried: "chip-rust",
@@ -22,6 +23,7 @@ export default function DataReview() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [asking, setAsking] = useState<{ id: number; text: string } | null>(null);
+  const [drawer, setDrawer] = useState<{ title: string; lines: HistoryLine[] | null } | null>(null);
 
   const load = useCallback(async () => {
     try { setRows(await api.dataRows(id)); setError(null); }
@@ -56,6 +58,15 @@ export default function DataReview() {
       await load();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
+  };
+
+  const showHistory = async (r: DataRow) => {
+    const title = `${r.subject} · ${r.field} · history`;
+    setDrawer({ title, lines: null });
+    try {
+      const rows = await api.history(id, r.id);
+      setDrawer({ title, lines: rows.map((h, i) => ({ key: i, old_value: h.old_value, new_value: h.new_value, who: h.changed_by, when: h.changed_at, reason: h.reason })) });
+    } catch (e) { setDrawer(null); setError((e as Error).message); }
   };
 
   const raise_ = async () => {
@@ -149,7 +160,9 @@ export default function DataReview() {
                   <td className="mono">{r.subject}</td>
                   <td>{r.visit}</td>
                   <td>{r.field}{r.repeat > 1 ? <span className="muted"> · {r.repeat}</span> : null}</td>
-                  <td className="num mono">{r.value ?? "—"}</td>
+                  <td className="num mono">
+                    {r.value ?? "—"} <HistoryButton onClick={() => showHistory(r)} label={`History of ${r.field} for ${r.subject}`} />
+                  </td>
                   <td><span className={`pill ${STATUS_CHIP[r.status]}`}>{r.status === "submitted" ? "awaiting review" : r.status}</span></td>
                   <td className="small muted">{r.entered_by}</td>
                   {can("query.raise") && (
@@ -181,6 +194,7 @@ export default function DataReview() {
         </div>
       )}
 
+      {drawer && <HistoryDrawer title={drawer.title} lines={drawer.lines} onClose={() => setDrawer(null)} />}
       {message && <p className="ok mt-3">{message}</p>}
       {error && <p className="error mt-3">{error}</p>}
     </div>

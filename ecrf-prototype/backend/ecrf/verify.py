@@ -68,6 +68,11 @@ def locate(quote: str, text: str) -> tuple[Verdict, float, int]:
 
 
 def check_field(field: FieldDef, doc: Document, threshold: int) -> FieldDef:
+    # A foundation field was put on the form by code and quotes nothing. This
+    # is the one exemption, and it is by origin, which the model cannot set.
+    if field.origin == "foundation":
+        field.verdict = "unchecked"
+        return field
     field.source.quote = clean_quote(field.source.quote)
     verdict, score, _ = locate(field.source.quote, doc.text)
     # The score is rounded BEFORE the comparison, so the number the reviewer

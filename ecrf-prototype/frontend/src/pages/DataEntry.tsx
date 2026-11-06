@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { DataRow, DraftResponse, FieldDef, Reading, SubjectRow } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import HistoryDrawer, { HistoryButton, type HistoryLine } from "../components/HistoryDrawer";
 import { DERIVED, INPUTS, LABEL, compute, roleOf } from "../derive";
 
 type Values = Record<string, string | boolean>;
@@ -58,6 +59,12 @@ export default function DataEntry() {
   }, [id, subject]);
   const [asking, setAsking] = useState<{ id: number; text: string } | null>(null);
   const [askBusy, setAskBusy] = useState(false);
+  const [drawer, setDrawer] = useState<{ title: string; lines: HistoryLine[] | null } | null>(null);
+  const showHistory = async (r: DataRow) => {
+    setDrawer({ title: `${r.field} · history`, lines: null });
+    const rows = await api.history(id, r.id);
+    setDrawer({ title: `${r.field} · history`, lines: rows.map((h, i) => ({ key: i, old_value: h.old_value, new_value: h.new_value, who: h.changed_by, when: h.changed_at, reason: h.reason })) });
+  };
 
   // What this patient already has on file, with a way to ask the sponsor
   // about any value. The rows come back scoped to this site.
@@ -95,7 +102,7 @@ export default function DataEntry() {
     const form = resp?.draft?.forms.find((f) => f.visit === visit);
     // A locked form only carries approved and rejected fields; only the
     // approved ones are collected.
-    return (form?.fields ?? []).filter((f) => f.status === "approved");
+    return (form?.fields ?? []).filter((f) => f.status === "approved" && f.collected !== false);
   }, [resp, visit]);
 
   const set = (k: string, v: string | boolean) => {
@@ -129,7 +136,8 @@ export default function DataEntry() {
       const role = roleOf(f, INPUTS);
       if (!role || inputs[role]) continue;
       const v = values[slot(f.name, 1)];
-      const n = v === undefined || v === "" ? NaN : Number(v);
+      // A date counts by its year, the only part age at consent needs.
+      const n = v === undefined || v === "" ? NaN : Number(f.type === "date" ? String(v).slice(0, 4) : v);
       if (Number.isFinite(n)) inputs[role] = { value: n, unit: f.unit };
     }
     return compute(inputs, patient ? { birth_year: patient.birth_year, sex: patient.sex } : null);
@@ -342,6 +350,7 @@ export default function DataEntry() {
                   <td className="mono">{r.value ?? "—"}</td>
                   <td><span className={`pill ${r.status === "approved" ? "chip-teal" : r.status === "queried" ? "chip-amber" : ""}`}>{r.status}</span></td>
                   <td className="num">
+                    <HistoryButton onClick={() => showHistory(r)} label={`History of ${r.field}`} />
                     {r.status !== "queried" && can("query.raise") && (
                       <button type="button" className="btn-link" onClick={() => setAsking({ id: r.id, text: "" })}>Ask the sponsor</button>
                     )}
@@ -360,6 +369,7 @@ export default function DataEntry() {
           </div>
         )}
       </div>
+      {drawer && <HistoryDrawer title={drawer.title} lines={drawer.lines} onClose={() => setDrawer(null)} />}
     </div>
   );
 }

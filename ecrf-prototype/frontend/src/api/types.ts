@@ -31,6 +31,9 @@ export interface FieldDef {
   // what the CDASH library filled in because the protocol was silent
   suggested: string[];
   suggested_from: "protocol" | "library" | "heuristic" | null;
+  field_id: string;
+  origin: "model" | "foundation";
+  collected: boolean;
 }
 
 export interface VisitForm {
@@ -167,6 +170,46 @@ export interface FieldChange {
   required?: boolean;
   repeats?: number;
   choices?: string[] | null;
+  reviewer_note?: string;
+  collected?: boolean;
+  cdash?: string;
+}
+
+export interface FieldComment {
+  id: number;
+  version: number;
+  field_id: string;
+  author: string;
+  body: string;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+}
+
+export interface FormHistoryRow {
+  id: number;
+  version: number;
+  field_id: string | null;
+  attribute: string;
+  old_value: string | null;
+  new_value: string | null;
+  by: string;
+  at: string;
+  reason: string | null;
+}
+
+export interface CdashEntry {
+  cdash: string;
+  name: string;
+  domain: string;
+}
+
+export interface HistoryRow {
+  old_value: string | null;
+  new_value: string | null;
+  changed_by: string;
+  changed_at: string;
+  reason: string | null;
 }
 
 export interface Reading {

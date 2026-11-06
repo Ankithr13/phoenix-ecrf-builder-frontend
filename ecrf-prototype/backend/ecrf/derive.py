@@ -30,6 +30,8 @@ INPUTS: dict[str, tuple[tuple[str, ...], str]] = {
     "qt": (("QT",), r"\bqt\b(?!c)|\bqt interval\b|\buncorrected qt\b"),
     "rr": (("RR",), r"\brr interval\b"),
     "creat": (("CREAT",), r"\b(serum )?creatinine\b"),
+    "birth_year": (("BRTHDTC",), r"\byear of birth\b"),
+    "consent_date": (("RFICDTC",), r"\bconsent date\b"),
 }
 DERIVED: dict[str, tuple[tuple[str, ...], str]] = {
     "bmi": (("BMI",), r"\bbmi\b|body mass index"),
@@ -40,10 +42,12 @@ DERIVED: dict[str, tuple[tuple[str, ...], str]] = {
     # QTCF code, and Bazett's correction is a different number.
     "qtcf": ((), r"\bqtcf\b|fridericia"),
     "egfr": (("EGFR",), r"\begfr\b|glomerular filtration"),
+    "age_at_consent": ((), r"\bage at consent\b"),
 }
-TOLERANCE = {"bmi": 0.2, "bsa": 0.05, "map": 1.0, "pulse_pressure": 0.5, "qtcf": 5.0, "egfr": 2.0}
+TOLERANCE = {"bmi": 0.2, "bsa": 0.05, "map": 1.0, "pulse_pressure": 0.5, "qtcf": 5.0, "egfr": 2.0,
+             "age_at_consent": 0.0}
 LABEL = {"bmi": "BMI", "bsa": "BSA", "map": "Mean arterial pressure", "pulse_pressure": "Pulse pressure",
-         "qtcf": "QTcF", "egfr": "eGFR (CKD-EPI 2021)"}
+         "qtcf": "QTcF", "egfr": "eGFR (CKD-EPI 2021)", "age_at_consent": "Age at consent"}
 
 
 @dataclass
@@ -63,6 +67,21 @@ def role_of(field: FieldDef, table: dict) -> str | None:
     for key, (_codes, pat) in table.items():
         if re.search(pat, name):
             return key
+    return None
+
+
+def input_value(field: FieldDef, value) -> float | None:
+    """A field's entered value as a number for these formulas. A date counts
+    by its year, which is all age at consent needs and all the form may hold."""
+    if value in (None, ""):
+        return None
+    try:
+        if field.type == "date":
+            return float(str(value)[:4])
+        if field.type in ("integer", "decimal"):
+            return float(value)
+    except (TypeError, ValueError):
+        return None
     return None
 
 
@@ -118,6 +137,9 @@ def compute(values: dict[str, tuple[float, str | None]], birth_year: int | None 
             r = scr / kappa
             egfr = 142 * min(r, 1) ** alpha * max(r, 1) ** -1.2 * 0.9938 ** age * (1.012 if sex == "Female" else 1)
             out.append(Derived("egfr", round(egfr, 0), {"creatinine": scr, "age": age, "sex": sex}, "mL/min/1.73m2"))
+    if "birth_year" in g and "consent_date" in g:
+        out.append(Derived("age_at_consent", g["consent_date"] - g["birth_year"],
+                           {"birth_year": g["birth_year"], "consent_year": g["consent_date"]}, "years"))
     return out
 
 
@@ -129,11 +151,10 @@ def check(fields: dict[str, FieldDef], readings: list, birth_year: int | None = 
     entered: dict[str, tuple[str, float]] = {}
     for r in readings:
         f = fields.get(r.field_name)
-        if f is None or f.type not in ("integer", "decimal") or r.value in (None, ""):
+        if f is None:
             continue
-        try:
-            v = float(r.value)
-        except (TypeError, ValueError):
+        v = input_value(f, r.value)
+        if v is None:
             continue
         key = role_of(f, INPUTS)
         if key and r.repeat_num == 1 and key not in inputs:

@@ -13,7 +13,7 @@ cost and most of the instability live.
 import logging
 import time
 
-from ecrf import cdash, guess, hints, sections, verify
+from ecrf import cdash, foundation, guess, hints, sections, verify
 from ecrf.config import config
 from ecrf.extract import get_extractor
 from ecrf.extract.base import Extractor, Usage
@@ -119,10 +119,14 @@ def run_fields(doc: Document, p: ExtractionPlan, ex: Extractor, protocol_id: int
     counts = {"exact": 0, "approximate": 0, "rejected": len(rejections), "flagged": 0}
     for f in forms:
         for fld in f.fields:
+            # The model may not set origin; it is filled by the pipeline only.
+            fld.origin = "model"
             counts[fld.verdict] += 1
             if fld.issue != "none":
                 counts["flagged"] += 1
     total = sum(len(f.fields) for f in forms) + len(rejections)
+    base = foundation.form()
+    forms.insert(0, base)
 
     usage = Usage()
     if pass_one_usage:
@@ -137,6 +141,7 @@ def run_fields(doc: Document, p: ExtractionPlan, ex: Extractor, protocol_id: int
         "seconds": round(time.time() - t0, 2),
         "strategy": strategy,
         "forms": len(p.forms),
+        "foundation_fields": len(base.fields),
         **usage.summary(),
     }
     log.info("[pipeline] done: %s", summary)

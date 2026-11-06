@@ -62,7 +62,7 @@ def _locked_fields(s: Session, cu: CurrentUser, body: EntryRequest):
     draft = DraftECRF.model_validate(v.content)
     for form in draft.forms:
         if form.visit == body.visit:
-            return p, v, subj, {f.name: f for f in form.fields if f.status == "approved"}
+            return p, v, subj, {f.name: f for f in form.fields if f.status == "approved" and f.collected}
     raise HTTPException(404, f"visit '{body.visit}' not in eCRF")
 
 
@@ -124,14 +124,12 @@ def _recompute(fields: dict[str, FieldDef], merged: dict[tuple[str, int], object
     inputs: dict[str, tuple[float, str | None]] = {}
     for (name, rep), value in merged.items():
         f = fields.get(name)
-        if f is None or rep != 1 or f.type not in ("integer", "decimal") or value in (None, ""):
+        if f is None or rep != 1:
             continue
         key = derive.role_of(f, derive.INPUTS)
-        if key and key not in inputs:
-            try:
-                inputs[key] = (float(value), f.unit)
-            except (TypeError, ValueError):
-                continue
+        number = derive.input_value(f, value) if key else None
+        if number is not None and key not in inputs:
+            inputs[key] = (number, f.unit)
     out = []
     computed = derive.compute(inputs, subj.birth_year if subj else None, subj.sex if subj else None, date.today().year)
     for d in computed:

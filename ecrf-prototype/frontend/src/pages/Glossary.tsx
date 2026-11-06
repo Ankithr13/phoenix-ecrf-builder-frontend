@@ -46,6 +46,16 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    title: "Foundation form and form history",
+    terms: [
+      { word: "Foundation form", means: "The first form on every protocol: consent, year of birth, age at consent, sex, race, ethnicity, height, weight, BMI, eligibility. Put there by code, not by the model, so it quotes nothing and the quote check does not apply to it." },
+      { word: "Not collected", means: "A builder can switch off Race and Ethnicity on the Foundation form. The other foundation fields cannot be removed." },
+      { word: "Comment", means: "A note on one field for the people reviewing the form. It stays with the field through new versions. Sites do not see it." },
+      { word: "History (clock)", means: "On a form field: each change, old and new, who, when, why. On an entered value: the same for the value." },
+      { word: "No CDASH code", means: "The library had no match for this field's name. A builder can pick a code by name on the card, and the choice is logged." },
+    ],
+  },
+  {
     title: "Filling what the protocol left out",
     terms: [
       { word: "Found in protocol", means: "Code searched the protocol text and found the unit or range stated somewhere else (eligibility criteria, a lab table). The sentence is in the note. This is the only label that clears a flag, and only when the unit was already known.",

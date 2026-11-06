@@ -3,7 +3,7 @@
 Stage 1. Fixes from the audit: done
 Stage 2. Put it online: skipped (by Tarushi, to test locally first; all of its work was removed)
 Stage 3. Roles, admin panel, approval chain: done
-Stage 4. Foundation form, field comments, form audit trail: todo
+Stage 4. Foundation form, field comments, form audit trail: done
 Stage 5. Data entry rules and edit checks: todo
 Stage 6. Query lifecycle, notifications, investigator sign-off: todo
 Stage 7. Dashboard metrics, SAP mapping, biostatistics, PDF: todo
@@ -69,3 +69,23 @@ Choices to confirm:
 - The `unsupported` demonstration route needs `sap.edit`, so `read_only` gets 403 on every non-GET route as `test_read_only_has_no_write_route` requires.
 - The stage says the login page lists demo accounts in dev only. That brings back the list removed for the midterm video, so a recording made under `npm run dev` will show it.
 - Until Stage 7, site and monitor roles see scoped totals on the dashboard and no statistics, because the statistics describe the whole study.
+
+## Stage 4 acceptance
+
+Tests: 213 passed, was 203.
+
+1. Foundation form: done. `ecrf/foundation.py`, `test_foundation_form_is_first_and_has_fixed_fields`, `test_foundation_fields_skip_quote_verifier_only_by_origin`, `test_foundation_fields_cannot_be_deleted`, `test_bmi_and_age_are_derived_from_foundation_fields`
+2. Field comments: done. `test_reviewer_note_is_stored_as_comment`, thread and count on `components/FieldCard.tsx`, migration `0012_comments_and_form_history.py`
+3. Form audit trail: done. `test_field_edit_writes_old_and_new_values`, `test_approve_and_reject_write_history`, `test_lock_writes_history_row`, History drawer on Review
+4. Observation history screen: done. Clock on each value in `pages/DataReview.tsx` and `pages/DataEntry.tsx`, `components/HistoryDrawer.tsx`
+5. Approve and reject feedback: done. `pages/Review.tsx` `decided`, CSS in `styles/global.css`, `prefers-reduced-motion` turns the slide off
+6. CDASH coverage: done. `test_manual_cdash_code_is_saved_and_logged`, "no CDASH code" pill and name search on the card
+
+Screenshot check on the mock protocol, Screening tab: before approving, one group "Needs a decision" with 12 cards. 250 ms after clicking Approve on the first card it is green, labelled "Approved", and still first in place. At 1250 ms the groups read "Needs a decision" 11 and "Approved" 1, with that card in Approved and the slide class on it. Reject flashed red with the label "Rejected" the same way.
+
+Choices to confirm:
+
+- The spec's codes for the foundation fields were used as given. Consent version and Age at consent have no code in the spec, so none is shown.
+- Sex, Race and Ethnicity use the codelists in the client's library, so Sex is M, F, U, UNDIFFERENTIATED, not the Female and Male used at patient registration.
+- Besides Reject being refused, a foundation field's name and type are fixed, because later checks bind to them.
+- Comments can be written by the builder and the data manager, and read by sponsor roles. The matrix has no comment permission and sites do not see them.

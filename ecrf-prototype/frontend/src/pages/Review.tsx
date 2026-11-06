@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { DraftResponse, FieldChange, FieldDef, VersionRow } from "../api/types";
+import type { CdashEntry, DraftResponse, FieldChange, FieldComment, FieldDef, Status, VersionRow } from "../api/types";
 import FieldCard from "../components/FieldCard";
+import HistoryDrawer, { type HistoryLine } from "../components/HistoryDrawer";
 import Stat from "../components/Stat";
 import { useAuth } from "../auth/useAuth";
 import { costText } from "../format";
@@ -37,6 +38,15 @@ function formatSection(text: string): { kind: "p" | "li" | "h"; text: string }[]
 
 const key = (visit: string, name: string) => `${visit}\u0000${name}`;
 
+/* Fields sit in groups by what they still need. */
+const GROUPS: { title: string; has: (s: Status) => boolean }[] = [
+  { title: "Needs a decision", has: (s) => s === "draft" || s === "flagged" },
+  { title: "Approved", has: (s) => s === "approved" },
+  { title: "Rejected", has: (s) => s === "rejected" },
+];
+const FLASH_MS = 1000;
+const MOVE_MS = 350;
+
 export default function Review() {
   const id = Number(useParams().id);
   const { can } = useAuth();
@@ -53,6 +63,14 @@ export default function Review() {
   const [fIssue, setFIssue] = useState<string>("");
   const [fSuggest, setFSuggest] = useState<"" | "protocol" | "library" | "heuristic" | "none">("");
   const [fText, setFText] = useState("");
+  const [comments, setComments] = useState<FieldComment[]>([]);
+  const [library, setLibrary] = useState<CdashEntry[] | undefined>(undefined);
+  const [drawer, setDrawer] = useState<{ title: string; lines: HistoryLine[] | null } | null>(null);
+  // A decision flashes on the card for a second while it stays where it is;
+  // settling holds its old status so it does not jump, then moved slides it in.
+  const [flash, setFlash] = useState<Record<string, Status>>({});
+  const [settling, setSettling] = useState<Record<string, Status>>({});
+  const [moved, setMoved] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +84,32 @@ export default function Review() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadComments = useCallback(() => { api.comments(id).then(setComments).catch(() => setComments([])); }, [id]);
+  useEffect(() => { loadComments(); }, [loadComments]);
+  useEffect(() => {
+    if (can("form.edit")) api.cdashLibrary().then(setLibrary).catch(() => setLibrary(undefined));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const showHistory = async (f: FieldDef) => {
+    setDrawer({ title: `${f.name} · history`, lines: null });
+    try {
+      const rows = await api.formHistory(id, f.field_id);
+      setDrawer({ title: `${f.name} · history`, lines: rows.map((h) => ({ key: h.id, label: `${h.attribute}, v${h.version}`, old_value: h.old_value, new_value: h.new_value, who: h.by, when: h.at, reason: h.reason })) });
+    } catch (e) { setDrawer(null); setError((e as Error).message); }
+  };
+
+  const decided = (k: string, before: Status, next: Status) => {
+    setFlash((m) => ({ ...m, [k]: next }));
+    setSettling((m) => ({ ...m, [k]: m[k] ?? before }));
+    window.setTimeout(() => {
+      setFlash((m) => { const n = { ...m }; delete n[k]; return n; });
+      setSettling((m) => { const n = { ...m }; delete n[k]; return n; });
+      setMoved((m) => ({ ...m, [k]: true }));
+      window.setTimeout(() => setMoved((m) => { const n = { ...m }; delete n[k]; return n; }), MOVE_MS);
+    }, FLASH_MS);
+  };
 
   const loadVersions = async () => {
     try { setVersions(await api.versions(id)); }
@@ -121,6 +165,8 @@ export default function Review() {
       type: c.type ?? f.type,
       unit: c.unit !== undefined ? c.unit : f.unit,
       status: c.status ?? f.status,
+      collected: c.collected ?? f.collected,
+      cdash: c.cdash ?? f.cdash,
       min: c.min !== undefined ? c.min : f.min,
       max: c.max !== undefined ? c.max : f.max,
       required: c.required ?? f.required,
@@ -160,8 +206,8 @@ export default function Review() {
   // The filter bar works on the active visit's fields, after pending
   // local edits are merged in, so a field you just approved moves out of
   // "needs a decision" immediately.
-  const matches = (f: FieldDef): boolean => {
-    const st = f.status;
+  const shownStatus = (visit: string, original: string, f: FieldDef): Status => settling[key(visit, original)] ?? f.status;
+  const matches = (f: FieldDef, st: Status = f.status): boolean => {
     if (fStatus === "needs" && st !== "draft" && st !== "flagged") return false;
     if (fStatus !== "all" && fStatus !== "needs" && st !== fStatus) return false;
     if (fIssue && f.issue !== fIssue) return false;
@@ -171,7 +217,8 @@ export default function Review() {
     return true;
   };
   const visible = form
-    ? form.fields.map((f) => ({ original: f.name, field: merged(f, form.visit) })).filter((x) => matches(x.field))
+    ? form.fields.map((f) => ({ original: f.name, field: merged(f, form.visit) }))
+        .filter((x) => matches(x.field, shownStatus(form.visit, x.original, x.field)))
     : [];
   const countBy = (pred: (f: FieldDef) => boolean) => (form ? form.fields.map((f) => merged(f, form.visit)).filter(pred).length : 0);
   const blockers = resp.lock_blockers ?? { draft: 0, flagged: 0 };
@@ -323,15 +370,41 @@ export default function Review() {
               </div>
             )}
             {form.fields.length > 0 && visible.length === 0 && <p className="muted small">No fields match the filter.</p>}
-            {visible.map(({ original, field: f }) => (
-              <FieldCard
-                key={`${form.visit}-${original}`}
-                field={f}
-                onChange={(c) => onChange(form.visit, original, c)}
-                onShowSection={showSection}
-                readOnly={locked || !can("form.edit")}
-              />
-            ))}
+            {GROUPS.map((group) => {
+              const members = visible.filter((x) => group.has(shownStatus(form.visit, x.original, x.field)));
+              if (members.length === 0) return null;
+              return (
+                <div className="field-group" key={group.title}>
+                  <div className="field-group-title">{group.title} <span className="tab-count">{members.length}</span></div>
+                  {members.map(({ original, field: f }) => {
+                    const k = key(form.visit, original);
+                    return (
+                      <FieldCard
+                        key={`${form.visit}-${original}`}
+                        field={f}
+                        onChange={(c) => {
+                          if (c.status && c.status !== f.status) decided(k, f.status, c.status);
+                          onChange(form.visit, original, c);
+                        }}
+                        onShowSection={showSection}
+                        readOnly={locked || !can("form.edit")}
+                        comments={comments.filter((c) => c.field_id === f.field_id)}
+                        onComment={can("form.edit") || can("protocol.lock")
+                          ? async (body) => { await api.addComment(id, f.field_id, body); loadComments(); }
+                          : undefined}
+                        onResolve={can("form.edit") || can("protocol.lock")
+                          ? async (commentId) => { await api.resolveComment(id, commentId); loadComments(); }
+                          : undefined}
+                        onHistory={() => showHistory(f)}
+                        library={library}
+                        flash={flash[k] ?? null}
+                        moved={!!moved[k]}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })}
 
             <details className="panel mt-4">
               <summary>Library also defines… <span className="mono muted-2">{(sugg[form.visit] ?? []).length}</span></summary>
@@ -404,6 +477,8 @@ export default function Review() {
           Approve all remaining
         </button>
       </div>}
+
+      {drawer && <HistoryDrawer title={drawer.title} lines={drawer.lines} onClose={() => setDrawer(null)} />}
 
       {section && (
         <aside className="side-panel" aria-label="Protocol section">

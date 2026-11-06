@@ -1,13 +1,25 @@
 import { useEffect, useState } from "react";
-import type { FieldChange, FieldDef, FieldType } from "../api/types";
+import type { CdashEntry, FieldChange, FieldComment, FieldDef, FieldType, Status } from "../api/types";
 import Badge from "./Badge";
+import { HistoryButton } from "./HistoryDrawer";
 
 interface Props {
   field: FieldDef;
   onChange: (change: Partial<FieldChange>) => void;
   onShowSection: (section: string) => void;
   readOnly?: boolean;
+  comments?: FieldComment[];
+  onComment?: (body: string) => Promise<void>;
+  onResolve?: (commentId: number) => void;
+  onHistory?: () => void;
+  library?: CdashEntry[];
+  // Set for a second after a decision, then the card moves to its new group.
+  flash?: Status | null;
+  moved?: boolean;
 }
+
+const FLASH_LABEL: Partial<Record<Status, string>> = { approved: "Approved", flagged: "Flagged", rejected: "Rejected" };
+const OPTIONAL_FOUNDATION = ["Race", "Ethnicity"];
 
 const TYPES: FieldType[] = ["integer", "decimal", "text", "date", "choice", "boolean"];
 
@@ -53,8 +65,18 @@ function formFrom(f: FieldDef): Form {
   };
 }
 
-export default function FieldCard({ field, onChange, onShowSection, readOnly = false }: Props) {
+export default function FieldCard({ field, onChange, onShowSection, readOnly = false, comments = [], onComment, onResolve, onHistory, library, flash = null, moved = false }: Props) {
   const [editing, setEditing] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [draftComment, setDraftComment] = useState("");
+  const [codeText, setCodeText] = useState("");
+  const foundation = field.origin === "foundation";
+  const openComments = comments.filter((c) => !c.resolved_at).length;
+  const pickCode = (text: string) => {
+    setCodeText(text);
+    const hit = library?.find((e) => `${e.name} (${e.cdash})` === text);
+    if (hit) onChange({ cdash: hit.cdash });
+  };
   const [form, setForm] = useState<Form>(() => formFrom(field));
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -93,11 +115,20 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
   const cancel = () => { setForm(formFrom(field)); setProblem(null); setEditing(false); };
 
   return (
-    <div className={`field-card${editing ? " editing" : ""}`}>
+    <div className={`field-card${editing ? " editing" : ""}${flash ? ` flash-${flash}` : ""}${moved ? " moved" : ""}`}>
       <div className="field-head">
         <span className="field-name">{field.name}</span>
-        {field.cdash && <span className="pill">{field.cdash}</span>}
+        {field.cdash
+          ? <span className="pill">{field.cdash}</span>
+          : !foundation && <span className="pill chip-amber">no CDASH code</span>}
+        {foundation && <span className="pill chip-brand">foundation</span>}
+        {!field.collected && <span className="pill">not collected</span>}
         <span className="grow" />
+        {flash && FLASH_LABEL[flash] && <span className="flash-label" role="status">{FLASH_LABEL[flash]}</span>}
+        <button type="button" className="btn-link small" onClick={() => setShowComments((v) => !v)} aria-expanded={showComments}>
+          comments{comments.length > 0 && <span className="tab-count">{openComments > 0 ? openComments : `${comments.length} resolved`}</span>}
+        </button>
+        {onHistory && <HistoryButton onClick={onHistory} label={`History of ${field.name}`} />}
         <Badge kind={field.status} />
       </div>
       <div className="field-meta">
@@ -119,6 +150,11 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
         )}
       </div>
 
+      {foundation ? (
+        <div className="quote">
+          <div className="small muted">Standard foundation field requested by the sponsor. It is on every protocol and quotes nothing, so the quote check does not apply.</div>
+        </div>
+      ) : (
       <div className={`quote quote-${field.verdict}`}>
         <div className="quote-text">"{field.source.quote}"</div>
         <div className="quote-row">
@@ -129,6 +165,40 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
           <span className="mono small muted">{field.match_score ?? "–"}%</span>
         </div>
       </div>
+      )}
+
+      {!readOnly && !field.cdash && !foundation && library && (
+        <div className="row row-wrap mt-2">
+          <label className="ctl ctl-wide">
+            Pick a CDASH code by name
+            <input className="input input-sm input-grow" list={`cdash-${field.field_id}`} value={codeText}
+                   onChange={(e) => pickCode(e.target.value)} placeholder="Search the library" aria-label={`CDASH code for ${field.name}`} />
+          </label>
+          <datalist id={`cdash-${field.field_id}`}>
+            {library.map((e) => <option key={`${e.domain}-${e.cdash}`} value={`${e.name} (${e.cdash})`} />)}
+          </datalist>
+        </div>
+      )}
+
+      {showComments && (
+        <div className="comment-thread">
+          {comments.length === 0 && <p className="muted small">No comments on this field.</p>}
+          {comments.map((c) => (
+            <div className={`comment${c.resolved_at ? " resolved" : ""}`} key={c.id}>
+              <div className="xs muted">{c.author} · {new Date(c.created_at).toLocaleString()} · v{c.version}{c.resolved_at ? ` · resolved by ${c.resolved_by}` : ""}</div>
+              <div className="small">{c.body}</div>
+              {!c.resolved_at && onResolve && <button type="button" className="btn-link small" onClick={() => onResolve(c.id)}>Resolve</button>}
+            </div>
+          ))}
+          {onComment && (
+            <div className="row mt-2">
+              <input className="input input-sm grow" value={draftComment} onChange={(e) => setDraftComment(e.target.value)} placeholder="Add a comment" aria-label={`Comment on ${field.name}`} />
+              <button type="button" className="btn btn-secondary btn-sm" disabled={!draftComment.trim()}
+                      onClick={async () => { await onComment(draftComment.trim()); setDraftComment(""); }}>Add</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {field.issue !== "none" && (
         <div className="issue-banner">
@@ -139,16 +209,20 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
 
       {!readOnly && editing && (
         <div className="field-editor">
-          <label className="ctl ctl-wide">
-            name
-            <input className="input input-sm input-grow" value={form.name} onChange={(e) => set({ name: e.target.value })} aria-label="Field name" />
-          </label>
-          <label className="ctl">
-            type
-            <select className="input input-sm" value={form.type} onChange={(e) => set({ type: e.target.value as FieldType })} aria-label="Field type">
-              {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
+          {!foundation && (
+            <>
+              <label className="ctl ctl-wide">
+                name
+                <input className="input input-sm input-grow" value={form.name} onChange={(e) => set({ name: e.target.value })} aria-label="Field name" />
+              </label>
+              <label className="ctl">
+                type
+                <select className="input input-sm" value={form.type} onChange={(e) => set({ type: e.target.value as FieldType })} aria-label="Field type">
+                  {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+            </>
+          )}
           {numeric && (
             <>
               <label className="ctl">
@@ -192,7 +266,13 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
         <span className="grow" />
         <button type="button" className="btn btn-teal btn-sm" onClick={() => onChange({ status: "approved" })}>Approve</button>
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => onChange({ status: "flagged" })}>Flag</button>
-        <button type="button" className="btn btn-danger btn-sm" onClick={() => onChange({ status: "rejected" })}>Reject</button>
+        {foundation
+          ? OPTIONAL_FOUNDATION.includes(field.name) && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onChange({ collected: !field.collected })}>
+              {field.collected ? "Mark not collected" : "Collect this field"}
+            </button>
+          )
+          : <button type="button" className="btn btn-danger btn-sm" onClick={() => onChange({ status: "rejected" })}>Reject</button>}
       </div>}
     </div>
   );
