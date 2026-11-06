@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ecrf import derive
+from ecrf import derive, notify
 from ecrf.auth import scope
 from ecrf.auth.permissions import DATA_READERS, CurrentUser, require
 from ecrf.checks import run as checks
@@ -31,10 +31,12 @@ from ecrf.schema import DraftECRF, FieldDef
 from ecrf.stats import seed as seed_mod
 from ecrf.storage import db
 from ecrf.storage.models import (
+    LIVE_QUERY,
     Observation,
     ObservationHistory,
     Organisation,
     Query,
+    Signoff,
     Subject,
     utcnow,
 )
@@ -242,30 +244,30 @@ def _after(num, text, completion: str, why: str | None) -> str | None:
 
 
 def record_change(s: Session, o: Observation, num, text, by: str, reason: str | None,
-                  completion: str = "value", why: str | None = None) -> bool:
-    """Write the history row, then change the value. Returns False when
+                  completion: str = "value", why: str | None = None) -> ObservationHistory | None:
+    """Write the history row, then change the value. Returns None when
     nothing changed, so an unchanged resubmission leaves no trace."""
     before, after = shown(o), _after(num, text, completion, why)
     if before == after:
-        return False
-    s.add(ObservationHistory(observation_id=o.id, old_value=before, new_value=after,
-                             changed_by=by, reason=reason))
+        return None
+    row = ObservationHistory(observation_id=o.id, old_value=before, new_value=after, changed_by=by, reason=reason)
+    s.add(row)
     o.value_num, o.value_text = num, text
     o.completion_status, o.completion_reason = completion, why if completion != "value" else None
     o.updated_at = utcnow()
-    return True
+    return row
 
 
 def _reopened_by_sponsor(s: Session, o: Observation) -> bool:
     """An approved value can change only while a person on the sponsor side has
     a query open on it. A site's own question or a system query does not count."""
     return s.scalars(select(Query.id).where(
-        Query.observation_id == o.id, Query.status != "closed",
+        Query.observation_id == o.id, Query.status.in_(LIVE_QUERY),
         Query.raised_by_org == "sponsor", Query.raised_by != "system")).first() is not None
 
 
 def open_query_counts(s: Session, ids: list[int]) -> dict[int, int]:
-    rows = s.scalars(select(Query.observation_id).where(Query.observation_id.in_(ids), Query.status != "closed"))
+    rows = s.scalars(select(Query.observation_id).where(Query.observation_id.in_(ids), Query.status.in_(LIVE_QUERY)))
     out: dict[int, int] = {}
     for oid in rows:
         out[oid] = out.get(oid, 0) + 1
@@ -288,7 +290,9 @@ def save_readings(s: Session, cu: CurrentUser, p, v, subj: Subject, visit: str,
     New values are drafts. Changing one already submitted needs a reason and
     takes it back to submitted, so it is reviewed again. An approved value is
     frozen until the sponsor raises a query on it. A value that was recomputed
-    follows its inputs whatever its status, and needs approving again too."""
+    follows its inputs whatever its status, and needs approving again too. Any
+    change to a value in a signed visit undoes the sign-off."""
+    scope.check_study_open(p)
     rows, recomputed, standing = _prepare(s, p, subj, visit, fields, readings)
     check = _check(fields, [*readings, *recomputed], subj, standing)
     if not check["ok"]:
@@ -327,6 +331,7 @@ def save_readings(s: Session, cu: CurrentUser, p, v, subj: Subject, visit: str,
 
     auto = {r.field_name for r in recomputed}
     reopened_submitted = False
+    changes: list[ObservationHistory] = []
     for r in [*readings, *recomputed]:
         num, text, _ = after(r)
         o = rows.get((r.field_name, r.repeat_num))
@@ -342,24 +347,33 @@ def save_readings(s: Session, cu: CurrentUser, p, v, subj: Subject, visit: str,
             continue
         why = "recalculated after a change to its inputs" if r.field_name in auto else reason
         changed = record_change(s, o, num, text, cu.user.email, why, r.completion_status, r.completion_reason)
+        if changed:
+            changes.append(changed)
         if changed and o.status != "draft":
             o.status, o.approved_by, o.approved_at = "submitted", None, None
             reopened_submitted = True
     s.flush()
+    if changes:
+        signed = s.scalars(select(Signoff).where(Signoff.subject_ref == subj.id, Signoff.visit == visit,
+                                                 Signoff.invalidated_at.is_(None))).first()
+        if signed:
+            signed.invalidated_at, signed.invalidated_by_history_id = utcnow(), changes[0].id
+            notify.signoff_invalidated(s, p, subj.site_org_id, subj.code, visit)
     if reopened_submitted:
-        checks.sync_queries(s, p, draft, subj, visit)
+        _notify_raised(s, p, subj, visit, checks.sync_queries(s, p, draft, subj, visit))
     return len(readings)
 
 
+def _notify_raised(s: Session, p, subj: Subject, visit: str, raised: list[Query]) -> None:
+    for q in raised:
+        notify.system_query(s, p, q, subj.code, visit)
+
+
 def _warnings(s: Session, p, draft: DraftECRF, subj: Subject, visit: str, overlay=None) -> list[dict]:
-    """What submitting would newly raise. A failure that already has a live
-    query is not listed, because it will not raise a second one."""
+    """What submitting would newly raise."""
     names = {f.field_id: f.name for form in draft.forms for f in form.fields}
-    live = set(s.scalars(select(Query.check_key).where(
-        Query.protocol_id == p.id, Query.subject_ref == subj.id, Query.status != "closed", Query.check_key.is_not(None))))
     return [{"code": hit.code, "field": names.get(hit.field_id), "repeat": hit.repeat, "message": hit.message}
-            for check, hit in checks.failures(s, p, draft, subj, visit, overlay)
-            if hit.severity == "soft" and str(check.id) not in live]
+            for _, hit in checks.would_raise(s, p, draft, subj, visit, overlay)]
 
 
 # ------------------------------------------------------------- site side
@@ -402,6 +416,7 @@ def submit(body: SubmitRequest, cu: CurrentUser = Depends(require("data.submit")
     the sponsor can see it."""
     p, v, subj, _ = _locked_fields(s, cu, EntryRequest(protocol_id=body.protocol_id, subject_id=body.subject_id,
                                                        visit=body.visit, readings=[]))
+    scope.check_study_open(p)
     draft = DraftECRF.model_validate(v.content)
     checks.ensure(s, p, draft, v.version)
     rows = list(s.scalars(select(Observation).where(Observation.protocol_id == p.id,
@@ -421,6 +436,9 @@ def submit(body: SubmitRequest, cu: CurrentUser = Depends(require("data.submit")
             moved += 1
     s.flush()
     raised = checks.sync_queries(s, p, draft, subj, body.visit)
+    _notify_raised(s, p, subj, body.visit, raised)
+    if moved:
+        notify.visit_submitted(s, p, subj.site_org_id, subj.code, body.visit)
     s.commit()
     return {"submitted": moved, "queries": [{"id": q.id, "code": q.check_code, "text": q.text} for q in raised]}
 
@@ -431,6 +449,7 @@ def seed(protocol_id: int, cu: CurrentUser = Depends(require("data.approve")),
     """Load synthetic observations for the dashboard demo, spread across
     the site organisations, all of them awaiting the sponsor's approval."""
     p = scope.protocol_or_404(s, cu, protocol_id)
+    scope.check_study_open(p)
     v = db.locked_version(s, p.id)
     if v is None:
         raise HTTPException(409, "Lock the form before seeding; data only exists against a locked form")
@@ -504,7 +523,8 @@ def list_data(protocol_id: int, site: str | None = None, visit: str | None = Non
 def approve_data(protocol_id: int, body: ApproveRequest,
                  cu: CurrentUser = Depends(require("data.approve")),
                  s: Session = Depends(db.get_session)):
-    scope.protocol_or_404(s, cu, protocol_id)
+    p = scope.protocol_or_404(s, cu, protocol_id)
+    scope.check_study_open(p)
     rows = s.scalars(select(Observation).where(Observation.protocol_id == protocol_id, Observation.status != "draft",
                                                 Observation.id.in_(body.observation_ids))).all()
     live = open_query_counts(s, list(body.observation_ids))
@@ -512,10 +532,27 @@ def approve_data(protocol_id: int, body: ApproveRequest,
     if blocked:
         raise HTTPException(409, {"queried": blocked,
                                   "message": "Close the open queries on these values before approving them"})
+    if p.monitor_review_required:
+        unreviewed = [o.id for o in rows if o.status == "submitted"]
+        if unreviewed:
+            raise HTTPException(409, {"unreviewed": unreviewed,
+                                      "message": "This study needs monitor review before approval"})
     now = utcnow()
+    touched = set()
     for o in rows:
         if o.status != "approved":
             o.status, o.approved_by, o.approved_at = "approved", cu.user.email, now
+            touched.add((o.subject_ref, o.subject_id, o.visit))
+    s.flush()
+    for ref, code, visit in touched:
+        statuses = s.scalars(select(Observation.status).where(Observation.protocol_id == protocol_id,
+                                                              Observation.subject_ref == ref,
+                                                              Observation.visit == visit)).all()
+        if ref and all(st == "approved" for st in statuses):
+            site_id = s.get(Subject, ref).site_org_id
+            notify.visit_approved(s, p, site_id, code, visit)
+            if p.investigator_signature_required:
+                notify.signoff_needed(s, p, site_id, code, visit)
     s.commit()
     return {"approved": len(rows)}
 

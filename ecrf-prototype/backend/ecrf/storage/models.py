@@ -23,6 +23,10 @@ def utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+# The query statuses that are still waiting on someone. Closed and cancelled are not.
+LIVE_QUERY = ("open", "answered")
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -128,6 +132,8 @@ class Protocol(Base):
     # investigator sign-off if required, study lock.
     monitor_review_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     investigator_signature_required: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    study_locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    study_locked_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class LLMCall(Base):
@@ -307,6 +313,8 @@ class Observation(Base):
     approved_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    monitor_reviewed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    monitor_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class ObservationHistory(Base):
@@ -346,7 +354,7 @@ class Query(Base):
     raised_by_org: Mapped[str] = mapped_column(String(20), default="sponsor", server_default="sponsor")  # sponsor | site
     raised_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     text: Mapped[str] = mapped_column(String(1000))
-    status: Mapped[str] = mapped_column(String(20), default="open", server_default="open")  # open | answered | closed
+    status: Mapped[str] = mapped_column(String(20), default="open", server_default="open")  # open | answered | closed | cancelled
     answer_text: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     answered_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -356,3 +364,42 @@ class Query(Base):
     # is what stops the same failure raising a second query.
     check_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     check_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    raised_by_role: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    close_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancel_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class Signoff(Base):
+    """An investigator's sign-off on one patient's visit: a recorded action with
+    who, when and the meaning statement. Any later change to a signed value sets
+    invalidated_at, and the visit needs signing again. The row stays."""
+
+    __tablename__ = "signoff"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
+    subject_ref: Mapped[int] = mapped_column(ForeignKey("subject.id"))
+    visit: Mapped[str] = mapped_column(String(200))
+    signed_by: Mapped[str] = mapped_column(String(100))
+    signed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    meaning: Mapped[str] = mapped_column(String(500))
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    invalidated_by_history_id: Mapped[int | None] = mapped_column(ForeignKey("observation_history.id"), nullable=True)
+
+
+class Notification(Base):
+    """One in-app message for one person. No email, no SMS."""
+
+    __tablename__ = "notification"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+    kind: Mapped[str] = mapped_column(String(30))
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
+    subject: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    visit: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    query_id: Mapped[int | None] = mapped_column(ForeignKey("query.id"), nullable=True)
+    body: Mapped[str] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

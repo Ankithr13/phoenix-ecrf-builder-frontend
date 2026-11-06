@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { DataRow, ObservationStatus } from "../api/types";
+import type { DataRow, ObservationStatus, StudyLockState } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import HistoryDrawer, { HistoryButton, type HistoryLine } from "../components/HistoryDrawer";
 
@@ -24,10 +24,17 @@ export default function DataReview() {
   const [message, setMessage] = useState<string | null>(null);
   const [asking, setAsking] = useState<{ id: number; text: string } | null>(null);
   const [drawer, setDrawer] = useState<{ title: string; lines: HistoryLine[] | null } | null>(null);
+  const [needsMonitor, setNeedsMonitor] = useState(false);
+  const [lockState, setLockState] = useState<StudyLockState | null>(null);
 
   const load = useCallback(async () => {
-    try { setRows(await api.dataRows(id)); setError(null); }
-    catch (e) { setError((e as Error).message); }
+    try {
+      setRows(await api.dataRows(id));
+      setNeedsMonitor(!!(await api.draft(id)).monitor_review_required);
+      if (can("study.lock")) setLockState(await api.studyLockState(id));
+      setError(null);
+    } catch (e) { setError((e as Error).message); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
@@ -48,7 +55,22 @@ export default function DataReview() {
   const toggle = (rid: number) => setSelected((prev) => {
     const n = new Set(prev); if (n.has(rid)) n.delete(rid); else n.add(rid); return n;
   });
-  const canApprove = (r: DataRow) => r.status !== "approved" && r.open_query_count === 0;
+  const canApprove = (r: DataRow) => r.status !== "approved" && r.open_query_count === 0 && (!needsMonitor || r.status === "monitor_reviewed");
+  const toReview = useMemo(() => Array.from(new Set((rows ?? []).filter((r) => r.status === "submitted").map((r) => `${r.subject}\u0000${r.visit}`)))
+    .map((k) => k.split("\u0000") as [string, string]), [rows]);
+  const review = async (subject: string, v: string) => {
+    setBusy(true); setError(null);
+    try { await api.monitorReview(id, subject, v); setMessage(`${subject} ${v} marked reviewed`); await load(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+  const lockStudy = async () => {
+    if (!window.confirm("Lock this study? After this, no data on it can change.")) return;
+    setBusy(true); setError(null);
+    try { await api.studyLock(id); setMessage("Study locked"); await load(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
   const selectable = shown.filter(canApprove);
   const allSelected = selectable.length > 0 && selectable.every((r) => selected.has(r.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((r) => r.id)));
@@ -103,6 +125,37 @@ export default function DataReview() {
           {counts.queried > 0 && <> · <span className="mono">{counts.queried}</span> queried</>}
         </div>
       </div>
+
+      {lockState && (
+        <div className={`card${lockState.locked ? " lock-banner" : ""}`}>
+          {lockState.locked
+            ? <p className="small"><span className="strong">Study locked</span> by {lockState.locked_by}{lockState.locked_at && ` on ${new Date(lockState.locked_at).toLocaleString()}`}. No data on it can change.</p>
+            : (
+              <div className="row row-wrap row-between">
+                <div>
+                  <p className="strong">Study lock</p>
+                  {lockState.blockers.length > 0
+                    ? <ul className="warn-list">{lockState.blockers.map((b) => <li key={b}>{b}</li>)}</ul>
+                    : <p className="muted small">Everything is approved, signed and closed.</p>}
+                </div>
+                <button type="button" className="btn btn-teal btn-sm" onClick={lockStudy} disabled={busy || lockState.blockers.length > 0}>Lock study</button>
+              </div>
+            )}
+        </div>
+      )}
+
+      {can("data.monitor_review") && toReview.length > 0 && (
+        <div className="card">
+          <p className="strong">Visits waiting for monitor review</p>
+          <div className="row row-wrap mt-2">
+            {toReview.map(([subject, v]) => (
+              <button type="button" className="btn btn-secondary btn-sm" key={`${subject}-${v}`} onClick={() => review(subject, v)} disabled={busy}>
+                Mark {subject} {v} reviewed
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {rows && rows.length === 0 && (
         <div className="card">

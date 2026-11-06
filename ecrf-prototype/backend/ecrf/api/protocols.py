@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ecrf import cdash, foundation, ingest, pipeline
+from ecrf import cdash, foundation, ingest, notify, pipeline
 from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
 from ecrf.checks import run as checks
@@ -87,6 +87,7 @@ def list_protocols(cu: CurrentUser = Depends(require("protocol.view")),
             "plan": _plan_response(p) if p.extraction_plan else None,
             "monitor_review_required": p.monitor_review_required,
             "investigator_signature_required": p.investigator_signature_required,
+            "study_locked_at": p.study_locked_at.isoformat() if p.study_locked_at else None,
         })
     return out
 
@@ -381,6 +382,9 @@ def get_draft(protocol_id: int,
         "locked_at": v.locked_at.isoformat() if v.locked_at else None,
         "lock_blockers": _lock_blockers(v.content),
         "lock_warnings": _lock_warnings(v.content),
+        "monitor_review_required": p.monitor_review_required,
+        "investigator_signature_required": p.investigator_signature_required,
+        "study_locked_at": p.study_locked_at.isoformat() if p.study_locked_at else None,
     }
 
 
@@ -703,6 +707,7 @@ def lock(protocol_id: int, cu: CurrentUser = Depends(require("protocol.lock")),
     s.add(FormFieldHistory(protocol_id=protocol_id, version=v.version, field_id=None, attribute="state",
                            old_value="draft", new_value="locked", by=cu.user.email))
     checks.ensure(s, p, DraftECRF.model_validate(v.content), v.version)
+    notify.form_locked(s, p)
     s.commit()
     return {"version": v.version, "state": "locked", "locked_by": v.locked_by,
             "locked_at": v.locked_at.isoformat()}

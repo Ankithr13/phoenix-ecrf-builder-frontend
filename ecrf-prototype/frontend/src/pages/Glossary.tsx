@@ -56,6 +56,16 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    title: "From submitted to locked",
+    terms: [
+      { word: "Monitor review", means: "When a protocol requires it, a monitor marks a submitted visit reviewed before the data manager can approve it." },
+      { word: "Investigator sign-off", means: "The investigator confirms a visit's data, entering their password again. It is a recorded action with who, when and what it means. It needs every value approved and no query open on the patient." },
+      { word: "Needs re-sign", means: "A value changed after the visit was signed, so that sign-off no longer stands." },
+      { word: "Study lock", means: "The last step. Once every visit is signed, or sign-off is not required, and no query is open, an admin or data manager locks the study and its data can no longer change." },
+      { word: "Notifications", means: "Messages in the app about what needs you. Nothing is emailed." },
+    ],
+  },
+  {
     title: "Filling what the protocol left out",
     terms: [
       { word: "Found in protocol", means: "Code searched the protocol text and found the unit or range stated somewhere else (eligibility criteria, a lab table). The sentence is in the note. This is the only label that clears a flag, and only when the unit was already known.",
@@ -100,7 +110,8 @@ const GROUPS: Group[] = [
     terms: [
       { word: "Query", means: "A question from one side to the other about a study, a patient, a visit or one value. Whoever asks, the other side answers, and the sponsor closes it.",
         example: "Site: \"Which unit do you want for creatinine?\" Sponsor answers in words, then closes it." },
-      { word: "Open / Answered / Closed", means: "Open: waiting for the other side. Answered: waiting for the sponsor to close it. Closed: settled. A value-level query returns the value to Entered when closed, so it is approved again on purpose." },
+      { word: "Cancelled (query)", means: "The person on the sponsor side who raised it withdrew it, with a reason." },
+      { word: "Open / Answered / Closed", means: "Open: waiting for the other side. Answered: waiting for the sponsor to close it. Closed: settled, with a reason if the value did not change. A value-level query returns the value to Entered when closed, so it is approved again on purpose." },
       { word: "My turn", means: "Queries where it is your move: open ones you should answer and, for the sponsor, answered ones to close. The badge in the sidebar counts them." },
       { word: "Corrected value", means: "A site answering a query about one value may attach the right number. It goes into the value's history with the query as the reason. Sponsors answer in words only." },
     ],

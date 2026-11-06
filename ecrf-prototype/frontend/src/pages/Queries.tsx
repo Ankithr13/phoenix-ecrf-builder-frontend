@@ -4,9 +4,9 @@ import type { QueryRow, QueryStatus } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import NewQuery from "../components/NewQuery";
 
-const CHIP: Record<QueryStatus, string> = { open: "chip-rust", answered: "chip-amber", closed: "chip-teal" };
+const CHIP: Record<QueryStatus, string> = { open: "chip-rust", answered: "chip-amber", closed: "chip-teal", cancelled: "" };
 
-type Filter = "mine" | "open" | "answered" | "closed" | "";
+type Filter = "mine" | "open" | "answered" | "closed" | "cancelled" | "";
 
 /* One page for both portals. Queries run both ways: a sponsor questions a
    value a site entered, a site asks the sponsor about a value or the form.
@@ -21,6 +21,12 @@ export default function Queries() {
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  const [fSite, setFSite] = useState("");
+  const [fVisit, setFVisit] = useState("");
+  const [fBy, setFBy] = useState("");
+  const [fCode, setFCode] = useState("");
+  const [closing, setClosing] = useState<Record<number, string>>({});
+  const [cancelling, setCancelling] = useState<Record<number, string>>({});
 
   const load = useCallback(async () => {
     try { setRows(await api.queries()); setError(null); }
@@ -31,7 +37,12 @@ export default function Queries() {
 
   const isSite = me?.org.type === "site";
   const pass = (q: QueryRow, f: Filter) => (f === "mine" ? q.for_me : !f || q.status === f);
-  const shown = (rows ?? []).filter((q) => pass(q, filter));
+  const narrow = (q: QueryRow) => (!fSite || q.site === fSite) && (!fVisit || q.visit === fVisit)
+    && (!fBy || (fBy === "system" ? q.raised_by === "system" : q.raised_by !== "system"))
+    && (!fCode || q.check_code === fCode);
+  const narrowed = (rows ?? []).filter(narrow);
+  const shown = narrowed.filter((q) => pass(q, filter));
+  const options = (pick: (q: QueryRow) => string | null) => Array.from(new Set((rows ?? []).map(pick).filter(Boolean) as string[])).sort();
   const draft = (id: number) => answers[id] ?? { text: "", value: "" };
   const setDraft = (id: number, patch: Partial<{ text: string; value: string }>) =>
     setAnswers((a) => ({ ...a, [id]: { ...draft(id), ...patch } }));
@@ -50,7 +61,14 @@ export default function Queries() {
 
   const close = async (q: QueryRow) => {
     setBusy(q.id); setError(null);
-    try { await api.closeQuery(q.id); await load(); }
+    try { await api.closeQuery(q.id, closing[q.id]?.trim() || undefined); await load(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(null); }
+  };
+
+  const cancel = async (q: QueryRow) => {
+    setBusy(q.id); setError(null);
+    try { await api.cancelQuery(q.id, cancelling[q.id]?.trim() ?? ""); await load(); }
     catch (e) { setError((e as Error).message); }
     finally { setBusy(null); }
   };
@@ -80,12 +98,32 @@ export default function Queries() {
       )}
 
       <div className="row row-wrap mb-3">
-        {(["mine", "open", "answered", "closed", ""] as const).map((f) => (
+        {(["mine", "open", "answered", "closed", "cancelled", ""] as const).map((f) => (
           <button key={f || "all"} type="button" className={`tab${filter === f ? " active" : ""}`} onClick={() => setFilter(f)}>
             {f === "mine" ? "my turn" : f || "all"}
-            <span className="tab-count">{(rows ?? []).filter((q) => pass(q, f)).length}</span>
+            <span className="tab-count">{narrowed.filter((q) => pass(q, f)).length}</span>
           </button>
         ))}
+      </div>
+
+      <div className="row row-wrap filters mb-3">
+        <select className="input" value={fSite} onChange={(e) => setFSite(e.target.value)} aria-label="Site">
+          <option value="">All sites</option>
+          {options((q) => q.site).map((x) => <option key={x} value={x}>{x}</option>)}
+        </select>
+        <select className="input" value={fVisit} onChange={(e) => setFVisit(e.target.value)} aria-label="Visit">
+          <option value="">All visits</option>
+          {options((q) => q.visit).map((x) => <option key={x} value={x}>{x}</option>)}
+        </select>
+        <select className="input" value={fBy} onChange={(e) => setFBy(e.target.value)} aria-label="Raised by">
+          <option value="">Raised by anyone</option>
+          <option value="person">A person</option>
+          <option value="system">An edit check</option>
+        </select>
+        <select className="input" value={fCode} onChange={(e) => setFCode(e.target.value)} aria-label="Check code">
+          <option value="">Any check</option>
+          {options((q) => q.check_code).map((x) => <option key={x} value={x}>{x}</option>)}
+        </select>
       </div>
 
       {shown.length === 0 && <div className="card"><p className="muted small">Nothing here.</p></div>}
@@ -124,7 +162,10 @@ export default function Queries() {
               </div>
             )}
             {q.status === "closed" && (
-              <div className="xs muted">closed by {q.closed_by}{q.closed_at && ` · ${new Date(q.closed_at).toLocaleString()}`}</div>
+              <div className="xs muted">closed by {q.closed_by}{q.closed_at && ` · ${new Date(q.closed_at).toLocaleString()}`}{q.close_reason ? `: ${q.close_reason}` : ""}</div>
+            )}
+            {q.status === "cancelled" && (
+              <div className="xs muted">cancelled{q.cancelled_at && ` · ${new Date(q.cancelled_at).toLocaleString()}`}: {q.cancel_reason}</div>
             )}
           </div>
 
@@ -140,14 +181,26 @@ export default function Queries() {
             </div>
           )}
           {q.can_close && (
-            <div className="row mt-3">
-              <button type="button" className="btn btn-teal btn-sm" onClick={() => close(q)} disabled={busy === q.id}>
+            <div className="row row-wrap mt-3">
+              {q.needs_close_reason && (
+                <input className="input input-sm grow" placeholder="The value has not changed. Why close this?" aria-label="Reason for closing"
+                       value={closing[q.id] ?? ""} onChange={(e) => setClosing((m) => ({ ...m, [q.id]: e.target.value }))} />
+              )}
+              <button type="button" className="btn btn-teal btn-sm" onClick={() => close(q)}
+                      disabled={busy === q.id || (q.needs_close_reason && !closing[q.id]?.trim())}>
                 {busy === q.id ? "Closing…" : "Close query"}
               </button>
               <span className="small muted">
-                {q.status === "open" ? "Waiting for the other side to answer. " : ""}
+                {q.status === "open" && !q.can_answer ? "Waiting for the other side to answer. " : ""}
                 {q.about === "value" ? "The value cannot be approved until this is closed." : "Close it once the answer settles the question."}
               </span>
+            </div>
+          )}
+          {q.can_cancel && (
+            <div className="row row-wrap mt-2">
+              <input className="input input-sm grow" placeholder="Raised by mistake? Say why, then cancel." aria-label="Reason for cancelling"
+                     value={cancelling[q.id] ?? ""} onChange={(e) => setCancelling((m) => ({ ...m, [q.id]: e.target.value }))} />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => cancel(q)} disabled={busy === q.id || !cancelling[q.id]?.trim()}>Cancel query</button>
             </div>
           )}
         </div>

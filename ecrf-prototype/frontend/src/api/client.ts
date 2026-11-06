@@ -2,7 +2,7 @@
    else. Vite proxies /api to the backend in dev, so the session cookie is
    same-origin and travels with every request. */
 
-import type { AccessEvent, AdminOrg, AdminUser, CdashEntry, ChainRow, CheckWarning, EditCheck, FieldComment, FormHistoryRow, HistoryRow, LabRange, NewQuery, Role, SubjectCreate,
+import type { AccessEvent, AdminOrg, AdminUser, CdashEntry, ChainRow, CheckWarning, EditCheck, FieldComment, FormHistoryRow, HistoryRow, LabRange, NewQuery, NotificationRow, Role, SignoffRow, StudyLockState, SubjectCreate,
   DashboardResponse, DataRow, DraftResponse, FieldChange, Health, Me, Plan,
   ProtocolListItem, QueryRow, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
 } from "./types";
@@ -139,5 +139,24 @@ export const api = {
   newQuery: (body: NewQuery) => req<QueryRow>("/api/queries", post(body)),
   answerQuery: (queryId: number, text: string, new_value?: string) =>
     req<QueryRow>(`/api/queries/${queryId}/answer`, post({ text, new_value: new_value === undefined || new_value === "" ? null : new_value })),
-  closeQuery: (queryId: number) => req<QueryRow>(`/api/queries/${queryId}/close`, { method: "POST" }),
+  closeQuery: (queryId: number, reason?: string) => req<QueryRow>(`/api/queries/${queryId}/close`, post({ reason: reason ?? null })),
+  cancelQuery: (queryId: number, reason: string) => req<QueryRow>(`/api/queries/${queryId}/cancel`, post({ reason })),
+
+  monitorReview: (id: number, subject_id: string, visit: string) =>
+    req<{ reviewed: number }>(`/api/protocols/${id}/monitor-review`, post({ subject_id, visit })),
+  signoffs: (id: number, subject_id?: string) =>
+    req<{ meaning: string; rows: SignoffRow[] }>(`/api/protocols/${id}/signoffs${subject_id ? `?subject_id=${encodeURIComponent(subject_id)}` : ""}`),
+  sign: (id: number, subject_id: string, visit: string, password: string) =>
+    req<SignoffRow>(`/api/protocols/${id}/signoff`, post({ subject_id, visit, password })),
+  studyLockState: (id: number) => req<StudyLockState>(`/api/protocols/${id}/study-lock`),
+  studyLock: (id: number) => req<{ locked: boolean }>(`/api/protocols/${id}/study-lock`, { method: "POST" }),
+
+  notifications: (filters: { protocol_id?: string; kind?: string } = {}) => {
+    const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => !!v) as [string, string][]);
+    return req<NotificationRow[]>(`/api/notifications${q.toString() ? `?${q}` : ""}`);
+  },
+  unreadNotifications: () => req<{ unread: number }>("/api/notifications/unread-count"),
+  readNotification: (id: number) => req<{ read: number }>(`/api/notifications/${id}/read`, { method: "POST" }),
+  readAllNotifications: (protocolId?: number) =>
+    req<{ read: number }>(`/api/notifications/read-all${protocolId ? `?protocol_id=${protocolId}` : ""}`, { method: "POST" }),
 };

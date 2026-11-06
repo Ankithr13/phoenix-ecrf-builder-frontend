@@ -788,3 +788,6 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 .check-note { color: var(--amber-ink); font-size: var(--text-xs); }
 .completion { margin-bottom: var(--s-1); max-width: 180px; }
 .completion-reason { width: 100%; }
+
+/* Sprint 3: notifications */
+.notification.read { opacity: 0.65; }

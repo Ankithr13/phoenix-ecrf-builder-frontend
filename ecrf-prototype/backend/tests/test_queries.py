@@ -46,7 +46,7 @@ def test_full_flow_raise_answer_with_correction_close_approve(client, demo_accou
     # Still blocked while answered; the sponsor must close it first.
     assert approver.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]}).status_code == 409
     assert [x["id"] for x in people(approver.get("/api/queries", params={"status": "answered"}).json())] == [q["id"]]
-    r = approver.post(f"/api/queries/{q['id']}/close")
+    r = approver.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"})
     assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["open_query_count"] == 0
 
     assert approver.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]}).json() == {"approved": 1}
@@ -78,7 +78,7 @@ def test_monitor_can_raise_and_close_too(client, demo_accounts):
     monitor.__enter__()
     login(monitor, MONITOR)
     q = monitor.post(f"/api/data/{row['id']}/queries", json={"text": "unit?"}).json()
-    assert monitor.post(f"/api/queries/{q['id']}/close").json()["status"] == "closed"
+    assert monitor.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"}).json()["status"] == "closed"
     # The builder has no part in queries.
     builder = fresh_client()
     builder.__enter__()
@@ -101,8 +101,8 @@ def test_site_raises_sponsor_answers_sponsor_closes(client, demo_accounts):
     r = sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "mmHg, as on the form. Convert and re-enter."})
     assert r.status_code == 200 and r.json()["status"] == "answered"
     # The site cannot close, even a query it raised; the sponsor does.
-    assert bgh.post(f"/api/queries/{q['id']}/close").status_code == 403
-    r = sponsor.post(f"/api/queries/{q['id']}/close")
+    assert bgh.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"}).status_code == 403
+    r = sponsor.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"})
     assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["open_query_count"] == 0
     # The other site cannot raise a query on a BGH value.
     assert site_client(MRC).post(f"/api/data/{row['id']}/queries", json={"text": "?"}).status_code == 404
@@ -113,9 +113,9 @@ def test_sponsor_raised_query_direction_is_unchanged(client, demo_accounts):
     q = sponsor.post(f"/api/data/{row['id']}/queries", json={"text": "check"}).json()
     assert q["raised_by_org"] == "sponsor" and q["can_close"] and not q["can_answer"]
     assert sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "me"}).status_code == 403
-    assert bgh.post(f"/api/queries/{q['id']}/close").status_code == 403
+    assert bgh.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"}).status_code == 403
     assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "ok", "new_value": 131}).status_code == 200
-    assert sponsor.post(f"/api/queries/{q['id']}/close").status_code == 200
+    assert sponsor.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"}).status_code == 200
 
 
 def test_queries_about_a_study_a_patient_or_a_visit(client, demo_accounts):
@@ -129,7 +129,7 @@ def test_queries_about_a_study_a_patient_or_a_visit(client, demo_accounts):
     assert sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "x", "new_value": 1}).status_code == 403
     assert sponsor.post(f"/api/queries/{q['id']}/answer", json={"text": "Plus or minus 3 days."}).status_code == 200
     assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "ok", "new_value": 5}).status_code in (403, 422)
-    assert sponsor.post(f"/api/queries/{q['id']}/close").status_code == 200
+    assert sponsor.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"}).status_code == 200
     # The other site never sees BGH's study-level question.
     assert all(x["id"] != q["id"] for x in mrc.get("/api/queries").json())
     assert mrc.post(f"/api/queries/{q['id']}/answer", json={"text": "?"}).status_code == 404

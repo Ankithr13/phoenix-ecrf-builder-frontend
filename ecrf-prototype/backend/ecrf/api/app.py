@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ecrf import __version__
-from ecrf.api import admin, auth, checks, dashboard, data, protocols, queries, sites, studies
+from ecrf.api import admin, auth, chain, checks, dashboard, data, protocols, queries, sites, studies
 from ecrf.config import check_production, config, docs_settings
 from ecrf.storage import db, migrate
 
@@ -37,7 +37,7 @@ app.add_middleware(
 
 # Named once here so the route walk in the permission tests sees all of them.
 ROUTERS = (auth.router, admin.router, protocols.router, checks.router, studies.router, sites.router,
-           data.review_router, queries.router, data.router, dashboard.router)
+           data.review_router, queries.router, data.router, chain.router, dashboard.router)
 for router in ROUTERS:
     app.include_router(router)
 

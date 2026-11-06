@@ -126,6 +126,7 @@ export interface ProtocolListItem {
   state: "draft" | "locked" | null;
   summary: Summary | null;
   plan: Plan | null;
+  study_locked_at?: string | null;
 }
 
 export interface DraftResponse {
@@ -142,6 +143,39 @@ export interface DraftResponse {
   lock_blockers?: { draft: number; flagged: number };
   lock_warnings?: LockWarning[];
   plan?: Plan | null;
+  monitor_review_required?: boolean;
+  investigator_signature_required?: boolean;
+  study_locked_at?: string | null;
+}
+
+export interface SignoffRow {
+  id: number;
+  subject: string;
+  visit: string;
+  signed_by: string;
+  signed_at: string;
+  meaning: string;
+  invalidated_at: string | null;
+}
+
+export interface StudyLockState {
+  locked: boolean;
+  locked_by: string | null;
+  locked_at: string | null;
+  blockers: string[];
+}
+
+export interface NotificationRow {
+  id: number;
+  kind: string;
+  protocol_id: number;
+  protocol_name: string | null;
+  subject: string | null;
+  visit: string | null;
+  query_id: number | null;
+  body: string;
+  created_at: string;
+  read_at: string | null;
 }
 
 /* Approved fields a site will struggle with. Shown next to the Lock
@@ -366,6 +400,7 @@ export interface SubjectRow {
   statuses: ObservationStatus[];
   open_queries: number;
   needs_signoff: boolean;
+  needs_resign: string[];
   birth_year: number | null;
   sex: string | null;
   enrolled_on: string | null;
@@ -410,7 +445,7 @@ export interface Health {
   quote_match_threshold: number;
 }
 
-export type QueryStatus = "open" | "answered" | "closed";
+export type QueryStatus = "open" | "answered" | "closed" | "cancelled";
 
 export interface QueryRow {
   id: number;
@@ -441,6 +476,13 @@ export interface QueryRow {
   answered_at: string | null;
   closed_by: string | null;
   closed_at: string | null;
+  close_reason: string | null;
+  raised_by_role: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  can_cancel: boolean;
+  // Closing needs a reason when the value it is about has not changed.
+  needs_close_reason: boolean;
   // For the signed-in user: their turn to answer, or theirs to close.
   can_answer: boolean;
   can_close: boolean;

@@ -70,8 +70,8 @@ def test_upload_with_same_name_does_not_replace_stored_pdf(client, demo_accounts
 def test_site_cannot_close_a_query(client, demo_accounts):
     _, sponsor, bgh, row = _entered()
     q = bgh.post(f"/api/data/{row['id']}/queries", json={"text": "which unit?"}).json()
-    assert bgh.post(f"/api/queries/{q['id']}/close").status_code == 403
-    assert sponsor.post(f"/api/queries/{q['id']}/close").json()["status"] == "closed"
+    assert bgh.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"}).status_code == 403
+    assert sponsor.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"}).json()["status"] == "closed"
 
 
 def test_approved_value_edit_needs_open_sponsor_query(client, demo_accounts):
@@ -83,7 +83,7 @@ def test_approved_value_edit_needs_open_sponsor_query(client, demo_accounts):
     q = bgh.post(f"/api/data/{row['id']}/queries", json={"text": "can I change this?"}).json()
     assert q["observation_status"] == "approved"
     assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135, reason="re-read it")).status_code == 409
-    sponsor.post(f"/api/queries/{q['id']}/close")
+    sponsor.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"})
     assert sponsor.get(f"/api/protocols/{pid}/data").json()[0]["status"] == "approved"
 
     # A sponsor's query reopens it; the edit goes back to submitted, with history.

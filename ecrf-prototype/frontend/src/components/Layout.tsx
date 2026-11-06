@@ -27,6 +27,15 @@ export default function Layout({ children }: { children: ReactNode }) {
     api.queries().then((q) => setOpenItems(q.filter((x) => x.for_me).length)).catch(() => setOpenItems(0));
   }, [me, pathname, hasQueries]);
 
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!me || me.must_change_password) return;
+    const refresh = () => { api.unreadNotifications().then((r) => setUnread(r.unread)).catch(() => setUnread(0)); };
+    refresh();
+    window.addEventListener("notifications-changed", refresh);
+    return () => window.removeEventListener("notifications-changed", refresh);
+  }, [me, pathname]);
+
   const badge = openItems > 0 ? <span className="nav-badge">{openItems}</span> : null;
   const m = pathname.match(ID_IN_PATH);
   const id = m ? m[2] : null;
@@ -62,6 +71,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               {can("users.manage") && <NavLink to="/admin">Admin</NavLink>}
               <NavLink to="/sponsor" end>Protocols</NavLink>
               {hasQueries && <NavLink to="/sponsor/queries">Queries{badge}</NavLink>}
+              <NavLink to="/notifications">Notifications{unread > 0 && <span className="nav-badge">{unread}</span>}</NavLink>
               {id && (
                 <div className="nav-group">
                   <div className="nav-group-label">protocol {id}</div>
@@ -71,6 +81,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   {can("sites.assign") && <NavLink to={`/sponsor/p/${id}/sites`}>Sites</NavLink>}
                   {can("listing.view") && <NavLink to={`/sponsor/p/${id}/data`}>Data review</NavLink>}
                   {can("dashboard.view") && <NavLink to={`/sponsor/p/${id}/dashboard`}>Dashboard</NavLink>}
+                  <NavLink to={`/sponsor/p/${id}/notifications`}>Study notifications</NavLink>
                 </div>
               )}
             </>
@@ -78,10 +89,12 @@ export default function Layout({ children }: { children: ReactNode }) {
             <>
               <NavLink to="/site" end>Studies</NavLink>
               {hasQueries && <NavLink to="/site/queries">Queries{badge}</NavLink>}
+              <NavLink to="/notifications">Notifications{unread > 0 && <span className="nav-badge">{unread}</span>}</NavLink>
               {id && (
                 <div className="nav-group">
                   <div className="nav-group-label">study {id}</div>
                   <NavLink to={`/site/s/${id}/patients`}>Patients</NavLink>
+                  <NavLink to={`/site/s/${id}/notifications`}>Study notifications</NavLink>
                 </div>
               )}
             </>

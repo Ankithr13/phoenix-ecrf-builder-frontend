@@ -3,7 +3,8 @@
 A sponsor questions what a site entered; a site asks the sponsor about a
 value, a visit, a patient or the study as a whole. The other side
 answers (only a site may attach a corrected value, because data entry is
-the site's job) and the sponsor closes it, whichever side raised it.
+the site's job) and the sponsor closes it, whichever side raised it. A status
+is open, answered, closed or cancelled.
 
 Every query belongs to one protocol and, so that a site only ever sees
 its own traffic, to one site: the site that raised it, the site of the
@@ -18,6 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ecrf import notify
 from ecrf.api.data import (
     EntryRequest,
     Reading,
@@ -30,7 +32,9 @@ from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
 from ecrf.storage import db
 from ecrf.storage.models import (
+    LIVE_QUERY,
     Observation,
+    ObservationHistory,
     Organisation,
     Protocol,
     ProtocolSite,
@@ -84,13 +88,23 @@ def _may_answer(cu: CurrentUser, q: Query) -> bool:
     return cu.can("query.answer") if cu.org.type == "site" else cu.can("query.close")
 
 
+def _value_unchanged(s: Session, q: Query) -> bool:
+    """True for a query about one value when that value has not changed since."""
+    if not q.observation_id:
+        return False
+    return s.scalars(select(ObservationHistory.id).where(
+        ObservationHistory.observation_id == q.observation_id,
+        ObservationHistory.changed_at >= q.raised_at)).first() is None
+
+
 def _row(s: Session, q: Query, cu: CurrentUser | None = None) -> dict:
     p = s.get(Protocol, q.protocol_id)
     o = s.get(Observation, q.observation_id) if q.observation_id else None
     subj = s.get(Subject, q.subject_ref) if q.subject_ref else None
     site = s.get(Organisation, q.site_org_id) if q.site_org_id else None
-    can_answer = cu is not None and q.status != "closed" and _may_answer(cu, q)
-    can_close = cu is not None and q.status != "closed" and cu.can("query.close")
+    live = q.status in LIVE_QUERY
+    can_answer = cu is not None and live and _may_answer(cu, q)
+    can_close = cu is not None and live and cu.can("query.close")
     return {
         "id": q.id, "protocol_id": q.protocol_id, "protocol_name": p.name if p else None,
         "about": _about(q),
@@ -107,6 +121,10 @@ def _row(s: Session, q: Query, cu: CurrentUser | None = None) -> dict:
         "answer_text": q.answer_text, "answered_by": q.answered_by,
         "answered_at": q.answered_at.isoformat() if q.answered_at else None,
         "closed_by": q.closed_by, "closed_at": q.closed_at.isoformat() if q.closed_at else None,
+        "close_reason": q.close_reason, "raised_by_role": q.raised_by_role,
+        "cancelled_at": q.cancelled_at.isoformat() if q.cancelled_at else None, "cancel_reason": q.cancel_reason,
+        "can_cancel": cu is not None and live and cu.org.type == "sponsor" and q.raised_by == cu.user.email,
+        "needs_close_reason": live and _value_unchanged(s, q),
         # For the caller: whether it is their turn to answer, or theirs to close.
         "can_answer": can_answer, "can_close": can_close,
         "for_me": (can_answer and q.status == "open") or (can_close and q.status == "answered"),
@@ -133,6 +151,7 @@ def _visible_query(s: Session, cu: CurrentUser, query_id: int) -> Query:
 
 def _create(s: Session, cu: CurrentUser, body: NewQueryRequest) -> Query:
     p = scope.protocol_or_404(s, cu, body.protocol_id)
+    scope.check_study_open(p)
     if not body.text.strip():
         raise HTTPException(422, "say what the question is")
 
@@ -142,7 +161,7 @@ def _create(s: Session, cu: CurrentUser, body: NewQueryRequest) -> Query:
         if o is None:
             raise HTTPException(404, "observation not found")
         subj = s.get(Subject, o.subject_ref) if o.subject_ref else None
-        live = s.scalars(select(Query).where(Query.observation_id == o.id, Query.status != "closed")).first()
+        live = s.scalars(select(Query).where(Query.observation_id == o.id, Query.status.in_(LIVE_QUERY))).first()
         if live:
             raise HTTPException(409, f"query {live.id} is already {live.status} on this value")
     elif body.subject_code:
@@ -174,8 +193,11 @@ def _create(s: Session, cu: CurrentUser, body: NewQueryRequest) -> Query:
 
     q = Query(protocol_id=p.id, site_org_id=site_id, subject_ref=subj.id if subj else None,
               visit=visit if (visit and not o) else None, observation_id=o.id if o else None,
-              raised_by=cu.user.email, raised_by_org=cu.org.type, text=body.text.strip(), status="open")
+              raised_by=cu.user.email, raised_by_org=cu.org.type, raised_by_role=cu.role,
+              text=body.text.strip(), status="open")
     s.add(q)
+    s.flush()
+    notify.query_raised(s, p, q, subj.code if subj else None)
     s.commit()
     return q
 
@@ -211,8 +233,9 @@ def answer_query(query_id: int, body: AnswerRequest,
     about one value, and goes through the same validation as data entry;
     the history row carries the query text as the reason."""
     q = _visible_query(s, cu, query_id)
-    if q.status == "closed":
-        raise HTTPException(409, "this query is closed")
+    scope.check_study_open(s.get(Protocol, q.protocol_id))
+    if q.status not in LIVE_QUERY:
+        raise HTTPException(409, f"this query is {q.status}")
     if not _may_answer(cu, q):
         raise HTTPException(403, "your side raised this query; the other side answers it")
     has_value = body.new_value is not None and body.new_value != ""
@@ -230,19 +253,54 @@ def answer_query(query_id: int, body: AnswerRequest,
                       [Reading(field_name=o.field_name, repeat_num=o.repeat_num, value=body.new_value)],
                       reason=f"query {q.id}: {q.text}")
     q.status, q.answer_text, q.answered_by, q.answered_at = "answered", body.text.strip(), cu.user.email, utcnow()
+    subj = s.get(Subject, q.subject_ref) if q.subject_ref else None
+    notify.query_answered(s, s.get(Protocol, q.protocol_id), q, subj.code if subj else None)
     s.commit()
     return _row(s, q, cu)
 
 
+class CloseRequest(BaseModel):
+    reason: str | None = None
+
+
 @router.post("/api/queries/{query_id}/close")
-def close_query(query_id: int, cu: CurrentUser = Depends(require("query.close")),
+def close_query(query_id: int, body: CloseRequest | None = None,
+                cu: CurrentUser = Depends(require("query.close")),
                 s: Session = Depends(db.get_session)):
     """Only the sponsor closes, whichever side raised it. The permission is
-    the rule: a site has no route to end a question about its own data."""
+    the rule: a site has no route to end a question about its own data. Closing
+    a query about a value that did not change says why."""
     q = _visible_query(s, cu, query_id)
+    scope.check_study_open(s.get(Protocol, q.protocol_id))
     if q.status == "closed":
         return _row(s, q, cu)
-    q.status, q.closed_by, q.closed_at = "closed", cu.user.email, utcnow()
+    if q.status not in LIVE_QUERY:
+        raise HTTPException(409, f"this query is {q.status}")
+    reason = ((body.reason if body else None) or "").strip()
+    if _value_unchanged(s, q) and not reason:
+        raise HTTPException(422, "The value has not changed, so closing this query needs a reason")
+    q.status, q.closed_by, q.closed_at, q.close_reason = "closed", cu.user.email, utcnow(), reason or None
+    s.commit()
+    return _row(s, q, cu)
+
+
+class CancelRequest(BaseModel):
+    reason: str
+
+
+@router.post("/api/queries/{query_id}/cancel")
+def cancel_query(query_id: int, body: CancelRequest, cu: CurrentUser = Depends(require("query.raise")),
+                 s: Session = Depends(db.get_session)):
+    """A sponsor role can withdraw a query they raised themselves, with a reason."""
+    q = _visible_query(s, cu, query_id)
+    scope.check_study_open(s.get(Protocol, q.protocol_id))
+    if cu.org.type != "sponsor" or q.raised_by != cu.user.email:
+        raise HTTPException(403, "Only the person on the sponsor side who raised a query can cancel it")
+    if q.status not in LIVE_QUERY:
+        raise HTTPException(409, f"this query is {q.status}")
+    if not body.reason.strip():
+        raise HTTPException(422, "Cancelling a query needs a reason")
+    q.status, q.cancelled_at, q.cancel_reason = "cancelled", utcnow(), body.reason.strip()
     s.commit()
     return _row(s, q, cu)
 

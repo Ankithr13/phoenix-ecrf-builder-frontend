@@ -110,12 +110,27 @@ def test_system_query_auto_answers_when_fixed(client, demo_accounts):
     assert q["can_close"] is True, "left for the data manager to close"
     row = dm.get(f"/api/protocols/{pid}/data").json()[0]
     assert dm.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]}).status_code == 409
-    assert dm.post(f"/api/queries/{q['id']}/close").status_code == 200
+    assert dm.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"}).status_code == 200
     assert dm.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]}).status_code == 200
     # Broken again: the check raises afresh once the old query is closed.
     dm.post(f"/api/data/{row['id']}/queries", json={"text": "re-check"})
     bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 500, reason="re-measured"))
     assert any(x["check_code"] == "EC-006" and x["status"] == "open" for x in dm.get("/api/queries").json())
+
+
+def test_closed_system_query_stays_closed_until_its_value_changes(client, demo_accounts):
+    pid, dm, bgh = _site()
+    bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 400))
+    submit(bgh, pid, "BGH-001")
+    q = next(x for x in dm.get("/api/queries").json() if x["check_code"] == "EC-006")
+    assert dm.post(f"/api/queries/{q['id']}/close", json={"reason": "confirmed with the site"}).status_code == 200
+    # Editing another value on the visit does not ask again about this one.
+    bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 5, field="HbA1c"))
+    assert not [x for x in submit(bgh, pid, "BGH-001")["queries"] if x["code"] == "EC-006"]
+    assert not [x for x in dm.get("/api/queries").json() if x["check_code"] == "EC-006" and x["status"] == "open"]
+    # A new value is a new question.
+    bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 500, reason="re-measured"))
+    assert [x for x in dm.get("/api/queries").json() if x["check_code"] == "EC-006" and x["status"] == "open"]
 
 
 def test_edit_after_submit_requires_reason(client, demo_accounts):
@@ -348,7 +363,7 @@ def test_filters_return_expected_subjects(client, demo_accounts):
     assert codes(needs_signoff=True) == []
     # Close what the checks raised, approve, and the visit is ready for sign-off.
     for q in people(dm.get("/api/queries").json()) + dm.get("/api/queries").json():
-        dm.post(f"/api/queries/{q['id']}/close")
+        dm.post(f"/api/queries/{q['id']}/close", json={"reason": "settled"})
     row = dm.get(f"/api/protocols/{pid}/data").json()[0]
     assert dm.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]}).status_code == 200
     assert codes(needs_signoff=True) == ["BGH-002"]

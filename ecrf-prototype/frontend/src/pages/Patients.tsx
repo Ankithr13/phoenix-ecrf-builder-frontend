@@ -167,6 +167,7 @@ export default function Patients() {
                     {r.statuses.map((x) => <span className="pill entry-status" key={x}>{x.replace("_", " ")}</span>)}
                     {r.open_queries > 0 && <span className="pill chip-rust entry-status">{r.open_queries} open</span>}
                     {r.needs_signoff && <span className="pill chip-amber entry-status">needs sign-off</span>}
+                    {r.needs_resign.length > 0 && <span className="pill chip-rust entry-status">needs re-sign</span>}
                   </td>
                   <td className="small muted">{new Date(r.created_at).toLocaleDateString()} · {r.created_by}</td>
                   <td className="num"><Link className="btn btn-secondary btn-sm" to={`/site/s/${id}/patients/${encodeURIComponent(r.code)}`}>Enter data</Link></td>

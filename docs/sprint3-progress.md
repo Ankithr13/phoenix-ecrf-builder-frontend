@@ -5,7 +5,7 @@ Stage 2. Put it online: skipped (by Tarushi, to test locally first; all of its w
 Stage 3. Roles, admin panel, approval chain: done
 Stage 4. Foundation form, field comments, form audit trail: done
 Stage 5. Data entry rules and edit checks: done
-Stage 6. Query lifecycle, notifications, investigator sign-off: todo
+Stage 6. Query lifecycle, notifications, investigator sign-off: done
 Stage 7. Dashboard metrics, SAP mapping, biostatistics, PDF: todo
 Stage 8. Documentation and the regression run: todo
 
@@ -92,6 +92,8 @@ Choices to confirm:
 
 ## Stage 5 acceptance
 
+Tests: 236 passed, 1 skipped.
+
 1. Submit button: done. `test_submit_moves_draft_to_submitted_and_runs_checks`, `test_hard_check_blocks_submit`, `/api/data/submit`, `pages/DataEntry.tsx`
 2. Field status: done. `test_not_done_requires_reason_and_permission_on_field`, migration `0013_edit_checks_and_statuses.py`
 3. Reason for change: done. `test_edit_after_submit_requires_reason`
@@ -113,3 +115,30 @@ Choices to confirm:
 - Every visit now opens with a code-inserted "Visit date" field, because EC-003, EC-005 and the Stage 7 safety window need one and protocols rarely name it.
 - The built-in `decimal` format check has no precision limit, because there is no source for one. A custom check can set `max_decimals`.
 - ALT in the lab table comes from MedlinePlus's metabolic panel page, because the ALT page itself was not read. That panel page also gives slightly different calcium and glucose ranges from their own pages; the file notes this.
+
+## Stage 6 acceptance
+
+Tests: 262 passed, 1 skipped (the same skip as Stage 5, `test_ec_011`).
+
+1. Query lifecycle (open, answered, closed, cancelled): done. `test_query_status_transitions`, `test_close_with_unchanged_value_needs_reason`, `test_cancel_needs_reason_and_raiser`, migration `0014_chain_and_notifications.py`
+2. Query page (tabs by status, filters by site, visit, raised-by and check code, count badges): done. `pages/Queries.tsx`, seen in the browser
+3. Monitor review: done. `test_monitor_review_gate_when_required`, `test_monitor_review_not_required_lets_approval_through`, `pages/DataReview.tsx`
+4. Investigator sign-off: done. `test_signoff_blocked_by_open_query`, `test_signoff_needs_all_values_approved`, `test_signoff_reenters_password`, `test_signoff_not_required_refuses`, `test_edit_after_signoff_invalidates_it`, `pages/DataEntry.tsx`. The UI says "Investigator sign-off" and never calls it an e-signature.
+5. Study lock: done. `test_study_lock_needs_all_signoffs_and_no_open_queries`, `test_study_lock_without_signature_needs_only_approval`, `test_study_lock_freezes_all_writes`, `pages/DataReview.tsx`, `pages/Admin.tsx`
+6. Notifications (page, filters, mark read, mark all read, sidebar badge, per-protocol tab): done. `test_every_kind_has_an_event`, `test_notifications_fire_for_each_event`, `test_notifications_stay_at_their_site`, `test_notification_badge_counts_unread_only`, `pages/Notifications.tsx`
+
+Full chain, run in a browser on the mock protocol:
+
+1. `builder@phoenix.demo` loaded the sample, extracted and approved the fields. `dm@phoenix.demo` locked the form and assigned BGH.
+2. `crc@bgh.demo` registered BGH-001, entered a visit date and one systolic reading at Week 4, and submitted. The screen said "2 values submitted for Week 4. 4 queries raised."
+3. `dm@phoenix.demo` saw 4 open queries in the Queries tabs and closed them. The study lock box listed "2 value(s) not approved" and "1 visit(s) not signed: BGH-001 Week 4". After approving, only the unsigned line remained.
+4. `pi@bgh.demo` had "Sign-off needed" at the top of their notifications. A wrong password was refused with "That password is not correct". The right one recorded "Signed by pi@bgh.demo".
+5. `dm@phoenix.demo` saw no blockers and locked the study. The site then saw "Study locked. No data on this study can change."
+
+Choices to confirm:
+
+- **A query closed by a person stays closed until its value changes.** Otherwise any later edit raised it again, although the value it is about had not changed. A check about a blank or a missing value (no value to compare) stays closed for good once a person closes it.
+- **Study lock also needs every entered value approved**, which goes further than the sprint's wording of signed-off and no open queries. Without it, a study that does not use sign-off could lock with unreviewed data.
+- **Sign-off is blocked by any open query on the patient**, not only those on that visit.
+- `form_locked` also fires when a site is assigned after the lock, because a site assigned later would otherwise never hear.
+- A person's own notifications are left out of the read-only walk in `test_permissions`, because they are not study data.

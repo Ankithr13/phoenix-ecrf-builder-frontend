@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ecrf import notify
 from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
 from ecrf.storage import db
@@ -39,7 +40,8 @@ def _locked_or_409(s: Session, protocol_id: int) -> None:
 @router.post("/{protocol_id}/sites")
 def assign(protocol_id: int, body: SiteRef, cu: CurrentUser = Depends(require("sites.assign")),
            s: Session = Depends(db.get_session)):
-    scope.protocol_or_404(s, cu, protocol_id)
+    p = scope.protocol_or_404(s, cu, protocol_id)
+    scope.check_study_open(p)
     _locked_or_409(s, protocol_id)
     org = s.get(Organisation, body.site_org_id)
     if org is None or org.type != "site":
@@ -47,6 +49,7 @@ def assign(protocol_id: int, body: SiteRef, cu: CurrentUser = Depends(require("s
     if not s.scalars(select(ProtocolSite).where(ProtocolSite.protocol_id == protocol_id,
                                                  ProtocolSite.site_org_id == org.id)).first():
         s.add(ProtocolSite(protocol_id=protocol_id, site_org_id=org.id, assigned_by=cu.user.email))
+        notify.form_locked(s, p, [org.id])
         s.commit()
     return {"assigned": True, "site": org.code}
 
@@ -57,7 +60,7 @@ def unassign(protocol_id: int, site_org_id: int, force: bool = False,
              s: Session = Depends(db.get_session)):
     """A site with patients or data loses sight of them when unassigned, so
     that takes force=true. The rows stay either way."""
-    scope.protocol_or_404(s, cu, protocol_id)
+    scope.check_study_open(scope.protocol_or_404(s, cu, protocol_id))
     subjects = s.scalar(select(func.count(Subject.id)).where(
         Subject.protocol_id == protocol_id, Subject.site_org_id == site_org_id)) or 0
     rows = s.scalar(select(func.count(Observation.id)).join(Subject, Subject.id == Observation.subject_ref).where(

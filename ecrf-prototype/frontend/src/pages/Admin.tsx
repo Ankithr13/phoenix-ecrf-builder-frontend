@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import type { AccessEvent, AdminOrg, AdminUser, ChainRow, Role } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import { ROLE_LABEL } from "../format";
@@ -244,6 +244,7 @@ function AccessLog() {
 function Chain() {
   const [rows, setRows] = useState<ChainRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
   const load = useCallback(() => { api.adminChain().then(setRows).catch((e) => setError((e as Error).message)); }, []);
   useEffect(load, [load]);
   const set = async (id: number, patch: Partial<ChainRow>) => {
@@ -251,13 +252,22 @@ function Chain() {
     try { await api.adminSetChain(id, patch); load(); }
     catch (e) { setError((e as Error).message); }
   };
+  const lockStudy = async (p: ChainRow) => {
+    setError(null);
+    if (!window.confirm(`Lock ${p.name}? After this, no data on it can change.`)) return;
+    try { await api.studyLock(p.id); setDone(`${p.name} is locked.`); }
+    catch (e) {
+      const detail = e instanceof ApiError ? (e.detail as { blockers?: string[] }) : null;
+      setError(detail?.blockers ? `Not yet: ${detail.blockers.join("; ")}` : (e as Error).message);
+    }
+  };
   return (
     <div className="card">
       <p className="muted small mb-3">
         The order is fixed: enter, submit, monitor review if required, data manager approval, investigator sign-off if required, study lock.
       </p>
       <table className="table">
-        <thead><tr><th>Protocol</th><th>Monitor review required</th><th>Investigator sign-off required</th></tr></thead>
+        <thead><tr><th>Protocol</th><th>Monitor review required</th><th>Investigator sign-off required</th><th /></tr></thead>
         <tbody>
           {(rows ?? []).map((p) => (
             <tr key={p.id}>
@@ -266,11 +276,13 @@ function Chain() {
                          onChange={(e) => set(p.id, { monitor_review_required: e.target.checked })} /></td>
               <td><input type="checkbox" checked={p.investigator_signature_required} aria-label={`Investigator sign-off required for ${p.name}`}
                          onChange={(e) => set(p.id, { investigator_signature_required: e.target.checked })} /></td>
+              <td className="num"><button type="button" className="btn-link" onClick={() => lockStudy(p)}>Lock study</button></td>
             </tr>
           ))}
-          {rows && rows.length === 0 && <tr><td colSpan={3} className="muted small">No protocols yet.</td></tr>}
+          {rows && rows.length === 0 && <tr><td colSpan={4} className="muted small">No protocols yet.</td></tr>}
         </tbody>
       </table>
+      {done && <p className="ok mt-3">{done}</p>}
       {error && <p className="error mt-3">{error}</p>}
     </div>
   );

@@ -60,6 +60,12 @@ def visible_observations(cu: CurrentUser, protocol_id: int) -> Select:
     return q
 
 
+def check_study_open(p: Protocol) -> None:
+    """After the study lock, every write to its data is refused."""
+    if p.study_locked_at is not None:
+        raise HTTPException(409, "This study is locked; its data can no longer change")
+
+
 def require_sponsor_side(cu: CurrentUser) -> None:
     """Screens that describe the whole study, not one site's part of it."""
     if cu.org.type != "sponsor":

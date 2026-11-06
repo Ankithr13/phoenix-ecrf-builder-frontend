@@ -159,8 +159,9 @@ def test_read_only_has_no_write_route(client, demo_accounts):
     login(client, AUDITOR)
     walked = 0
     for rt in _routes():
-        if rt.path in ("/api/auth/login", "/api/auth/logout", "/api/auth/change-password"):
-            continue  # one's own session and password, not study data
+        # One's own session, password and notifications, not study data.
+        if rt.path in ("/api/auth/login", "/api/auth/logout", "/api/auth/change-password") or rt.path.startswith("/api/notifications"):
+            continue
         for method in rt.methods - {"GET", "HEAD", "OPTIONS"}:
             url = rt.path
             for name in ("protocol_id", "user_id", "observation_id", "query_id", "site_org_id", "comment_id", "check_id"):

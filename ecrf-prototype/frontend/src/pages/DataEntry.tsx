@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError } from "../api/client";
-import type { CheckWarning, CompletionStatus, DataRow, DraftResponse, FieldDef, Reading, SubjectRow } from "../api/types";
+import type { CheckWarning, CompletionStatus, DataRow, DraftResponse, FieldDef, Reading, SignoffRow, SubjectRow } from "../api/types";
 import { useAuth } from "../auth/useAuth";
 import HistoryDrawer, { HistoryButton, type HistoryLine } from "../components/HistoryDrawer";
 import { DERIVED, INPUTS, LABEL, compute, roleOf } from "../derive";
@@ -74,6 +74,15 @@ export default function DataEntry() {
   // Saves go one at a time. Two at once would each miss the other's value, and
   // a derived value such as BMI needs both of its inputs on file.
   const saves = useRef<Promise<unknown>>(Promise.resolve());
+  const [signoffs, setSignoffs] = useState<SignoffRow[]>([]);
+  const [meaning, setMeaning] = useState("");
+  const [signing, setSigning] = useState(false);
+  const [password, setPassword] = useState("");
+
+  const loadSignoffs = useCallback(() => {
+    api.signoffs(id, subject).then((r) => { setSignoffs(r.rows); setMeaning(r.meaning); }).catch(() => setSignoffs([]));
+  }, [id, subject]);
+  useEffect(() => { loadSignoffs(); }, [loadSignoffs, rows]);
 
   useEffect(() => {
     api.subjects(id).then((all) => setPatient(all.find((r) => r.code === subject) ?? null)).catch(() => setPatient(null));
@@ -254,6 +263,24 @@ export default function DataEntry() {
     } finally { setSaving(false); }
   };
 
+  const visitRows = rows.filter((r) => r.visit === visit);
+  const validSignoff = signoffs.find((x) => x.visit === visit && !x.invalidated_at);
+  const undone = !validSignoff && signoffs.some((x) => x.visit === visit && x.invalidated_at);
+  const openOnPatient = patient?.open_queries ?? 0;
+  const readyToSign = visitRows.length > 0 && visitRows.every((r) => r.status === "approved") && openOnPatient === 0;
+  const sign = async () => {
+    setSaving(true); setMessage(null);
+    try {
+      await api.sign(id, subject, visit, password);
+      setSigning(false); setPassword("");
+      setMessage({ kind: "ok", text: `${visit} signed.` });
+      loadSignoffs();
+    } catch (e) {
+      const detail = e instanceof ApiError ? e.detail : null;
+      setMessage({ kind: "error", text: typeof detail === "string" ? detail : (detail as { message?: string })?.message ?? (e as Error).message });
+    } finally { setSaving(false); }
+  };
+
   const ask = async () => {
     if (!asking || !asking.text.trim()) return;
     try {
@@ -294,6 +321,7 @@ export default function DataEntry() {
         <h1 className="page-title">Data entry</h1>
         <p className="muted small">Synthetic data only. No real patient information is entered into this prototype.</p>
       </div>
+      {resp.study_locked_at && <div className="lock-banner"><span className="strong">Study locked.</span> <span>No data on this study can change.</span></div>}
 
       <div className="card">
         <div className="row row-wrap row-between">
@@ -456,13 +484,42 @@ export default function DataEntry() {
         )}
 
         <div className="row mt-5">
-          {can("data.submit") && hasDraft && !confirming && (
+          {can("data.submit") && hasDraft && !confirming && !resp.study_locked_at && (
             <button type="button" className="btn btn-primary" onClick={askSubmit} disabled={saving || dirty.size > 0}>Submit visit</button>
           )}
           <span className="small muted">{hasDraft ? "Drafts save as you go. The sponsor sees nothing until you submit." : ""}</span>
           {message && <span className={message.kind === "ok" ? "ok" : "error"}>{message.text}</span>}
         </div>
       </div>
+
+      {resp.investigator_signature_required && visitRows.length > 0 && (
+        <div className={`card mt-4${undone ? " card-rust" : ""}`}>
+          <div className="section-title">Investigator sign-off</div>
+          {validSignoff && <p className="small">Signed by {validSignoff.signed_by} on {new Date(validSignoff.signed_at).toLocaleString()}.</p>}
+          {undone && <p className="small strong">Needs re-sign. A value changed after this visit was signed.</p>}
+          {!validSignoff && !readyToSign && (
+            <p className="muted small">
+              Sign-off opens once every value at this visit is approved and no query is open on this patient
+              {openOnPatient > 0 ? ` (${openOnPatient} open now)` : ""}.
+            </p>
+          )}
+          {!validSignoff && readyToSign && can("signoff.sign") && !signing && !resp.study_locked_at && (
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setSigning(true)}>Sign off this visit</button>
+          )}
+          {!validSignoff && readyToSign && !can("signoff.sign") && <p className="muted small">Ready for the investigator to sign.</p>}
+          {signing && (
+            <div className="mt-3">
+              <p className="small">{meaning}</p>
+              <div className="row row-wrap mt-2">
+                <input className="input input-sm" type="password" autoComplete="current-password" placeholder="Enter your password again"
+                       aria-label="Your password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <button type="button" className="btn btn-primary btn-sm" onClick={sign} disabled={saving || !password}>Sign</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setSigning(false); setPassword(""); }}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card mt-4">
         <div className="row row-between row-wrap">

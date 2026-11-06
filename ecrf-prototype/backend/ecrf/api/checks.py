@@ -86,6 +86,7 @@ def list_checks(protocol_id: int, cu: CurrentUser = Depends(require("protocol.vi
 def add_check(protocol_id: int, body: CheckIn, cu: CurrentUser = Depends(require("form.edit", "protocol.lock")),
               s: Session = Depends(db.get_session)):
     p = scope.protocol_or_404(s, cu, protocol_id)
+    scope.check_study_open(p)
     draft, locked, version = _draft(s, protocol_id)
     _may_change(cu, locked)
     _validate(body, draft)
@@ -113,6 +114,7 @@ def edit_check(protocol_id: int, check_id: int, body: CheckEdit,
                cu: CurrentUser = Depends(require("form.edit", "protocol.lock")),
                s: Session = Depends(db.get_session)):
     p = scope.protocol_or_404(s, cu, protocol_id)
+    scope.check_study_open(p)
     _, locked, version = _draft(s, protocol_id)
     _may_change(cu, locked)
     c = s.get(EditCheck, check_id)
