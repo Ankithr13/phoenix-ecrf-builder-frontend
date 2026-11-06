@@ -144,8 +144,8 @@ def test_reviewer_can_edit_every_attribute_and_rename(client, demo_accounts):
     c.post(f"/api/protocols/{pid}/extract")
     before = c.get(f"/api/protocols/{pid}/draft").json()["draft"]
     visit = before["forms"][1]["visit"]
-    f = before["forms"][1]["fields"][0]
-    other = before["forms"][1]["fields"][1]["name"]
+    f = before["forms"][1]["fields"][1]
+    other = before["forms"][1]["fields"][2]["name"]
     r = c.post(f"/api/protocols/{pid}/review", json={"changes": [{
         "visit": visit, "name": f["name"], "new_name": "Renamed Field", "type": "choice",
         "unit": "", "choices": ["Yes", " No ", ""], "required": False, "repeats": 2, "status": "approved"}]})

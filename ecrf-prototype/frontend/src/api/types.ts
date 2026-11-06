@@ -34,6 +34,9 @@ export interface FieldDef {
   field_id: string;
   origin: "model" | "foundation";
   collected: boolean;
+  allow_not_done: boolean;
+  allow_not_applicable: boolean;
+  allow_unknown: boolean;
 }
 
 export interface VisitForm {
@@ -173,6 +176,42 @@ export interface FieldChange {
   reviewer_note?: string;
   collected?: boolean;
   cdash?: string;
+  allow_not_done?: boolean;
+  allow_not_applicable?: boolean;
+  allow_unknown?: boolean;
+}
+
+export interface EditCheck {
+  id: number;
+  code: string;
+  form: string | null;
+  field_ids: string[];
+  type: string;
+  logic: Record<string, unknown>;
+  message: string;
+  severity: "soft" | "hard";
+  owner: string;
+  enabled: boolean;
+  origin: "builtin" | "custom";
+  form_version: number;
+}
+
+export interface CheckWarning {
+  code: string;
+  field: string | null;
+  repeat: number;
+  message: string;
+}
+
+export interface LabRange {
+  name: string;
+  sex?: string;
+  aliases?: string[];
+  unit: string;
+  low: number;
+  high: number;
+  source: string;
+  status: string;
 }
 
 export interface FieldComment {
@@ -212,10 +251,14 @@ export interface HistoryRow {
   reason: string | null;
 }
 
+export type CompletionStatus = "value" | "not_done" | "not_applicable" | "unknown";
+
 export interface Reading {
   field_name: string;
   repeat_num: number;
   value: string | number | boolean | null;
+  completion_status?: CompletionStatus;
+  completion_reason?: string | null;
 }
 
 export interface StatResult {
@@ -320,6 +363,9 @@ export interface SubjectRow {
   created_by: string;
   created_at: string;
   readings: number;
+  statuses: ObservationStatus[];
+  open_queries: number;
+  needs_signoff: boolean;
   birth_year: number | null;
   sex: string | null;
   enrolled_on: string | null;
@@ -335,7 +381,7 @@ export interface SubjectCreate {
   note?: string;
 }
 
-export type ObservationStatus = "submitted" | "approved" | "queried";
+export type ObservationStatus = "draft" | "submitted" | "monitor_reviewed" | "approved";
 
 export interface DataRow {
   id: number;
@@ -346,6 +392,9 @@ export interface DataRow {
   repeat: number;
   value: string | null;
   status: ObservationStatus;
+  open_query_count: number;
+  completion_status: CompletionStatus;
+  completion_reason: string | null;
   entered_by: string;
   entered_at: string;
   updated_at: string | null;
@@ -380,6 +429,8 @@ export interface QueryRow {
   repeat: number | null;
   value: string | null;
   observation_status: ObservationStatus | null;
+  open_query_count: number;
+  check_code: string | null;
   status: QueryStatus;
   text: string;
   raised_by: string;

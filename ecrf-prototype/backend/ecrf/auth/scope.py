@@ -52,6 +52,9 @@ def subject_or_404(s: Session, cu: CurrentUser, protocol_id: int, code: str) -> 
 
 def visible_observations(cu: CurrentUser, protocol_id: int) -> Select:
     q = select(Observation).where(Observation.protocol_id == protocol_id)
+    # A draft is still the site's to change. The sponsor sees it once submitted.
+    if cu.org.type == "sponsor":
+        q = q.where(Observation.status != "draft")
     if cu.site_ids is not None:
         q = q.join(Subject, Subject.id == Observation.subject_ref).where(Subject.site_org_id.in_(cu.site_ids))
     return q

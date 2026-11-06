@@ -782,3 +782,9 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 .icon-btn { background: none; border: none; padding: var(--s-1); color: var(--muted); cursor: pointer; line-height: 0; vertical-align: middle; }
 .icon-btn:hover { color: var(--ink); }
 .history-row { padding: var(--s-2) 0; border-bottom: 1px solid var(--line); }
+
+/* Sprint 3: data entry */
+.entry-status { margin-left: var(--s-1); font-size: var(--text-xs); }
+.check-note { color: var(--amber-ink); font-size: var(--text-xs); }
+.completion { margin-bottom: var(--s-1); max-width: 180px; }
+.completion-reason { width: 100%; }

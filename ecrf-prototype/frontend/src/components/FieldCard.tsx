@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CdashEntry, FieldChange, FieldComment, FieldDef, FieldType, Status } from "../api/types";
+import type { CdashEntry, FieldChange, FieldComment, FieldDef, FieldType, LabRange, Status } from "../api/types";
 import Badge from "./Badge";
 import { HistoryButton } from "./HistoryDrawer";
 
@@ -13,6 +13,7 @@ interface Props {
   onResolve?: (commentId: number) => void;
   onHistory?: () => void;
   library?: CdashEntry[];
+  labRanges?: LabRange[];
   // Set for a second after a decision, then the card moves to its new group.
   flash?: Status | null;
   moved?: boolean;
@@ -50,6 +51,9 @@ interface Form {
   repeats: string;
   required: boolean;
   choices: string;
+  allow_not_done: boolean;
+  allow_not_applicable: boolean;
+  allow_unknown: boolean;
 }
 
 function formFrom(f: FieldDef): Form {
@@ -62,16 +66,24 @@ function formFrom(f: FieldDef): Form {
     repeats: String(f.repeats),
     required: f.required,
     choices: (f.choices ?? []).join(", "),
+    allow_not_done: f.allow_not_done ?? false,
+    allow_not_applicable: f.allow_not_applicable ?? false,
+    allow_unknown: f.allow_unknown ?? false,
   };
 }
 
-export default function FieldCard({ field, onChange, onShowSection, readOnly = false, comments = [], onComment, onResolve, onHistory, library, flash = null, moved = false }: Props) {
+export default function FieldCard({ field, onChange, onShowSection, readOnly = false, comments = [], onComment, onResolve, onHistory, library, labRanges = [], flash = null, moved = false }: Props) {
   const [editing, setEditing] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [draftComment, setDraftComment] = useState("");
   const [codeText, setCodeText] = useState("");
   const foundation = field.origin === "foundation";
   const openComments = comments.filter((c) => !c.resolved_at).length;
+  const [showRanges, setShowRanges] = useState(false);
+  const lowered = field.name.toLowerCase();
+  const refRows = (field.type === "integer" || field.type === "decimal") && field.min === null && field.max === null
+    ? labRanges.filter((r) => [r.name, ...(r.aliases ?? [])].some((n) => new RegExp(`\\b${n.toLowerCase().replace(/[^a-z0-9 ]/g, "")}\\b`).test(lowered)))
+    : [];
   const pickCode = (text: string) => {
     setCodeText(text);
     const hit = library?.find((e) => `${e.name} (${e.cdash})` === text);
@@ -108,6 +120,9 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
     const choices = form.type === "choice" ? form.choices.split(",").map((c) => c.trim()).filter(Boolean) : null;
     if (form.type === "choice" && (!choices || choices.length === 0)) { setProblem("A choice field needs at least one choice, separated by commas."); return; }
     if (JSON.stringify(choices) !== JSON.stringify(field.choices ?? null)) change.choices = choices;
+    for (const key of ["allow_not_done", "allow_not_applicable", "allow_unknown"] as const) {
+      if (form[key] !== (field[key] ?? false)) change[key] = form[key];
+    }
     if (Object.keys(change).length > 0) onChange(change);
     setEditing(false);
   };
@@ -177,6 +192,24 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
           <datalist id={`cdash-${field.field_id}`}>
             {library.map((e) => <option key={`${e.domain}-${e.cdash}`} value={`${e.name} (${e.cdash})`} />)}
           </datalist>
+        </div>
+      )}
+
+      {!readOnly && refRows.length > 0 && (
+        <div className="mt-2">
+          <button type="button" className="btn-link small" onClick={() => setShowRanges((v) => !v)}>Suggest range from reference table</button>
+          {showRanges && (
+            <div className="comment-thread">
+              <p className="xs muted">Unconfirmed until Denise confirms it. Nothing is applied unless you choose it, and the field stays yours to edit.</p>
+              {refRows.map((r) => (
+                <div className="row row-wrap mt-2" key={`${r.name}-${r.sex ?? ""}`}>
+                  <span className="small">{r.name}{r.sex ? ` (${r.sex})` : ""}: <span className="mono">{r.low} to {r.high} {r.unit}</span></span>
+                  <a className="inline xs" href={r.source} target="_blank" rel="noreferrer">source</a>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => { onChange({ min: r.low, max: r.high, unit: r.unit }); setShowRanges(false); }}>Use this</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -252,6 +285,18 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
           <label className="ctl">
             <input type="checkbox" checked={form.required} onChange={(e) => set({ required: e.target.checked })} aria-label="Required" />
             required
+          </label>
+          <label className="ctl">
+            <input type="checkbox" checked={form.allow_not_done} onChange={(e) => set({ allow_not_done: e.target.checked })} aria-label="Allow not done" />
+            not done allowed
+          </label>
+          <label className="ctl">
+            <input type="checkbox" checked={form.allow_not_applicable} onChange={(e) => set({ allow_not_applicable: e.target.checked })} aria-label="Allow not applicable" />
+            not applicable allowed
+          </label>
+          <label className="ctl">
+            <input type="checkbox" checked={form.allow_unknown} onChange={(e) => set({ allow_unknown: e.target.checked })} aria-label="Allow unknown" />
+            unknown allowed
           </label>
           <span className="grow" />
           {problem && <span className="error small">{problem}</span>}

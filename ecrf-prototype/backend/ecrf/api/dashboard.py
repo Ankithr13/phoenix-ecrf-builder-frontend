@@ -113,8 +113,8 @@ def dashboard(protocol_id: int, cu: CurrentUser = Depends(require("dashboard.vie
         readings = sum(1 for o in scoped if o.status == "approved")
         entered_total = len(scoped)
     else:
-        entered_total = s.scalar(select(func.count(Observation.id))
-                                 .where(Observation.protocol_id == protocol_id)) or 0
+        entered_total = s.scalar(select(func.count(Observation.id)).where(
+            Observation.protocol_id == protocol_id, Observation.status != "draft")) or 0
 
     return {"protocol": {"id": p.id, "name": p.name}, "extraction": extraction,
             "data": {"subjects": subjects, "readings": readings, "entered_total": entered_total},

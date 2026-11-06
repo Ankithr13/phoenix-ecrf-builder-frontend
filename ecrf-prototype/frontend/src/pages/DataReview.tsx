@@ -6,7 +6,7 @@ import { useAuth } from "../auth/useAuth";
 import HistoryDrawer, { HistoryButton, type HistoryLine } from "../components/HistoryDrawer";
 
 const STATUS_CHIP: Record<ObservationStatus, string> = {
-  submitted: "chip-amber", approved: "chip-teal", queried: "chip-rust",
+  draft: "", submitted: "chip-amber", monitor_reviewed: "chip-amber", approved: "chip-teal",
 };
 
 /* The sponsor's view of everything sites have entered. Approving moves a
@@ -35,17 +35,21 @@ export default function DataReview() {
   const sites = useMemo(() => Array.from(new Set((rows ?? []).map((r) => r.site ?? ""))).filter(Boolean).sort(), [rows]);
   const visits = useMemo(() => Array.from(new Set((rows ?? []).map((r) => r.visit))), [rows]);
   const shown = useMemo(() => (rows ?? []).filter((r) =>
-    (!site || r.site === site) && (!visit || r.visit === visit) && (!status || r.status === status)), [rows, site, visit, status]);
+    (!site || r.site === site) && (!visit || r.visit === visit) && (!status || (status === "queried" ? r.open_query_count > 0 : r.status === status))), [rows, site, visit, status]);
   const counts = useMemo(() => {
-    const c = { submitted: 0, approved: 0, queried: 0 };
-    for (const r of rows ?? []) c[r.status] += 1;
+    const c = { waiting: 0, approved: 0, queried: 0 };
+    for (const r of rows ?? []) {
+      if (r.status === "approved") c.approved += 1; else c.waiting += 1;
+      if (r.open_query_count > 0) c.queried += 1;
+    }
     return c;
   }, [rows]);
 
   const toggle = (rid: number) => setSelected((prev) => {
     const n = new Set(prev); if (n.has(rid)) n.delete(rid); else n.add(rid); return n;
   });
-  const selectable = shown.filter((r) => r.status === "submitted");
+  const canApprove = (r: DataRow) => r.status !== "approved" && r.open_query_count === 0;
+  const selectable = shown.filter(canApprove);
   const allSelected = selectable.length > 0 && selectable.every((r) => selected.has(r.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((r) => r.id)));
 
@@ -95,7 +99,7 @@ export default function DataReview() {
       <div className="page-head">
         <h1 className="page-title">Data review</h1>
         <div className="muted small">
-          <span className="mono">{counts.approved}</span> approved · <span className="mono">{counts.submitted}</span> awaiting review
+          <span className="mono">{counts.approved}</span> approved · <span className="mono">{counts.waiting}</span> awaiting review
           {counts.queried > 0 && <> · <span className="mono">{counts.queried}</span> queried</>}
         </div>
       </div>
@@ -127,7 +131,8 @@ export default function DataReview() {
               <option value="">All statuses</option>
               <option value="submitted">Awaiting review</option>
               <option value="approved">Approved</option>
-              <option value="queried">Queried</option>
+              <option value="monitor_reviewed">Monitor reviewed</option>
+              <option value="queried">Has an open query</option>
             </select>
             <span className="grow" />
             {can("data.approve") && (
@@ -151,7 +156,7 @@ export default function DataReview() {
                 <tr key={r.id}>
                   {can("data.approve") && (
                     <td className="chk">
-                      {r.status === "submitted" && (
+                      {canApprove(r) && (
                         <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Select ${r.field} for ${r.subject}`} />
                       )}
                     </td>
@@ -163,11 +168,14 @@ export default function DataReview() {
                   <td className="num mono">
                     {r.value ?? "—"} <HistoryButton onClick={() => showHistory(r)} label={`History of ${r.field} for ${r.subject}`} />
                   </td>
-                  <td><span className={`pill ${STATUS_CHIP[r.status]}`}>{r.status === "submitted" ? "awaiting review" : r.status}</span></td>
+                  <td>
+                    <span className={`pill ${STATUS_CHIP[r.status]}`}>{r.status === "submitted" ? "awaiting review" : r.status.replace("_", " ")}</span>
+                    {r.open_query_count > 0 && <span className="pill chip-rust entry-status">{r.open_query_count} open query</span>}
+                  </td>
                   <td className="small muted">{r.entered_by}</td>
                   {can("query.raise") && (
                     <td className="num">
-                      {r.status !== "queried" && (
+                      {r.open_query_count === 0 && (
                         <button type="button" className="btn-link" onClick={() => setAsking({ id: r.id, text: "" })}>Raise query</button>
                       )}
                     </td>

@@ -2,7 +2,7 @@
 
 from conftest import BGH, BUILDER, MONITOR, MRC, fresh_client, login
 from sqlalchemy import select
-from test_lock_sites_data import entry, lock_and_assign, site_client, sponsor_draft
+from test_lock_sites_data import entry, lock_and_assign, people, site_client, sponsor_draft, submit
 
 from ecrf.storage import db
 from ecrf.storage.models import ObservationHistory
@@ -15,6 +15,7 @@ def _setup():
     bgh = site_client(BGH)
     bgh.post(f"/api/studies/{pid}/subjects")
     assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 130)).status_code == 200
+    submit(bgh, pid, "BGH-001")
     row = approver.get(f"/api/protocols/{pid}/data").json()[0]
     return pid, approver, bgh, row
 
@@ -23,7 +24,7 @@ def test_full_flow_raise_answer_with_correction_close_approve(client, demo_accou
     pid, approver, bgh, row = _setup()
 
     q = approver.post(f"/api/data/{row['id']}/queries", json={"text": "130 looks low for this patient, please check"}).json()
-    assert q["status"] == "open" and q["observation_status"] == "queried"
+    assert q["status"] == "open" and q["observation_status"] == "submitted" and q["open_query_count"] == 1
     assert approver.post(f"/api/data/{row['id']}/queries", json={"text": "again"}).status_code == 409
 
     # Approval is blocked while the query is live.
@@ -31,10 +32,10 @@ def test_full_flow_raise_answer_with_correction_close_approve(client, demo_accou
     assert r.status_code == 409 and r.json()["detail"]["queried"] == [row["id"]]
 
     # The site sees it as an open item and answers with a corrected value.
-    assert [x["id"] for x in bgh.get("/api/queries", params={"status": "open"}).json()] == [q["id"]]
+    assert [x["id"] for x in people(bgh.get("/api/queries", params={"status": "open"}).json())] == [q["id"]]
     r = bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "transcription slip, it was 138", "new_value": 138})
     assert r.status_code == 200 and r.json()["status"] == "answered" and r.json()["value"] == "138"
-    assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "x", "new_value": 9999}).status_code == 422
+    assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "x", "new_value": "abc"}).status_code == 422
 
     hist = approver.get(f"/api/protocols/{pid}/data/{row['id']}/history").json()
     assert hist[-1]["old_value"] == "130" and hist[-1]["new_value"] == "138"
@@ -44,21 +45,21 @@ def test_full_flow_raise_answer_with_correction_close_approve(client, demo_accou
 
     # Still blocked while answered; the sponsor must close it first.
     assert approver.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]}).status_code == 409
-    assert [x["id"] for x in approver.get("/api/queries", params={"status": "answered"}).json()] == [q["id"]]
+    assert [x["id"] for x in people(approver.get("/api/queries", params={"status": "answered"}).json())] == [q["id"]]
     r = approver.post(f"/api/queries/{q['id']}/close")
-    assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["observation_status"] == "submitted"
+    assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["open_query_count"] == 0
 
     assert approver.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]}).json() == {"approved": 1}
     final = approver.get(f"/api/protocols/{pid}/data").json()[0]
     assert final["status"] == "approved" and final["value"] == "138"
-    assert bgh.get("/api/queries", params={"status": "open"}).json() == []
+    assert people(bgh.get("/api/queries", params={"status": "open"}).json()) == []
 
 
 def test_a_site_cannot_answer_another_sites_query(client, demo_accounts):
     _, approver, bgh, row = _setup()
     q = approver.post(f"/api/data/{row['id']}/queries", json={"text": "check"}).json()
     mrc = site_client(MRC)
-    assert mrc.get("/api/queries").json() == []
+    assert people(mrc.get("/api/queries").json()) == []
     assert mrc.post(f"/api/queries/{q['id']}/answer", json={"text": "not mine"}).status_code == 404
     assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "mine"}).status_code == 200
 
@@ -66,9 +67,9 @@ def test_a_site_cannot_answer_another_sites_query(client, demo_accounts):
 def test_queried_value_can_be_corrected_through_data_entry_too(client, demo_accounts):
     pid, approver, bgh, row = _setup()
     approver.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]})
-    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135)).status_code == 409, "approved is frozen"
+    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135, reason="re-read")).status_code == 409, "approved is frozen"
     approver.post(f"/api/data/{row['id']}/queries", json={"text": "please re-check"})
-    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135)).status_code == 200, "open query reopens it"
+    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135, reason="re-read")).status_code == 200, "open query reopens it"
 
 
 def test_monitor_can_raise_and_close_too(client, demo_accounts):
@@ -88,7 +89,7 @@ def test_monitor_can_raise_and_close_too(client, demo_accounts):
 def test_site_raises_sponsor_answers_sponsor_closes(client, demo_accounts):
     _, sponsor, bgh, row = _setup()
     q = bgh.post(f"/api/data/{row['id']}/queries", json={"text": "Form says mmHg but our device reports kPa. Which do you want?"}).json()
-    assert q["raised_by_org"] == "site" and q["status"] == "open" and q["observation_status"] == "queried"
+    assert q["raised_by_org"] == "site" and q["status"] == "open" and q["open_query_count"] == 1
     assert q["can_close"] is False and q["can_answer"] is False, "only the sponsor closes"
     # Not the site's turn to answer its own question.
     assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "me"}).status_code == 403
@@ -102,7 +103,7 @@ def test_site_raises_sponsor_answers_sponsor_closes(client, demo_accounts):
     # The site cannot close, even a query it raised; the sponsor does.
     assert bgh.post(f"/api/queries/{q['id']}/close").status_code == 403
     r = sponsor.post(f"/api/queries/{q['id']}/close")
-    assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["observation_status"] == "submitted"
+    assert r.status_code == 200 and r.json()["status"] == "closed" and r.json()["open_query_count"] == 0
     # The other site cannot raise a query on a BGH value.
     assert site_client(MRC).post(f"/api/data/{row['id']}/queries", json={"text": "?"}).status_code == 404
 
@@ -149,6 +150,6 @@ def test_queries_about_a_study_a_patient_or_a_visit(client, demo_accounts):
     assert q4["about"] == "study" and q4["site"] == "BGH"
     # A query about one value through the general endpoint still marks the value.
     q5 = sponsor.post("/api/queries", json={"protocol_id": pid, "observation_id": row["id"], "text": "check"}).json()
-    assert q5["about"] == "value" and q5["observation_status"] == "queried" and q5["field"] == row["field"]
+    assert q5["about"] == "value" and q5["open_query_count"] == 1 and q5["field"] == row["field"]
     # Sites cannot ask about another site's patient.
     assert mrc.post("/api/queries", json={"protocol_id": pid, "subject_code": "BGH-001", "text": "?"}).status_code == 404

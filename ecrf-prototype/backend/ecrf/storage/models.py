@@ -212,6 +212,28 @@ class FormFieldHistory(Base):
     reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
+class EditCheck(Base):
+    """One edit check on one protocol, as data. Built-in ones are generated at
+    lock; a builder can add more of the same types. Soft checks raise a query,
+    hard checks block the save, and only format checks are hard."""
+
+    __tablename__ = "edit_check"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
+    code: Mapped[str] = mapped_column(String(20))            # EC-006, FMT, REQ, CUSTOM-1
+    form: Mapped[str | None] = mapped_column(String(200), nullable=True)  # visit; None spans visits
+    field_ids: Mapped[list] = mapped_column(JSON)
+    type: Mapped[str] = mapped_column(String(20))
+    logic: Mapped[dict] = mapped_column(JSON)
+    message: Mapped[str] = mapped_column(String(500))
+    severity: Mapped[str] = mapped_column(String(10))        # soft | hard
+    owner: Mapped[str] = mapped_column(String(100))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    origin: Mapped[str] = mapped_column(String(10))          # builtin | custom
+    form_version: Mapped[int] = mapped_column(Integer)
+
+
 class ProtocolSite(Base):
     """A site organisation assigned to a (locked) protocol."""
 
@@ -276,8 +298,12 @@ class Observation(Base):
     # keep working; subject_ref is the row it came from.
     subject_ref: Mapped[int | None] = mapped_column(ForeignKey("subject.id"), nullable=True)
     ecrf_version_id: Mapped[int | None] = mapped_column(ForeignKey("ecrf_version.id"), nullable=True)
-    # submitted -> approved by the sponsor; queried while a query is open.
-    status: Mapped[str] = mapped_column(String(20), default="submitted", server_default="submitted")
+    # draft -> submitted -> monitor_reviewed if required -> approved. An open
+    # query does not change this; it is counted alongside and blocks approval.
+    status: Mapped[str] = mapped_column(String(20), default="draft", server_default="draft")
+    # value, not_done, not_applicable or unknown. Anything but value has a reason.
+    completion_status: Mapped[str] = mapped_column(String(20), default="value", server_default="value")
+    completion_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     approved_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -326,3 +352,7 @@ class Query(Base):
     answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     closed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Set on a query raised by an edit check. check_key names the check row, and
+    # is what stops the same failure raising a second query.
+    check_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    check_key: Mapped[str | None] = mapped_column(String(40), nullable=True)

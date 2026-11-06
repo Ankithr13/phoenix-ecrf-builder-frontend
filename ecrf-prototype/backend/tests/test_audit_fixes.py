@@ -8,7 +8,7 @@ import pytest
 from conftest import APPROVER, BGH, BUILDER, login
 from sqlalchemy import inspect, select
 from test_cost import _run, fake_llm  # noqa: F401
-from test_lock_sites_data import _org_id, entry, lock_and_assign, site_client, sponsor_draft
+from test_lock_sites_data import _org_id, entry, lock_and_assign, site_client, sponsor_draft, submit
 
 import ecrf.extract.base as base_mod
 from ecrf.api import dashboard as dash_mod
@@ -33,6 +33,7 @@ def _entered():
     bgh = site_client(BGH)
     bgh.post(f"/api/studies/{pid}/subjects")
     assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 130)).status_code == 200
+    submit(bgh, pid, "BGH-001")
     return pid, sponsor, bgh, sponsor.get(f"/api/protocols/{pid}/data").json()[0]
 
 
@@ -76,18 +77,18 @@ def test_site_cannot_close_a_query(client, demo_accounts):
 def test_approved_value_edit_needs_open_sponsor_query(client, demo_accounts):
     pid, sponsor, bgh, row = _entered()
     sponsor.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]})
-    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135)).status_code == 409
+    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135, reason="re-read it")).status_code == 409
 
     # A site's own question changes nothing about the approval.
     q = bgh.post(f"/api/data/{row['id']}/queries", json={"text": "can I change this?"}).json()
     assert q["observation_status"] == "approved"
-    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135)).status_code == 409
+    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135, reason="re-read it")).status_code == 409
     sponsor.post(f"/api/queries/{q['id']}/close")
     assert sponsor.get(f"/api/protocols/{pid}/data").json()[0]["status"] == "approved"
 
     # A sponsor's query reopens it; the edit goes back to submitted, with history.
     sponsor.post(f"/api/data/{row['id']}/queries", json={"text": "please re-check"})
-    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135)).status_code == 200
+    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135, reason="re-read it")).status_code == 200
     now = sponsor.get(f"/api/protocols/{pid}/data").json()[0]
     assert now["status"] == "submitted" and now["approved_by"] is None and now["value"] == "135"
     hist = sponsor.get(f"/api/protocols/{pid}/data/{row['id']}/history").json()
@@ -111,6 +112,7 @@ def test_query_correction_uses_entry_validation(client, demo_accounts):
 
     assert post("ECG Performed", "yes").status_code == 200
     assert post("Weight", 80).status_code == 200
+    submit(bgh, pid, "BGH-001", "Screening")
     rows = {r["field"]: r for r in sponsor.get(f"/api/protocols/{pid}/data").json()}
 
     # Yes/no is spelt the same whichever way it arrives.
@@ -118,7 +120,7 @@ def test_query_correction_uses_entry_validation(client, demo_accounts):
     r = bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "was no", "new_value": "false"})
     assert r.status_code == 200 and r.json()["value"] == "No"
     q = sponsor.post(f"/api/data/{rows['Weight']['id']}/queries", json={"text": "check"}).json()
-    assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "x", "new_value": 99999}).status_code == 422
+    assert bgh.post(f"/api/queries/{q['id']}/answer", json={"text": "x", "new_value": "abc"}).status_code == 422
 
 
 def test_query_correction_recomputes_derived_value(client, demo_accounts):
@@ -138,6 +140,7 @@ def test_query_correction_recomputes_derived_value(client, demo_accounts):
 
     assert post("Height", 180).status_code == 200
     assert post("Weight", 80).status_code == 200
+    submit(bgh, pid, "BGH-001", "Screening")
     rows = {r["field"]: r for r in sponsor.get(f"/api/protocols/{pid}/data").json()}
     assert rows["BMI"]["value"] == "24.7", "filled in once both inputs are on file"
 

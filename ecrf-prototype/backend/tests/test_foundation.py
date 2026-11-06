@@ -1,7 +1,7 @@
 """Sprint 3, stage 4: the Foundation form, field comments, the form audit trail."""
 
 from conftest import APPROVER, BGH, BUILDER, login
-from test_lock_sites_data import lock_and_assign, site_client, sponsor_draft
+from test_lock_sites_data import lock_and_assign, site_client, sponsor_draft, submit
 
 from ecrf import foundation
 from ecrf.ingest import Document
@@ -33,7 +33,9 @@ def test_foundation_form_is_first_and_has_fixed_fields(client, demo_accounts):
     assert codes["Ethnicity"] == "ETHNIC" and codes["Height"] == "VSORRES/HEIGHT" and codes["Weight"] == "VSORRES/WEIGHT"
     assert codes["BMI"] == "BMI" and codes["Eligible"] == "IEYN"
     assert all(f["origin"] == "foundation" and f["source"]["section"] == "foundation" for f in forms[0]["fields"])
-    assert all(f["origin"] == "model" for form in forms[1:] for f in form["fields"])
+    # Every visit opens with a visit date, also from code; the rest is the model's.
+    assert all(form["fields"][0]["name"] == "Visit date" and form["fields"][0]["origin"] == "foundation" for form in forms[1:])
+    assert all(f["origin"] == "model" for form in forms[1:] for f in form["fields"][1:])
     # Added by code: the model's own counts are unaffected, and it is not a visit to choose.
     assert _draft(client, pid)["draft"]["summary"]["foundation_fields"] == len(ORDER)
     assert "Foundation" not in client.get(f"/api/protocols/{pid}/visits").json()["visits"]
@@ -84,6 +86,7 @@ def test_bmi_and_age_are_derived_from_foundation_fields(client, demo_accounts):
             "readings": [{"field_name": k, "value": v} for k, v in readings.items()]})
 
     assert enter({"Height": 180, "Weight": 81, "Year of birth": 1970, "Consent date": "2026-03-01"}).status_code == 200
+    submit(bgh, pid, "BGH-001", "Foundation")
     rows = {r["field"]: r["value"] for r in dm.get(f"/api/protocols/{pid}/data").json()}
     assert rows["BMI"] == "25" and rows["Age at consent"] == "56"
     r = enter({"Age at consent": 40})

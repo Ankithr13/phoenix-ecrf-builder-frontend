@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from ecrf.auth import scope
 from ecrf.auth.permissions import DATA_READERS, CurrentUser, require
 from ecrf.storage import db
-from ecrf.storage.models import Observation, Organisation, Subject
+from ecrf.storage.models import Observation, Organisation, Query, Subject
 
 router = APIRouter(prefix="/api/studies", tags=["studies"])
 
@@ -34,14 +34,24 @@ def list_studies(cu: CurrentUser = Depends(require("protocol.view")),
     return out
 
 
-def _subject_row(s: Session, subj: Subject) -> dict:
+def _subject_row(s: Session, subj: Subject, rows: list[Observation] | None = None, open_queries: int = 0) -> dict:
     site = s.get(Organisation, subj.site_org_id)
-    entered = s.scalar(select(func.count(Observation.id)).where(Observation.subject_ref == subj.id)) or 0
+    rows = rows or []
     return {"id": subj.id, "code": subj.code, "site": site.code if site else None,
             "site_name": site.name if site else None, "created_by": subj.created_by,
-            "created_at": subj.created_at.isoformat(), "readings": entered,
+            "created_at": subj.created_at.isoformat(), "readings": len(rows),
             "birth_year": subj.birth_year, "sex": subj.sex,
-            "enrolled_on": subj.enrolled_on, "note": subj.note}
+            "enrolled_on": subj.enrolled_on, "note": subj.note,
+            "statuses": sorted({o.status for o in rows}), "open_queries": open_queries,
+            "needs_signoff": _needs_signoff(rows)}
+
+
+def _needs_signoff(rows: list[Observation]) -> bool:
+    """A visit whose values are all approved is ready for the investigator."""
+    visits: dict[str, list[str]] = {}
+    for o in rows:
+        visits.setdefault(o.visit, []).append(o.status)
+    return any(all(st == "approved" for st in statuses) for statuses in visits.values())
 
 
 SEXES = ("Female", "Male", "Other", "Unknown")
@@ -83,11 +93,31 @@ def _clean(body: SubjectCreate) -> dict:
 
 
 @router.get("/{protocol_id}/subjects")
-def list_subjects(protocol_id: int, cu: CurrentUser = Depends(require(*DATA_READERS)),
+def list_subjects(protocol_id: int, visit: str | None = None, status: str | None = None,
+                  open_queries: bool = False, needs_signoff: bool = False,
+                  cu: CurrentUser = Depends(require(*DATA_READERS)),
                   s: Session = Depends(db.get_session)):
+    """Filters: patients with a value at this visit and in this status, with an
+    open query, or with a visit ready for sign-off."""
     scope.protocol_or_404(s, cu, protocol_id)
-    rows = s.scalars(scope.visible_subjects(cu, protocol_id).order_by(Subject.code)).all()
-    return [_subject_row(s, r) for r in rows]
+    by_subject: dict[int, list[Observation]] = {}
+    for o in s.scalars(scope.visible_observations(cu, protocol_id)):
+        by_subject.setdefault(o.subject_ref, []).append(o)
+    live: dict[int, int] = {}
+    for ref in s.scalars(select(Query.subject_ref).where(Query.protocol_id == protocol_id, Query.status != "closed")):
+        live[ref] = live.get(ref, 0) + 1
+    out = []
+    for subj in s.scalars(scope.visible_subjects(cu, protocol_id).order_by(Subject.code)):
+        rows = by_subject.get(subj.id, [])
+        at_visit = [o for o in rows if not visit or o.visit == visit]
+        if (visit or status) and not any(not status or o.status == status for o in at_visit):
+            continue
+        if open_queries and not live.get(subj.id):
+            continue
+        if needs_signoff and not _needs_signoff(rows):
+            continue
+        out.append(_subject_row(s, subj, rows, live.get(subj.id, 0)))
+    return out
 
 
 @router.post("/{protocol_id}/subjects")

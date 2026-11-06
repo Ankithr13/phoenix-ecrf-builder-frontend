@@ -51,9 +51,20 @@ def site_client(email: str):
     return c
 
 
-def entry(pid, subject, value, visit="Week 4", field=SBP):
-    return {"protocol_id": pid, "subject_id": subject, "visit": visit,
+def entry(pid, subject, value, visit="Week 4", field=SBP, reason=None):
+    return {"protocol_id": pid, "subject_id": subject, "visit": visit, "reason": reason,
             "readings": [{"field_name": field, "value": value}]}
+
+
+def submit(c, pid, subject, visit="Week 4"):
+    r = c.post("/api/data/submit", json={"protocol_id": pid, "subject_id": subject, "visit": visit})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def people(rows):
+    """Queries raised by a person, leaving out what the edit checks raised."""
+    return [q for q in rows if q["raised_by"] != "system"]
 
 
 # ------------------------------------------------------------------ lock
@@ -147,8 +158,10 @@ def test_edits_write_history_and_approved_values_are_frozen(client, demo_account
 
     assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 130)).json() == {"saved": 1}
     assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135)).json() == {"saved": 1}
-    r = bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 9999))
-    assert r.status_code == 422, "range check still applies"
+    r = bgh.post("/api/data/enter", json=entry(pid, "BGH-001", "abc"))
+    assert r.status_code == 422, "a word in a number field is still refused"
+    assert approver.get(f"/api/protocols/{pid}/data").json() == [], "a draft is the site's own"
+    submit(bgh, pid, "BGH-001")
 
     rows = approver.get(f"/api/protocols/{pid}/data").json()
     assert len(rows) == 1 and rows[0]["value"] == "135" and rows[0]["status"] == "submitted"
@@ -160,8 +173,9 @@ def test_edits_write_history_and_approved_values_are_frozen(client, demo_account
 
     assert approver.post(f"/api/protocols/{pid}/data/approve",
                          json={"observation_ids": [rows[0]["id"]]}).json() == {"approved": 1}
-    r = bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 140))
+    r = bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 140, reason="a good reason"))
     assert r.status_code == 409 and r.json()["detail"]["approved"] == [f"{SBP}#1"]
+    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135)).status_code == 200, "unchanged is no change"
     rows = approver.get(f"/api/protocols/{pid}/data", params={"status": "approved"}).json()
     assert rows[0]["value"] == "135" and rows[0]["approved_by"] == APPROVER
 
@@ -219,19 +233,18 @@ def test_patient_registration_details_and_rules(client, demo_accounts):
 
 def test_an_unanswered_yes_no_is_not_a_no():
     """Seen in the UI: a lone 'Yes' checkbox meant an untouched required
-    question was saved as False. The server has always treated a blank as
-    missing; this pins that down for booleans so the form cannot regress."""
-    from ecrf.api.data import validate
+    question was saved as False. A blank stays a blank: nothing is stored, and
+    the required check notices it at submit."""
+    from ecrf.api.data import _split, validate
     from ecrf.schema import FieldDef, Source
     f = FieldDef(name="Informed Consent Obtained", type="boolean", required=True,
                  source=Source(section="4", quote="written informed consent must be obtained"))
-    assert validate(f, None) == "required"
-    assert validate(f, "") == "required"
+    assert validate(f, None) is None and _split(f, None) == (None, None)
+    assert validate(f, "") is None and _split(f, "") == (None, None)
     assert validate(f, False) is None, "an explicit No is an answer"
+    assert _split(f, False) == (None, "No")
     assert validate(f, True) is None
     assert validate(f, "maybe") == "must be yes or no"
-    g = f.model_copy(update={"required": False})
-    assert validate(g, None) is None
 
 
 def test_value_rules_dates_booleans_and_display():

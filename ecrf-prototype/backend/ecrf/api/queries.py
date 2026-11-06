@@ -7,17 +7,25 @@ the site's job) and the sponsor closes it, whichever side raised it.
 
 Every query belongs to one protocol and, so that a site only ever sees
 its own traffic, to one site: the site that raised it, the site of the
-patient it is about, or the site a sponsor chose to ask. When a query is
-about one entered value that value cannot be approved while the query is
-live; closing returns a queried value to 'submitted'. A site asking about a
-value the sponsor already approved leaves the approval alone."""
+patient it is about, or the site a sponsor chose to ask. A value keeps its
+status while a query is on it; it cannot be approved until the query is
+closed. An approved value can change only while the sponsor has one open, so
+a site asking about it leaves the approval alone. Edit checks raise queries
+here too, with raised_by "system"."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ecrf.api.data import EntryRequest, Reading, _locked_fields, save_readings, shown
+from ecrf.api.data import (
+    EntryRequest,
+    Reading,
+    _locked_fields,
+    open_query_counts,
+    save_readings,
+    shown,
+)
 from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
 from ecrf.storage import db
@@ -92,6 +100,8 @@ def _row(s: Session, q: Query, cu: CurrentUser | None = None) -> dict:
         "observation_id": o.id if o else None,
         "field": o.field_name if o else None, "repeat": o.repeat_num if o else None,
         "value": shown(o) if o else None, "observation_status": o.status if o else None,
+        "open_query_count": open_query_counts(s, [o.id]).get(o.id, 0) if o else 0,
+        "check_code": q.check_code,
         "status": q.status, "text": q.text,
         "raised_by": q.raised_by, "raised_by_org": q.raised_by_org, "raised_at": q.raised_at.isoformat(),
         "answer_text": q.answer_text, "answered_by": q.answered_by,
@@ -165,10 +175,6 @@ def _create(s: Session, cu: CurrentUser, body: NewQueryRequest) -> Query:
     q = Query(protocol_id=p.id, site_org_id=site_id, subject_ref=subj.id if subj else None,
               visit=visit if (visit and not o) else None, observation_id=o.id if o else None,
               raised_by=cu.user.email, raised_by_org=cu.org.type, text=body.text.strip(), status="open")
-    # A site's question must not undo the sponsor's approval; only a question
-    # from the sponsor reopens an approved value.
-    if o is not None and (cu.org.type == "sponsor" or o.status != "approved"):
-        o.status = "queried"
     s.add(q)
     s.commit()
     return q
@@ -237,12 +243,6 @@ def close_query(query_id: int, cu: CurrentUser = Depends(require("query.close"))
     if q.status == "closed":
         return _row(s, q, cu)
     q.status, q.closed_by, q.closed_at = "closed", cu.user.email, utcnow()
-    # Back to 'submitted': the value was questioned, so it is approved again
-    # deliberately rather than inheriting an approval from before.
-    if q.observation_id:
-        o = s.get(Observation, q.observation_id)
-        if o is not None and o.status == "queried":
-            o.status, o.approved_by, o.approved_at = "submitted", None, None
     s.commit()
     return _row(s, q, cu)
 

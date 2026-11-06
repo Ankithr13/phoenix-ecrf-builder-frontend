@@ -11,6 +11,7 @@ cost and most of the instability live.
 """
 
 import logging
+import re
 import time
 
 from ecrf import cdash, foundation, guess, hints, sections, verify
@@ -21,6 +22,12 @@ from ecrf.ingest import Document, load
 from ecrf.schema import DraftECRF, ExtractionPlan, FieldDef, Rejection, VisitForm
 
 log = logging.getLogger("ecrf.pipeline")
+
+# A procedure can legitimately not happen at a visit, so "Not done" is allowed
+# on these by default. A builder can change it field by field.
+_PROCEDURE = re.compile(
+    r"\b(exam|examination|ecg|electrocardiogram|echocardiogram|mri|x-?ray|biopsy|collection|sample|"
+    r"test|assessment|procedure|questionnaire|scan|spirometry|performed)\b", re.IGNORECASE)
 
 
 def _context_for(doc: Document, key: str) -> str:
@@ -121,11 +128,14 @@ def run_fields(doc: Document, p: ExtractionPlan, ex: Extractor, protocol_id: int
         for fld in f.fields:
             # The model may not set origin; it is filled by the pipeline only.
             fld.origin = "model"
+            fld.allow_not_done = bool(_PROCEDURE.search(fld.name))
             counts[fld.verdict] += 1
             if fld.issue != "none":
                 counts["flagged"] += 1
     total = sum(len(f.fields) for f in forms) + len(rejections)
     base = foundation.form()
+    for f in forms:
+        f.fields.insert(0, foundation.visit_date())
     forms.insert(0, base)
 
     usage = Usage()

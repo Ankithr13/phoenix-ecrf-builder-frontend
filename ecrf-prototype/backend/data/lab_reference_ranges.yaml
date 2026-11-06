@@ -1,0 +1,131 @@
+# Adult reference ranges for common analytes. A SUGGESTION to a builder, shown
+# with its source, never applied automatically.
+#
+# Every number below was read from the linked MedlinePlus page on 2026-11-05.
+# Laboratories differ, and MedlinePlus says so on each page. Every row stays
+# status: unconfirmed until Denise confirms it. A row without a public source
+# does not belong in this file.
+#
+# Sources disagree slightly in places: MedlinePlus's own comprehensive metabolic
+# panel page gives calcium 8.5 to 10.2 mg/dL and glucose 70 to 100 mg/dL. Each
+# analyte's own page is used here. ALT is the exception, because only the panel
+# page was read for it.
+analytes:
+  - name: Sodium
+    aliases: [Na, serum sodium, blood sodium]
+    unit: mEq/L
+    low: 135
+    high: 145
+    source: https://medlineplus.gov/ency/article/003481.htm
+    status: unconfirmed
+  - name: Potassium
+    aliases: [K, serum potassium, blood potassium]
+    unit: mEq/L
+    low: 3.7
+    high: 5.2
+    source: https://medlineplus.gov/ency/article/003484.htm
+    status: unconfirmed
+  - name: Creatinine
+    sex: male
+    aliases: [serum creatinine]
+    unit: mg/dL
+    low: 0.7
+    high: 1.3
+    source: https://medlineplus.gov/ency/article/003475.htm
+    status: unconfirmed
+  - name: Creatinine
+    sex: female
+    aliases: [serum creatinine]
+    unit: mg/dL
+    low: 0.5
+    high: 0.95
+    source: https://medlineplus.gov/ency/article/003475.htm
+    status: unconfirmed
+  - name: Blood urea nitrogen
+    aliases: [BUN, urea nitrogen]
+    unit: mg/dL
+    low: 6
+    high: 20
+    source: https://medlineplus.gov/ency/article/003474.htm
+    status: unconfirmed
+  - name: Fasting glucose
+    aliases: [fasting plasma glucose, fasting blood glucose, fasting blood sugar]
+    unit: mg/dL
+    low: 70
+    high: 99
+    source: https://medlineplus.gov/ency/article/003482.htm
+    status: unconfirmed
+  - name: Hemoglobin
+    sex: male
+    aliases: [haemoglobin, Hgb, Hb]
+    unit: g/dL
+    low: 13.8
+    high: 17.2
+    source: https://medlineplus.gov/ency/article/003645.htm
+    status: unconfirmed
+  - name: Hemoglobin
+    sex: female
+    aliases: [haemoglobin, Hgb, Hb]
+    unit: g/dL
+    low: 12.1
+    high: 15.1
+    source: https://medlineplus.gov/ency/article/003645.htm
+    status: unconfirmed
+  - name: Red blood cell count
+    sex: male
+    aliases: [RBC, RBC count]
+    unit: million cells/mcL
+    low: 4.2
+    high: 5.7
+    source: https://medlineplus.gov/ency/article/003644.htm
+    status: unconfirmed
+  - name: Red blood cell count
+    sex: female
+    aliases: [RBC, RBC count]
+    unit: million cells/mcL
+    low: 3.8
+    high: 5.1
+    source: https://medlineplus.gov/ency/article/003644.htm
+    status: unconfirmed
+  - name: White blood cell count
+    aliases: [WBC, WBC count]
+    unit: WBCs/mcL
+    low: 4500
+    high: 11000
+    source: https://medlineplus.gov/ency/article/003643.htm
+    status: unconfirmed
+  - name: Calcium
+    aliases: [Ca, serum calcium, blood calcium]
+    unit: mg/dL
+    low: 8.8
+    high: 10.3
+    source: https://medlineplus.gov/ency/article/003477.htm
+    status: unconfirmed
+  - name: AST
+    aliases: [aspartate aminotransferase, SGOT]
+    unit: U/L
+    low: 8
+    high: 33
+    source: https://medlineplus.gov/ency/article/003472.htm
+    status: unconfirmed
+  - name: ALT
+    aliases: [alanine aminotransferase, SGPT]
+    unit: U/L
+    low: 4
+    high: 36
+    source: https://medlineplus.gov/ency/article/003468.htm
+    status: unconfirmed
+  - name: Albumin
+    aliases: [serum albumin]
+    unit: g/dL
+    low: 3.4
+    high: 5.4
+    source: https://medlineplus.gov/ency/article/003480.htm
+    status: unconfirmed
+  - name: Total bilirubin
+    aliases: [bilirubin]
+    unit: mg/dL
+    low: 0.1
+    high: 1.2
+    source: https://medlineplus.gov/ency/article/003479.htm
+    status: unconfirmed

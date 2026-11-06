@@ -67,6 +67,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <div className="nav-group-label">protocol {id}</div>
                   {can("protocol.extract") && <NavLink to={`/sponsor/p/${id}/visits`}>Visits</NavLink>}
                   <NavLink to={`/sponsor/p/${id}/review`}>Review</NavLink>
+                  {(can("form.edit") || can("protocol.lock")) && <NavLink to={`/sponsor/p/${id}/checks`}>Edit checks</NavLink>}
                   {can("sites.assign") && <NavLink to={`/sponsor/p/${id}/sites`}>Sites</NavLink>}
                   {can("listing.view") && <NavLink to={`/sponsor/p/${id}/data`}>Data review</NavLink>}
                   {can("dashboard.view") && <NavLink to={`/sponsor/p/${id}/dashboard`}>Dashboard</NavLink>}

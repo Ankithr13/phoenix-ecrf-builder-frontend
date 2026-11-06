@@ -31,9 +31,21 @@ export default function Patients() {
   const [form, setForm] = useState<Form>(EMPTY);
   const [problem, setProblem] = useState<string | null>(null);
 
+  const [fVisit, setFVisit] = useState("");
+  const [fStatus, setFStatus] = useState("");
+  const [fQueries, setFQueries] = useState(false);
+  const [fSignoff, setFSignoff] = useState(false);
+  const [visits, setVisits] = useState<string[]>([]);
+
   const load = useCallback(async () => {
-    try { setRows(await api.subjects(id)); setError(null); }
-    catch (e) { setError((e as Error).message); }
+    try {
+      setRows(await api.subjects(id, { visit: fVisit, status: fStatus, open_queries: fQueries ? "true" : "", needs_signoff: fSignoff ? "true" : "" }));
+      setError(null);
+    } catch (e) { setError((e as Error).message); }
+  }, [id, fVisit, fStatus, fQueries, fSignoff]);
+
+  useEffect(() => {
+    api.draft(id).then((d) => setVisits((d.draft?.forms ?? []).map((f) => f.visit))).catch(() => setVisits([]));
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
@@ -116,8 +128,23 @@ export default function Patients() {
         )}
       </div>
 
+      <div className="row row-wrap filters mt-4">
+        <select className="input" value={fVisit} onChange={(e) => setFVisit(e.target.value)} aria-label="Visit">
+          <option value="">All visits</option>
+          {visits.map((v) => <option key={v} value={v}>{v}</option>)}
+        </select>
+        <select className="input" value={fStatus} onChange={(e) => setFStatus(e.target.value)} aria-label="Status">
+          <option value="">Any status</option>
+          <option value="draft">Draft</option>
+          <option value="submitted">Submitted</option>
+          <option value="approved">Approved</option>
+        </select>
+        <label className="check"><input type="checkbox" checked={fQueries} onChange={(e) => setFQueries(e.target.checked)} /> Open queries</label>
+        <label className="check"><input type="checkbox" checked={fSignoff} onChange={(e) => setFSignoff(e.target.checked)} /> Needs sign-off</label>
+      </div>
+
       {rows && rows.length === 0 && (
-        <div className="card"><p className="muted small">No patients yet. Register one to start entering data.</p></div>
+        <div className="card"><p className="muted small">{fVisit || fStatus || fQueries || fSignoff ? "No patients match these filters." : "No patients yet. Register one to start entering data."}</p></div>
       )}
       {rows && rows.length > 0 && (
         <div className="card">
@@ -125,7 +152,7 @@ export default function Patients() {
             <thead>
               <tr>
                 <th>Subject ID</th><th>Born</th><th>Sex</th><th>Enrolled</th>
-                <th className="num">Readings</th><th>Registered</th><th />
+                <th className="num">Readings</th><th>Status</th><th>Registered</th><th />
               </tr>
             </thead>
             <tbody>
@@ -136,6 +163,11 @@ export default function Patients() {
                   <td>{r.sex ?? "—"}</td>
                   <td className="mono small">{r.enrolled_on ?? "—"}</td>
                   <td className="num mono">{r.readings}</td>
+                  <td>
+                    {r.statuses.map((x) => <span className="pill entry-status" key={x}>{x.replace("_", " ")}</span>)}
+                    {r.open_queries > 0 && <span className="pill chip-rust entry-status">{r.open_queries} open</span>}
+                    {r.needs_signoff && <span className="pill chip-amber entry-status">needs sign-off</span>}
+                  </td>
                   <td className="small muted">{new Date(r.created_at).toLocaleDateString()} · {r.created_by}</td>
                   <td className="num"><Link className="btn btn-secondary btn-sm" to={`/site/s/${id}/patients/${encodeURIComponent(r.code)}`}>Enter data</Link></td>
                 </tr>

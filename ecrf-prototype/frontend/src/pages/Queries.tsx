@@ -95,7 +95,8 @@ export default function Queries() {
           <div className="row row-between row-wrap">
             <div className="row row-wrap">
               <span className={`pill ${CHIP[q.status]}`}>{q.status}</span>
-              <span className="pill">asked by {who(q.raised_by_org)}</span>
+              <span className="pill">{q.raised_by === "system" ? "raised by an edit check" : `asked by ${who(q.raised_by_org)}`}</span>
+              {q.check_code && <span className="pill mono">{q.check_code}</span>}
               <span className="pill chip-brand">about {q.about === "value" ? "a value" : q.about === "study" ? "the study" : `a ${q.about}`}</span>
               {q.subject && <span className="mono">{q.subject}</span>}
               {q.visit && <><span className="muted">·</span><span>{q.visit}</span></>}
@@ -145,7 +146,7 @@ export default function Queries() {
               </button>
               <span className="small muted">
                 {q.status === "open" ? "Waiting for the other side to answer. " : ""}
-                {q.about === "value" ? "Closing returns the value to awaiting review, so it is approved again on purpose." : "Close it once the answer settles the question."}
+                {q.about === "value" ? "The value cannot be approved until this is closed." : "Close it once the answer settles the question."}
               </span>
             </div>
           )}

@@ -63,7 +63,7 @@ export default function NewQuery({ onDone, onCancel }: Props) {
   }, [study, isSite]);
 
   const current = studies?.find((s) => s.id === study) ?? null;
-  const values = rows.filter((r) => r.subject === subject && (!visit || r.visit === visit) && r.status !== "queried");
+  const values = rows.filter((r) => r.subject === subject && (!visit || r.visit === visit) && r.open_query_count === 0);
   const needSite = !isSite && about === "study";
   const needSubject = about !== "study";
   const needVisit = about === "visit";

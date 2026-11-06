@@ -17,7 +17,7 @@ from conftest import (
     login,
 )
 from fastapi.routing import APIRoute
-from test_lock_sites_data import _org_id, entry, lock_and_assign, site_client, sponsor_draft
+from test_lock_sites_data import _org_id, entry, lock_and_assign, site_client, sponsor_draft, submit
 
 from ecrf.api.app import ROUTERS
 from ecrf.auth.passwords import hash_password
@@ -163,7 +163,7 @@ def test_read_only_has_no_write_route(client, demo_accounts):
             continue  # one's own session and password, not study data
         for method in rt.methods - {"GET", "HEAD", "OPTIONS"}:
             url = rt.path
-            for name in ("protocol_id", "user_id", "observation_id", "query_id", "site_org_id"):
+            for name in ("protocol_id", "user_id", "observation_id", "query_id", "site_org_id", "comment_id", "check_id"):
                 url = url.replace("{" + name + "}", "1")
             r = client.request(method, url, params={"name": "x"})
             assert r.status_code == 403, f"{method} {url}: {r.status_code} {r.text[:100]}"
@@ -207,6 +207,8 @@ def test_monitor_sees_only_assigned_sites(client, demo_accounts):
     mrc.post(f"/api/studies/{pid}/subjects")
     bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 130))
     mrc.post("/api/data/enter", json=entry(pid, "MRC-001", 131))
+    submit(bgh, pid, "BGH-001")
+    submit(mrc, pid, "MRC-001")
     rows = {r["site"]: r for r in dm.get(f"/api/protocols/{pid}/data").json()}
     assert set(rows) == {"BGH", "MRC"}
 

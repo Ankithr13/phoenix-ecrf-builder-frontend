@@ -4,7 +4,7 @@ Stage 1. Fixes from the audit: done
 Stage 2. Put it online: skipped (by Tarushi, to test locally first; all of its work was removed)
 Stage 3. Roles, admin panel, approval chain: done
 Stage 4. Foundation form, field comments, form audit trail: done
-Stage 5. Data entry rules and edit checks: todo
+Stage 5. Data entry rules and edit checks: done
 Stage 6. Query lifecycle, notifications, investigator sign-off: todo
 Stage 7. Dashboard metrics, SAP mapping, biostatistics, PDF: todo
 Stage 8. Documentation and the regression run: todo
@@ -89,3 +89,27 @@ Choices to confirm:
 - Sex, Race and Ethnicity use the codelists in the client's library, so Sex is M, F, U, UNDIFFERENTIATED, not the Female and Male used at patient registration.
 - Besides Reject being refused, a foundation field's name and type are fixed, because later checks bind to them.
 - Comments can be written by the builder and the data manager, and read by sponsor roles. The matrix has no comment permission and sites do not see them.
+
+## Stage 5 acceptance
+
+1. Submit button: done. `test_submit_moves_draft_to_submitted_and_runs_checks`, `test_hard_check_blocks_submit`, `/api/data/submit`, `pages/DataEntry.tsx`
+2. Field status: done. `test_not_done_requires_reason_and_permission_on_field`, migration `0013_edit_checks_and_statuses.py`
+3. Reason for change: done. `test_edit_after_submit_requires_reason`
+4. Edit check engine: done. `ecrf/checks/engine.py`, one evaluator per type; `manual` is stored and never evaluated
+5. Built-in checks: done. `ecrf/checks/builtin.py`, `test_builtin_checks_bind_by_cdash_code`, `test_ec_001` to `test_ec_012`; `test_ec_011` is skipped with its reason
+6. Custom checks: done. `pages/Checks.tsx`, `test_custom_check_crud_and_evaluation`, `test_check_change_after_lock_needs_dm_and_is_logged`
+7. System queries: done. `ecrf/checks/run.py`, `test_soft_check_raises_system_query_once`, `test_system_query_auto_answers_when_fixed`
+8. Lab reference ranges: done. `data/lab_reference_ranges.yaml` has 16 rows for 13 analytes, each with its MedlinePlus page and `status: unconfirmed`, `test_lab_reference_rows_all_have_source`. Offered on the Review card and never applied without a click
+9. Site page filters: done. `test_filters_return_expected_subjects`, `pages/Patients.tsx`, Show filter on `pages/DataEntry.tsx`
+10. Entry UI: done. Status picker only where allowed, reason box, inline notes, confirmation listing what will be queried
+
+End-to-end run in a browser on the mock protocol, as `crc@bgh.demo`: registered BGH-001. On the Foundation form, typed consent date, year of birth, height and weight; BMI 25 and Age at consent 56 filled in. The confirmation listed 6 queries; submit reported 6 values and 6 queries. On Screening, typed systolic 400, which showed "above 250: this will raise a query on submit", and marked ECG Performed Not done with a reason. Submit raised system queries including one EC-006 on the value 400, with text "Systolic Blood Pressure is outside the expected range 60 to 250. Please check the value." The data manager then saw the query and the row "Not done: machine was down". The run found two bugs, both fixed: autosaves racing so BMI was not stored, and the preview counting a Not done field as missing.
+
+Choices to confirm:
+
+- **A value out of range now saves.** The sprint says only format checks are hard. So the midterm demo's "BMI of 52 is refused" no longer happens: the value saves, a note shows at once, and a query is raised at submit. Demo scripts that say "refused" are out of date.
+- A derived value that disagrees with its inputs is still refused. That is the existing guarantee, not an edit check.
+- Every required field gets a soft `REQ` check, so a half-empty visit raises many queries at submit, one per blank. The confirmation lists them first.
+- Every visit now opens with a code-inserted "Visit date" field, because EC-003, EC-005 and the Stage 7 safety window need one and protocols rarely name it.
+- The built-in `decimal` format check has no precision limit, because there is no source for one. A custom check can set `max_decimals`.
+- ALT in the lab table comes from MedlinePlus's metabolic panel page, because the ALT page itself was not read. That panel page also gives slightly different calcium and glucose ranges from their own pages; the file notes this.

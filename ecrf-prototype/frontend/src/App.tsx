@@ -5,6 +5,7 @@ import type { OrgType } from "./api/types";
 import Layout from "./components/Layout";
 import Admin from "./pages/Admin";
 import ChangePassword from "./pages/ChangePassword";
+import Checks from "./pages/Checks";
 import Dashboard from "./pages/Dashboard";
 import DataEntry from "./pages/DataEntry";
 import DataReview from "./pages/DataReview";
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="/sponsor/queries" element={<Queries />} />
             <Route path="/sponsor/p/:id/visits" element={<Visits />} />
             <Route path="/sponsor/p/:id/review" element={<Review />} />
+            <Route path="/sponsor/p/:id/checks" element={<Checks />} />
             <Route path="/sponsor/p/:id/sites" element={<Sites />} />
             <Route path="/sponsor/p/:id/data" element={<DataReview />} />
             <Route path="/sponsor/p/:id/dashboard" element={<Dashboard />} />

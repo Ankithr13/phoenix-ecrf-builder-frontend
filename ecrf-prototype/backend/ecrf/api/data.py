@@ -4,10 +4,16 @@ Validation runs here AND in the browser, on purpose. The browser check is
 for immediate feedback; this one is the guarantee. Both read the same
 locked field definition, so there is one source of truth.
 
-Three rules live here:
+Rules that live here:
   - a site enters data only for its own subjects, against a locked form
+  - entered values are drafts until the site submits the visit
+  - editing a submitted or approved value needs a reason
   - a value the sponsor has approved is frozen unless the sponsor reopens it
   - every change to a value writes a history row first
+
+Only what a value physically cannot be stops a save: a word in a number field.
+A value out of range or a blank required field is a soft check, which raises a
+query at submit and never overwrites what was entered.
 """
 
 from datetime import date
@@ -20,6 +26,7 @@ from sqlalchemy.orm import Session
 from ecrf import derive
 from ecrf.auth import scope
 from ecrf.auth.permissions import DATA_READERS, CurrentUser, require
+from ecrf.checks import run as checks
 from ecrf.schema import DraftECRF, FieldDef
 from ecrf.stats import seed as seed_mod
 from ecrf.storage import db
@@ -39,7 +46,9 @@ review_router = APIRouter(prefix="/api/protocols", tags=["data review"])
 class Reading(BaseModel):
     field_name: str
     repeat_num: int = 1
-    value: str | float | int | bool | None
+    value: str | float | int | bool | None = None
+    completion_status: str = "value"
+    completion_reason: str | None = None
 
 
 class EntryRequest(BaseModel):
@@ -47,6 +56,8 @@ class EntryRequest(BaseModel):
     subject_id: str          # the subject code, e.g. BGH-001
     visit: str
     readings: list[Reading]
+    # Why, when this changes a value that has already been submitted.
+    reason: str | None = None
 
 
 # ---------------------------------------------------------------- helpers
@@ -79,11 +90,11 @@ def as_bool(value) -> bool | None:
 
 
 def validate(field: FieldDef, value) -> str | None:
-    """Return an error message, or None if valid. A blank is missing, and
-    missing is an error only when the field is required; an explicit No,
-    zero or empty choice is never confused with a blank."""
+    """What this value cannot be, whatever the protocol says. A blank passes
+    here: a missing required value is a soft check at submit. So does a number
+    out of range. An explicit No or zero is never confused with a blank."""
     if value is None or value == "":
-        return "required" if field.required else None
+        return None
     if field.type in ("integer", "decimal"):
         if isinstance(value, bool):
             return "must be a number"
@@ -95,10 +106,6 @@ def validate(field: FieldDef, value) -> str | None:
             return "must be a number"
         if field.type == "integer" and x != int(x):
             return "must be a whole number"
-        if field.min is not None and x < field.min:
-            return f"below minimum {field.min}"
-        if field.max is not None and x > field.max:
-            return f"above maximum {field.max}"
     if field.type == "choice" and field.choices and str(value) not in field.choices:
         return f"must be one of: {', '.join(field.choices)}"
     if field.type == "boolean" and as_bool(value) is None:
@@ -110,6 +117,27 @@ def validate(field: FieldDef, value) -> str | None:
             return "must be a date, YYYY-MM-DD"
         if not 1900 <= d.year <= date.today().year + 1:
             return "date is out of range"
+    return None
+
+
+_COMPLETIONS = {"not_done": ("allow_not_done", "Not done"), "not_applicable": ("allow_not_applicable", "Not applicable"),
+                "unknown": ("allow_unknown", "Unknown")}
+
+
+def _completion_error(field: FieldDef, r: Reading) -> str | None:
+    """Not done, Not applicable and Unknown only where the form allows them,
+    each with a reason, and never alongside a value."""
+    if r.completion_status == "value":
+        return None
+    if r.completion_status not in _COMPLETIONS:
+        return "unknown completion status"
+    allowed, label = _COMPLETIONS[r.completion_status]
+    if not getattr(field, allowed):
+        return f"{label} is not allowed on this field"
+    if not (r.completion_reason or "").strip():
+        return f"{label} needs a reason"
+    if r.value not in (None, ""):
+        return f"{label} cannot have a value as well"
     return None
 
 
@@ -149,7 +177,14 @@ def _prepare(s: Session, p, subj: Subject, visit: str, fields: dict[str, FieldDe
     merged.update({(r.field_name, r.repeat_num): r.value for r in readings})
     recomputed = _recompute(fields, merged, {r.field_name for r in readings}, subj)
     merged.update({(r.field_name, r.repeat_num): r.value for r in recomputed})
-    return rows, recomputed, [Reading(field_name=k[0], repeat_num=k[1], value=v) for k, v in merged.items()]
+    # How each value was completed travels with it: a field marked Not done is
+    # answered, even though it has no value.
+    completion = {k: (o.completion_status, o.completion_reason) for k, o in rows.items()}
+    completion.update({(r.field_name, r.repeat_num): (r.completion_status, r.completion_reason) for r in readings})
+    standing = [Reading(field_name=k[0], repeat_num=k[1], value=v,
+                        completion_status=completion.get(k, ("value", None))[0],
+                        completion_reason=completion.get(k, ("value", None))[1]) for k, v in merged.items()]
+    return rows, recomputed, standing
 
 
 def _check(fields: dict[str, FieldDef], readings: list[Reading], subj: Subject | None = None,
@@ -162,7 +197,7 @@ def _check(fields: dict[str, FieldDef], readings: list[Reading], subj: Subject |
         if not f:
             errors[f"{r.field_name}#{r.repeat_num}"] = "unknown field for this visit"
             continue
-        err = validate(f, r.value)
+        err = _completion_error(f, r) or validate(f, r.value)
         if err:
             errors[f"{r.field_name}#{r.repeat_num}"] = err
     if not errors:
@@ -192,26 +227,57 @@ def fmt_num(x: float) -> str:
 
 def shown(o: Observation) -> str | None:
     """The value as text, for history rows and the review table."""
+    if o.completion_status != "value":
+        label = _COMPLETIONS.get(o.completion_status, (None, o.completion_status))[1]
+        return f"{label}: {o.completion_reason}"
     if o.value_num is not None:
         return fmt_num(o.value_num)
     return o.value_text
 
 
-def record_change(s: Session, o: Observation, num, text, by: str, reason: str | None) -> bool:
+def _after(num, text, completion: str, why: str | None) -> str | None:
+    if completion != "value":
+        return f"{_COMPLETIONS[completion][1]}: {why}"
+    return fmt_num(num) if num is not None else text
+
+
+def record_change(s: Session, o: Observation, num, text, by: str, reason: str | None,
+                  completion: str = "value", why: str | None = None) -> bool:
     """Write the history row, then change the value. Returns False when
     nothing changed, so an unchanged resubmission leaves no trace."""
-    before = shown(o)
-    after = fmt_num(num) if num is not None else text
+    before, after = shown(o), _after(num, text, completion, why)
     if before == after:
         return False
     s.add(ObservationHistory(observation_id=o.id, old_value=before, new_value=after,
                              changed_by=by, reason=reason))
     o.value_num, o.value_text = num, text
+    o.completion_status, o.completion_reason = completion, why if completion != "value" else None
     o.updated_at = utcnow()
     return True
 
 
-# ------------------------------------------------------------- site side
+def _reopened_by_sponsor(s: Session, o: Observation) -> bool:
+    """An approved value can change only while a person on the sponsor side has
+    a query open on it. A site's own question or a system query does not count."""
+    return s.scalars(select(Query.id).where(
+        Query.observation_id == o.id, Query.status != "closed",
+        Query.raised_by_org == "sponsor", Query.raised_by != "system")).first() is not None
+
+
+def open_query_counts(s: Session, ids: list[int]) -> dict[int, int]:
+    rows = s.scalars(select(Query.observation_id).where(Query.observation_id.in_(ids), Query.status != "closed"))
+    out: dict[int, int] = {}
+    for oid in rows:
+        out[oid] = out.get(oid, 0) + 1
+    return out
+
+
+def _overlay(standing: list[Reading]) -> dict[tuple[str, int], tuple[object, str]]:
+    return {(r.field_name, r.repeat_num): (r.value, r.completion_status) for r in standing}
+
+
+MIN_REASON = 5
+
 
 def save_readings(s: Session, cu: CurrentUser, p, v, subj: Subject, visit: str,
                   fields: dict[str, FieldDef], readings: list[Reading], reason: str | None = None) -> int:
@@ -219,38 +285,81 @@ def save_readings(s: Session, cu: CurrentUser, p, v, subj: Subject, visit: str,
     a correction through a query alike: same validation, same yes/no
     spelling, derived values recomputed, a history row for every change.
 
-    An approved value is frozen. It reopens only when the sponsor raises a
-    query on it, which sets 'queried'; an edit then takes it back to
-    'submitted', so it has to be approved again. A value that was recomputed
+    New values are drafts. Changing one already submitted needs a reason and
+    takes it back to submitted, so it is reviewed again. An approved value is
+    frozen until the sponsor raises a query on it. A value that was recomputed
     follows its inputs whatever its status, and needs approving again too."""
     rows, recomputed, standing = _prepare(s, p, subj, visit, fields, readings)
     check = _check(fields, [*readings, *recomputed], subj, standing)
     if not check["ok"]:
         raise HTTPException(422, {"errors": check["errors"]})
 
-    blocked = [f"{r.field_name}#{r.repeat_num}" for r in readings
-               if (o := rows.get((r.field_name, r.repeat_num))) is not None and o.status == "approved"]
+    draft = DraftECRF.model_validate(v.content)
+    checks.ensure(s, p, draft, v.version)
+    given = {r.field_name for r in readings}
+    names = {f.field_id: f.name for form in draft.forms for f in form.fields}
+    hard = {f"{names.get(hit.field_id)}#{hit.repeat}": hit.message
+            for _, hit in checks.failures(s, p, draft, subj, visit, _overlay(standing))
+            if hit.severity == "hard" and names.get(hit.field_id) in given}
+    if hard:
+        raise HTTPException(422, {"errors": hard})
+
+    def after(r: Reading):
+        num, text = _split(fields[r.field_name], r.value) if r.completion_status == "value" else (None, None)
+        return num, text, _after(num, text, r.completion_status, r.completion_reason)
+
+    blocked, need_reason = [], []
+    for r in readings:
+        o = rows.get((r.field_name, r.repeat_num))
+        if o is None or shown(o) == after(r)[2]:
+            continue
+        key = f"{r.field_name}#{r.repeat_num}"
+        if o.status == "approved" and not _reopened_by_sponsor(s, o):
+            blocked.append(key)
+        elif o.status != "draft" and len((reason or "").strip()) < MIN_REASON:
+            need_reason.append(key)
     if blocked:
         raise HTTPException(409, {"approved": blocked,
                                   "message": "These values have been approved by the sponsor and can "
                                              "no longer be changed here. Ask the sponsor to raise a query."})
+    if need_reason:
+        raise HTTPException(422, {"errors": dict.fromkeys(need_reason, f"Changing a submitted value needs a reason of at least {MIN_REASON} characters")})
 
     auto = {r.field_name for r in recomputed}
+    reopened_submitted = False
     for r in [*readings, *recomputed]:
-        f = fields[r.field_name]
-        num, text = _split(f, r.value)
+        num, text, _ = after(r)
         o = rows.get((r.field_name, r.repeat_num))
         if o is None:
+            if num is None and text is None and r.completion_status == "value":
+                continue    # nothing typed, nothing to keep
             s.add(Observation(protocol_id=p.id, subject_id=subj.code, subject_ref=subj.id,
                               ecrf_version_id=v.id, visit=visit, field_name=r.field_name,
                               repeat_num=r.repeat_num, value_num=num, value_text=text,
-                              synthetic=True, status="submitted", entered_by=cu.user.email))
+                              completion_status=r.completion_status,
+                              completion_reason=r.completion_reason if r.completion_status != "value" else None,
+                              synthetic=True, status="draft", entered_by=cu.user.email))
             continue
         why = "recalculated after a change to its inputs" if r.field_name in auto else reason
-        changed = record_change(s, o, num, text, cu.user.email, why)
-        if changed and o.approved_by:
+        changed = record_change(s, o, num, text, cu.user.email, why, r.completion_status, r.completion_reason)
+        if changed and o.status != "draft":
             o.status, o.approved_by, o.approved_at = "submitted", None, None
+            reopened_submitted = True
+    s.flush()
+    if reopened_submitted:
+        checks.sync_queries(s, p, draft, subj, visit)
     return len(readings)
+
+
+def _warnings(s: Session, p, draft: DraftECRF, subj: Subject, visit: str, overlay=None) -> list[dict]:
+    """What submitting would newly raise. A failure that already has a live
+    query is not listed, because it will not raise a second one."""
+    names = {f.field_id: f.name for form in draft.forms for f in form.fields}
+    live = set(s.scalars(select(Query.check_key).where(
+        Query.protocol_id == p.id, Query.subject_ref == subj.id, Query.status != "closed", Query.check_key.is_not(None))))
+    return [{"code": hit.code, "field": names.get(hit.field_id), "repeat": hit.repeat, "message": hit.message}
+            for check, hit in checks.failures(s, p, draft, subj, visit, overlay)
+            if hit.severity == "soft" and str(check.id) not in live]
 
 
 # ------------------------------------------------------------- site side
@@ -258,18 +367,62 @@ def save_readings(s: Session, cu: CurrentUser, p, v, subj: Subject, visit: str,
 @router.post("/validate")
 def validate_only(body: EntryRequest, cu: CurrentUser = Depends(require("data.enter")),
                   s: Session = Depends(db.get_session)):
-    p, _, subj, fields = _locked_fields(s, cu, body)
+    """Errors would stop the save. Warnings are what would become queries at
+    submit. Nothing is written."""
+    p, v, subj, fields = _locked_fields(s, cu, body)
     _, recomputed, standing = _prepare(s, p, subj, body.visit, fields, body.readings)
-    return _check(fields, [*body.readings, *recomputed], subj, standing)
+    result = _check(fields, [*body.readings, *recomputed], subj, standing)
+    draft = DraftECRF.model_validate(v.content)
+    checks.ensure(s, p, draft, v.version)
+    s.commit()
+    result["warnings"] = _warnings(s, p, draft, subj, body.visit, _overlay(standing))
+    return result
 
 
 @router.post("/enter")
 def enter(body: EntryRequest, cu: CurrentUser = Depends(require("data.enter")),
           s: Session = Depends(db.get_session)):
     p, v, subj, fields = _locked_fields(s, cu, body)
-    saved = save_readings(s, cu, p, v, subj, body.visit, fields, body.readings)
+    saved = save_readings(s, cu, p, v, subj, body.visit, fields, body.readings, body.reason)
     s.commit()
     return {"saved": saved}
+
+
+class SubmitRequest(BaseModel):
+    protocol_id: int
+    subject_id: str
+    visit: str
+
+
+@router.post("/submit")
+def submit(body: SubmitRequest, cu: CurrentUser = Depends(require("data.submit")),
+           s: Session = Depends(db.get_session)):
+    """Run every check for the visit. A hard failure blocks; a soft one raises a
+    system query. Then every draft value at this visit becomes submitted, and
+    the sponsor can see it."""
+    p, v, subj, _ = _locked_fields(s, cu, EntryRequest(protocol_id=body.protocol_id, subject_id=body.subject_id,
+                                                       visit=body.visit, readings=[]))
+    draft = DraftECRF.model_validate(v.content)
+    checks.ensure(s, p, draft, v.version)
+    rows = list(s.scalars(select(Observation).where(Observation.protocol_id == p.id,
+                                                    Observation.subject_id == subj.code,
+                                                    Observation.visit == body.visit)))
+    if not rows:
+        raise HTTPException(422, "Nothing has been entered for this visit")
+    names = {f.field_id: f.name for form in draft.forms for f in form.fields}
+    hard = {f"{names.get(hit.field_id)}#{hit.repeat}": hit.message
+            for _, hit in checks.failures(s, p, draft, subj, body.visit) if hit.severity == "hard"}
+    if hard:
+        raise HTTPException(422, {"errors": hard})
+    moved = 0
+    for o in rows:
+        if o.status == "draft":
+            o.status = "submitted"
+            moved += 1
+    s.flush()
+    raised = checks.sync_queries(s, p, draft, subj, body.visit)
+    s.commit()
+    return {"submitted": moved, "queries": [{"id": q.id, "code": q.check_code, "text": q.text} for q in raised]}
 
 
 @router.post("/seed/{protocol_id}")
@@ -313,13 +466,15 @@ class ApproveRequest(BaseModel):
     observation_ids: list[int]
 
 
-def _row(s: Session, o: Observation, sites: dict[int, Organisation]) -> dict:
+def _row(s: Session, o: Observation, sites: dict[int, Organisation], queries: dict[int, int] | None = None) -> dict:
     subj = s.get(Subject, o.subject_ref) if o.subject_ref else None
     site = sites.get(subj.site_org_id) if subj else None
     return {
         "id": o.id, "site": site.code if site else None, "subject": o.subject_id,
         "visit": o.visit, "field": o.field_name, "repeat": o.repeat_num, "value": shown(o),
-        "status": o.status, "entered_by": o.entered_by, "entered_at": o.entered_at.isoformat(),
+        "status": o.status, "open_query_count": (queries or {}).get(o.id, 0),
+        "completion_status": o.completion_status, "completion_reason": o.completion_reason,
+        "entered_by": o.entered_by, "entered_at": o.entered_at.isoformat(),
         "updated_at": o.updated_at.isoformat() if o.updated_at else None,
         "approved_by": o.approved_by,
     }
@@ -336,8 +491,10 @@ def list_data(protocol_id: int, site: str | None = None, visit: str | None = Non
     if status:
         q = q.where(Observation.status == status)
     sites = {o.id: o for o in s.scalars(select(Organisation).where(Organisation.type == "site"))}
-    rows = [_row(s, o, sites) for o in s.scalars(q.order_by(Observation.subject_id, Observation.visit,
-                                                              Observation.field_name, Observation.repeat_num))]
+    found = list(s.scalars(q.order_by(Observation.subject_id, Observation.visit,
+                                      Observation.field_name, Observation.repeat_num)))
+    counts = open_query_counts(s, [o.id for o in found])
+    rows = [_row(s, o, sites, counts) for o in found]
     if site:
         rows = [r for r in rows if r["site"] == site]
     return rows
@@ -348,11 +505,10 @@ def approve_data(protocol_id: int, body: ApproveRequest,
                  cu: CurrentUser = Depends(require("data.approve")),
                  s: Session = Depends(db.get_session)):
     scope.protocol_or_404(s, cu, protocol_id)
-    rows = s.scalars(select(Observation).where(Observation.protocol_id == protocol_id,
+    rows = s.scalars(select(Observation).where(Observation.protocol_id == protocol_id, Observation.status != "draft",
                                                 Observation.id.in_(body.observation_ids))).all()
-    live = set(s.scalars(select(Query.observation_id).where(
-        Query.observation_id.in_(body.observation_ids), Query.status != "closed")))
-    blocked = [o.id for o in rows if o.status == "queried" or (o.id in live and o.status != "approved")]
+    live = open_query_counts(s, list(body.observation_ids))
+    blocked = [o.id for o in rows if o.id in live and o.status != "approved"]
     if blocked:
         raise HTTPException(409, {"queried": blocked,
                                   "message": "Close the open queries on these values before approving them"})

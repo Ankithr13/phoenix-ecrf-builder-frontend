@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Literal
 
+import yaml
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -19,6 +20,7 @@ from sqlalchemy.orm import Session
 from ecrf import cdash, foundation, ingest, pipeline
 from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
+from ecrf.checks import run as checks
 from ecrf.config import config
 from ecrf.extract import get_extractor
 from ecrf.extract.base import Usage
@@ -58,6 +60,14 @@ def cdash_library(cu: CurrentUser = Depends(require("form.edit"))):
     """Every code in the library, for choosing one by name on the Review page."""
     return [{"cdash": e.get("cdash"), "name": e["name"], "domain": dom}
             for dom, d in cdash.library().items() for e in d["fields"] if e.get("cdash")]
+
+
+@router.get("/library/lab-ranges")
+def lab_ranges(cu: CurrentUser = Depends(require("form.edit"))):
+    """Suggestions a builder can choose to use, each with its source. Nothing
+    from this table is ever applied to a field automatically."""
+    with open(config.data_dir / "lab_reference_ranges.yaml") as f:
+        return yaml.safe_load(f)["analytes"]
 
 
 @router.get("")
@@ -443,10 +453,14 @@ class FieldChange(BaseModel):
     reviewer_note: str | None = None
     collected: bool | None = None
     cdash: str | None = None
+    allow_not_done: bool | None = None
+    allow_not_applicable: bool | None = None
+    allow_unknown: bool | None = None
 
 
 # Reviewer-editable attributes, applied in this order.
-_EDITABLE = ("type", "unit", "min", "max", "required", "repeats", "choices")
+_EDITABLE = ("type", "unit", "min", "max", "required", "repeats", "choices",
+             "allow_not_done", "allow_not_applicable", "allow_unknown")
 # Foundation fields are fixed: later checks bind to them.
 _FOUNDATION_FIXED = ("new_name", "type")
 
@@ -671,8 +685,9 @@ def form_history(protocol_id: int, field_id: str | None = None,
 def lock(protocol_id: int, cu: CurrentUser = Depends(require("protocol.lock")),
          s: Session = Depends(db.get_session)):
     """Freeze the latest version. Allowed only once every field has been
-    approved or rejected; sites only ever see a locked form."""
-    scope.protocol_or_404(s, cu, protocol_id)
+    approved or rejected; sites only ever see a locked form. The built-in
+    edit checks are generated here, from the form as it stands."""
+    p = scope.protocol_or_404(s, cu, protocol_id)
     v = db.latest_version(s, protocol_id)
     if not v:
         raise HTTPException(404, "no draft to lock")
@@ -687,6 +702,7 @@ def lock(protocol_id: int, cu: CurrentUser = Depends(require("protocol.lock")),
     v.state, v.locked_by, v.locked_at = "locked", cu.user.email, utcnow()
     s.add(FormFieldHistory(protocol_id=protocol_id, version=v.version, field_id=None, attribute="state",
                            old_value="draft", new_value="locked", by=cu.user.email))
+    checks.ensure(s, p, DraftECRF.model_validate(v.content), v.version)
     s.commit()
     return {"version": v.version, "state": "locked", "locked_by": v.locked_by,
             "locked_at": v.locked_at.isoformat()}

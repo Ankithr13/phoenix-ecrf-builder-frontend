@@ -73,6 +73,10 @@ class FieldDef(BaseModel):
     origin: Literal["model", "foundation"] = "model"
     # False on a foundation field the study has chosen not to collect.
     collected: bool = True
+    # Which answers other than a value this field accepts. Each needs a reason.
+    allow_not_done: bool = False
+    allow_not_applicable: bool = False
+    allow_unknown: bool = False
 
 
 class VisitForm(BaseModel):

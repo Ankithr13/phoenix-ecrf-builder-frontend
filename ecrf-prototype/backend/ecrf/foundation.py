@@ -29,6 +29,12 @@ def _field(name: str, type_: str, code: str | None, **kw) -> FieldDef:
                     source=Source(**_SOURCE), **kw)
 
 
+def visit_date() -> FieldDef:
+    """Put on every visit by code. The date checks and the safety window need
+    it, and a protocol's schedule rarely names it as a field."""
+    return _field("Visit date", "date", "SVSTDTC")
+
+
 def form() -> VisitForm:
     """A fresh copy. Codelists and ranges come from the client's library."""
     height, weight, bmi = _library_field("HEIGHT"), _library_field("WEIGHT"), _library_field("BMI")

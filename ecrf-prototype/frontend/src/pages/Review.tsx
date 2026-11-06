@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { CdashEntry, DraftResponse, FieldChange, FieldComment, FieldDef, Status, VersionRow } from "../api/types";
+import type { CdashEntry, DraftResponse, FieldChange, FieldComment, FieldDef, LabRange, Status, VersionRow } from "../api/types";
 import FieldCard from "../components/FieldCard";
 import HistoryDrawer, { type HistoryLine } from "../components/HistoryDrawer";
 import Stat from "../components/Stat";
@@ -65,6 +65,7 @@ export default function Review() {
   const [fText, setFText] = useState("");
   const [comments, setComments] = useState<FieldComment[]>([]);
   const [library, setLibrary] = useState<CdashEntry[] | undefined>(undefined);
+  const [labRanges, setLabRanges] = useState<LabRange[]>([]);
   const [drawer, setDrawer] = useState<{ title: string; lines: HistoryLine[] | null } | null>(null);
   // A decision flashes on the card for a second while it stays where it is;
   // settling holds its old status so it does not jump, then moved slides it in.
@@ -88,7 +89,10 @@ export default function Review() {
   const loadComments = useCallback(() => { api.comments(id).then(setComments).catch(() => setComments([])); }, [id]);
   useEffect(() => { loadComments(); }, [loadComments]);
   useEffect(() => {
-    if (can("form.edit")) api.cdashLibrary().then(setLibrary).catch(() => setLibrary(undefined));
+    if (can("form.edit")) {
+      api.cdashLibrary().then(setLibrary).catch(() => setLibrary(undefined));
+      api.labRanges().then(setLabRanges).catch(() => setLabRanges([]));
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -172,6 +176,9 @@ export default function Review() {
       required: c.required ?? f.required,
       repeats: c.repeats ?? f.repeats,
       choices: c.choices !== undefined ? c.choices : f.choices,
+      allow_not_done: c.allow_not_done ?? f.allow_not_done,
+      allow_not_applicable: c.allow_not_applicable ?? f.allow_not_applicable,
+      allow_unknown: c.allow_unknown ?? f.allow_unknown,
     };
   };
 
@@ -397,6 +404,7 @@ export default function Review() {
                           : undefined}
                         onHistory={() => showHistory(f)}
                         library={library}
+                        labRanges={labRanges}
                         flash={flash[k] ?? null}
                         moved={!!moved[k]}
                       />
