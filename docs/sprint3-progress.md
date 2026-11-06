@@ -197,3 +197,18 @@ Browser checks added at this stage, for what the Stage 6 walk had not clicked, a
 - The admin locked the study from the chain tab.
 
 Migration on a copy of the real `backend/ecrf.db`: revision 0009 to 0015, with 14 protocols, 58 form versions, 2,246 values, 8 subjects and 7 queries all kept. The 4 accounts on the old `sponsor` role became data managers. The original file was left unchanged.
+
+## Fixes against the client documents
+
+From `SPRINT3-FIXES.md`. It says the five documents are in `docs/client/`. They are not: the roles, edit check and SAP documents are in the repo root (git-ignored), the dashboards document is in Downloads, and the completion guidelines are on the Desktop. They were read from there.
+
+### Fix 1. demo.sh starts again: done
+
+- `demo.sh` on a stale or deleted `demo.db` reaches a login page listing the nine accounts: done. Ran the real script on copies of both database files, with `DEMO_PORT` and a new `DEMO_DB_DIR` pointing elsewhere, and read the login page in a browser. The real `demo.db` was not touched, because the running server on port 8000 is using it.
+- Builds a locked protocol with subjects: done. `test_demo_seed_builds_a_locked_protocol_with_subjects`, `test_demo_db_is_rebuilt_only_when_behind`, `scripts/build_demo_db.py`. Result: PHX-401-201 locked, BGH and MRC with 10 subjects each, 731 values all submitted.
+
+Choices to confirm:
+
+- Each `start` still copies `clean.db` to `demo.db`, so every retake starts fresh, as it did before. `clean.db` is rebuilt only when the schema is behind. The old files move to `db/stale-<date>`, so the midterm `demo.db` is kept, not deleted.
+- The demo database is built with the mock extractor. The server still follows `.env`, so with a paid model set, extracting an uploaded PDF is still a live paid call, as it was for the recording. `ECRF_BACKEND=mock ./demo.sh start` avoids that.
+- `demo.sh` was untracked. It is committed on its own, without the rest of `midterm-assets/`.
