@@ -48,6 +48,21 @@ LLM_API_KEY=sk-...          # your key, never commit this file
 `.env` is git-ignored. Any OpenAI-compatible endpoint works (Groq, Gemini,
 a local vLLM); the commented blocks in `.env.example` show the settings.
 
+To see a run's cost, also set `LLM_PRICE_INPUT_PER_M`, `LLM_PRICE_CACHED_PER_M` and
+`LLM_PRICE_OUTPUT_PER_M`. Without them the cost shows "not configured" rather than a
+guess. An older `.env` using `PRICE_*` names needs renaming.
+
+Other settings, all optional and commented in `.env.example`:
+
+| Setting | Default | Does |
+|---|---|---|
+| `EXTRACT_STRATEGY` | `per_visit` | One model call per visit, or `per_form` |
+| `QUOTE_MATCH_THRESHOLD` | `90` | How close a quote must be. A placeholder, not yet tuned |
+| `SESSION_HOURS` | `12` | How long a login lasts |
+| `DEMO_PASSWORD` | `demo1234` | Password for the demo accounts |
+| `ECRF_ENV` | `dev` | `prod` turns off `/docs`, forces secure cookies and needs a private `SECRET_KEY` |
+| `SEED_DEMO` | off | In `prod`, `1` creates the demo accounts |
+
 ## 4. Run
 
 ```bash
@@ -81,11 +96,12 @@ All demo accounts use the password `demo1234`.
 | `crc@mrc.demo` | Mercy Hospital (site) | site coordinator |
 
 In development the login page lists these. A production build does not.
-Who can do what is in `docs/roles-and-permissions.md` once Stage 8 writes it, and in `backend/ecrf/auth/permissions.py` today.
+Who can do what is in `docs/roles-and-permissions.md`.
 
 Sponsors upload protocols, review and lock forms, assign sites, approve
 data and see statistics. Sites see only locked forms they are assigned
-to, register patients and enter data. Either side can raise queries.
+to, register patients, enter data and sign off visits. Either side can
+raise queries.
 
 ## 6. Walk through
 
@@ -96,21 +112,42 @@ to, register patients and enter data. Either side can raise queries.
    shown on each run. Re-running the same protocol is free; answers are
    cached.
 3. **Review**: every field quotes the protocol, and quotes that are not
-   found were already deleted. Filter by status or source, edit a field,
-   accept the library suggestions, approve the rest. Lock when nothing is
-   left undecided.
-4. **Sites**: assign Boston General.
-5. As `crc@bgh.demo`: open the study, register a patient, enter data.
-   Out-of-range values are refused; BMI, eGFR and similar are computed
-   from the inputs.
-6. As `dm@phoenix.demo`: **Data review** shows the entered values.
-   Raise a query, approve a value. **Dashboard** counts approved values
-   only, next to an independent recomputation.
+   found were already deleted. Each protocol also gets a Foundation form and a
+   visit date on every visit. Filter by status or source, edit a field, accept
+   the library suggestions, approve the rest. **Edit checks** lists the checks.
+4. As `dm@phoenix.demo`: **Review**, then **Lock form**. **Sites**: assign Boston General.
+5. As `crc@bgh.demo`: open the study, register a patient, enter data. Values save
+   as you go. A value out of range saves with a note and raises a query on submit;
+   only a wrong format is refused. BMI, age and similar are computed from the
+   inputs. **Submit visit** when done.
+6. As `dm@phoenix.demo`: **Queries** has tabs by status and filters by site, visit,
+   who raised it and check. Close what the checks raised. **Data review**: approve
+   the values.
+7. As `pi@bgh.demo`: **Notifications** says what is ready. Open the patient's visit
+   and use **Sign off this visit**, which asks for your password again.
+8. As `dm@phoenix.demo`: **Data review** lists whatever blocks **Lock study**.
+   Once it is clear, lock the study. No data on it can change after that.
+
+To see statistics, as `dm@phoenix.demo`:
+
+1. **Dashboard**, **Results**, **Seed 20 synthetic subjects**, then approve the values on
+   **Data review**.
+2. **Analysis plan**: add a row, such as Systolic Blood Pressure, Day 1 to Week 12.
+3. **Dashboard** has three tabs. **Queries 360** shows where queries stand, by week and
+   site. **Page status** shows how far each subject has got, per site. **Results**
+   shows each number next to an independent recalculation.
+
+Also there: **Data listing** shows one form's values across subjects, with CSV export.
+**Blank eCRF PDF** is on the Dashboard, and each subject has a **Casebook** PDF.
+To require monitor review, as `admin@phoenix.demo` open **Admin**, **Approval chain**,
+then as `cra@phoenix.demo` use **Data review** to mark visits reviewed.
+
+Site staff have a short guide in `docs/ecrf-completion-guidelines.md`.
 
 ## 7. Tests
 
 ```bash
-./run.sh test          # backend, 143 tests, uses a temporary database
+./run.sh test          # backend, 280 tests, 1 skipped, uses a temporary database
 cd frontend && npm run build && npm run lint
 ```
 
@@ -125,8 +162,10 @@ ecrf-prototype/
     migrations/        Alembic; run.sh applies them
     tests/             pytest
     scripts/           seed_demo.py, fetch_ctgov_protocol.py
+    verification/      independent statistics; imports nothing from ecrf/
     ecrf.db            SQLite database, created on first run
   frontend/            React + TypeScript + Vite
+docs/                  roles, edit checks, analysis plan, database schema, sprint report
 test_protocols/        public protocols from ClinicalTrials.gov, with a README of results
 ```
 
@@ -143,5 +182,9 @@ test_protocols/        public protocols from ClinicalTrials.gov, with a README o
   protocol (`test_protocol2.pdf`, 6 pages).
 - **Port in use**: stop whatever is on 8000 or 5173, or edit the ports in
   `run.sh` and `frontend/vite.config.ts`.
-- **Postgres instead of SQLite**: set `DATABASE_URL=postgresql+psycopg://...`
-  in `.env`; the migrations run the same way.
+- **Postgres**: not supported yet. The independent statistics read SQLite only, so
+  the dashboard's Results would fail, and hosting work was deferred before this was
+  tested.
+- **The backend refuses to start after pulling new code** on a database copied from
+  somewhere else: it is behind the migrations. `./run.sh` migrates `backend/ecrf.db`,
+  including moving old roles to the eight current ones. Back it up first if it matters.

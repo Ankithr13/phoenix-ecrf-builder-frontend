@@ -6,9 +6,10 @@ A clinical trial protocol PDF goes in. Draft electronic case report forms
 come out, one per study visit, with every field carrying the verbatim
 sentence from the protocol that requires it. Code (not a model) then
 searches the protocol for that sentence and deletes any field whose quote
-cannot be found. A reviewer approves, synthetic data is entered through the
-approved forms, and a dashboard reports statistics that a separate script
-has independently recomputed.
+cannot be found. A reviewer approves and the form is locked. Sites enter
+synthetic data through it, edit checks raise queries, and values move through
+review, approval and investigator sign-off to a study lock. A dashboard reports
+statistics that a separate script has independently recomputed.
 
 ![pipeline](docs/pipeline.png)
 
@@ -26,17 +27,14 @@ cp .env.example .env     # defaults to the offline mock backend, no key needed
 ./run.sh                 # backend on :8000, frontend on :5173
 ```
 
-Open <http://localhost:5173>, click **Load sample protocol**, then
-**Extract**.
+Open <http://localhost:5173>, sign in as `builder@phoenix.demo` with password
+`demo1234`, click **Load sample**, then **Extract**. `instructions.md` walks through
+every role and page.
 
 ```bash
-./run.sh test            # backend tests, expect 3 passed
+./run.sh test            # backend tests, against a temporary database
 ./run.sh backend         # backend only
 ```
-
-Stop the backend before running the tests. They delete `backend/ecrf.db`,
-and a running server keeps a handle on the old file, after which every
-write fails with "attempt to write a readonly database".
 
 ## Using a real model
 
@@ -48,7 +46,7 @@ real model is needed for real protocols. In `.env`:
 ECRF_BACKEND=openai_compat
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_API_KEY=sk-...
-LLM_MODEL=gpt-5.1
+LLM_MODEL=gpt-6-luna
 ```
 
 Any provider speaking the OpenAI chat format works. `.env.example` has
@@ -71,17 +69,32 @@ ecrf-prototype/
       extract/       the model adapter; mock and OpenAI-compatible
       verify.py      the grounding check that deletes ungrounded fields
       cdash.py       attaches standard codes from the CDASH library
+      checks/        edit check engine and the built-in checks
+      auth/          roles, permissions and row scope
       stats/         the fixed registry of approved calculations
+      pdf.py         the blank eCRF and the subject casebook
+      notify.py      in-app notifications
       api/           FastAPI routes
     verification/    independent statistics. Imports nothing from ecrf/
     data/            CDASH library, sample protocol, recorded fixture
     tests/
   frontend/
     src/api/         types.ts mirrors the backend schema
-    src/pages/       Protocols, Review, DataEntry, Dashboard
+    src/pages/       one file per page
 test_protocols/      two real protocols from ClinicalTrials.gov
+docs/                roles, edit checks, analysis plan, database schema, sprint report
 BUILD.md             the full original specification
 ```
+
+## More documents
+
+- [instructions.md](instructions.md): running it and a walk through every role
+- [docs/roles-and-permissions.md](docs/roles-and-permissions.md): who can do what, and the approval chain
+- [docs/edit-checks.md](docs/edit-checks.md): the checks and how to add one
+- [docs/sap-mapping.md](docs/sap-mapping.md): the analysis plan page and exactly which statistics exist
+- [docs/ecrf-completion-guidelines.md](docs/ecrf-completion-guidelines.md): a draft guide for site staff
+- [docs/db-schema.md](docs/db-schema.md): every table and column
+- [docs/sprint3-report.md](docs/sprint3-report.md): what Sprint 3 built, and what is not verified
 
 ## Continuous integration
 
@@ -154,5 +167,9 @@ three things that decide whether a protocol can be processed.
 - Models did not reliably flag a contradiction planted in the sample
   protocol. Treat "refuses to invent fields" as demonstrated and "catches
   contradictions" as not yet demonstrated.
-- There is no login. The reviewer identity is a hardcoded placeholder.
 - Scanned PDFs are refused rather than read.
+- It runs locally on SQLite. Hosting and Postgres are deferred, and the independent
+  statistics read SQLite only.
+- Statistics are pooled. There are no treatment arms or analysis populations.
+- Investigator sign-off is a recorded action. Nothing here claims compliance with any
+  regulation on electronic records or signatures.

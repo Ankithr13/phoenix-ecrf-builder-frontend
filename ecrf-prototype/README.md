@@ -4,17 +4,19 @@ BU Spark! Fall 2026 · DS519 · Client: Phoenix Clinical
 
 A clinical trial protocol goes in. Draft electronic case report forms come
 out, every generated field carrying a verbatim protocol quote that the code
-verifies before a human sees it. A reviewer approves, synthetic data is
-entered through the approved forms, and a dashboard reports statistics that
-have been independently recomputed.
+verifies before a human sees it. A reviewer approves and the form is locked.
+Sites enter synthetic data, edit checks raise queries, and values move through
+review, approval and sign-off to a study lock. A dashboard reports statistics
+that have been independently recomputed.
 
 ```
 ./run.sh          # backend on :8000, frontend on :5173, no API key needed
 ./run.sh test     # backend tests
 ```
 
-Then open http://localhost:5173, click **Load sample protocol**, then
-**Extract**.
+Then open http://localhost:5173, sign in as `builder@phoenix.demo` with password
+`demo1234`, click **Load sample**, then **Extract**. `../instructions.md` walks through
+every role and page.
 
 ## What runs where
 
@@ -37,11 +39,17 @@ protocol.pdf
  4 REVIEW        approve, edit, append a version  backend/ecrf/api/protocols.py
    ▼
  5 DATA ENTRY    validated against approved defs  backend/ecrf/api/data.py
+                 edit checks raise queries        backend/ecrf/checks/
    ▼
- 6 STATS         fixed registry, refuse the rest  backend/ecrf/stats/
+ 6 THE CHAIN     monitor review, approval,        backend/ecrf/api/chain.py
+                 sign-off, study lock             backend/ecrf/api/queries.py
+   ▼
+ 7 STATS         analysis plan picks the fields   backend/ecrf/api/sap.py
+                 fixed registry, refuse the rest  backend/ecrf/stats/
                  independent recomputation        backend/verification/
    ▼
- dashboard                                        frontend/src/pages/Dashboard.tsx
+ dashboard, listing, PDFs                         frontend/src/pages/Dashboard.tsx
+                                                  backend/ecrf/api/reports.py
 ```
 
 ## Model backends
@@ -77,8 +85,9 @@ frontend/
   src/api/         types.ts mirrors the backend schema; client.ts owns URLs
   src/styles/      tokens.css is the only place colours and type are defined
   src/components/  Layout, Badge, FieldCard, Stat, charts/
-  src/pages/       Login, Protocols, Visits, Review, Sites, DataReview, Dashboard,
-                   Queries, Studies, Patients, DataEntry, Glossary
+  src/pages/       Login, ChangePassword, Admin, Protocols, Visits, Review, Checks,
+                   Sites, DataReview, Sap, Dashboard, Listing, Queries, Notifications,
+                   Studies, Patients, DataEntry, Glossary
   public/logo.svg  REPLACE with the Phoenix Clinical logo
 ```
 
