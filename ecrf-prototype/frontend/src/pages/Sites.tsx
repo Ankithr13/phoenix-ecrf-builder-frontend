@@ -67,13 +67,13 @@ export default function Sites() {
           <div className="section-title">Assigned sites</div>
           <p className="muted small mb-3">
             An assigned site sees this study in its portal and can add its own patients and enter their data.
-            {!can("site.assign") && " Only sponsor accounts can change assignments."}
+            {!can("sites.assign") && " Only a data manager or an admin can change assignments."}
           </p>
           {sites.map((s) => (
             <label className="check site-row" key={s.org_id}>
               <input
                 type="checkbox" checked={s.assigned}
-                disabled={!can("site.assign") || busy !== null}
+                disabled={!can("sites.assign") || busy !== null}
                 onChange={() => toggle(s)}
               />
               <span className="mono">{s.code}</span>

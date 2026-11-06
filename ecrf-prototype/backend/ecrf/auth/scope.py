@@ -1,7 +1,8 @@
 """What a signed-in user may see. Every list and every lookup goes through
 here, so the rule lives in one place:
 
-  sponsor   protocols that belong to its organisation; every site's data
+  sponsor   protocols that belong to its organisation; every site's data,
+            except a monitor, who sees only the sites assigned to them
   site      protocols assigned to it whose form is locked; its own
             subjects and their data only
 
@@ -37,8 +38,8 @@ def protocol_or_404(s: Session, cu: CurrentUser, protocol_id: int) -> Protocol:
 
 def visible_subjects(cu: CurrentUser, protocol_id: int) -> Select:
     q = select(Subject).where(Subject.protocol_id == protocol_id)
-    if cu.org.type == "site":
-        q = q.where(Subject.site_org_id == cu.org.id)
+    if cu.site_ids is not None:
+        q = q.where(Subject.site_org_id.in_(cu.site_ids))
     return q
 
 
@@ -51,6 +52,17 @@ def subject_or_404(s: Session, cu: CurrentUser, protocol_id: int, code: str) -> 
 
 def visible_observations(cu: CurrentUser, protocol_id: int) -> Select:
     q = select(Observation).where(Observation.protocol_id == protocol_id)
-    if cu.org.type == "site":
-        q = q.join(Subject, Subject.id == Observation.subject_ref).where(Subject.site_org_id == cu.org.id)
+    if cu.site_ids is not None:
+        q = q.join(Subject, Subject.id == Observation.subject_ref).where(Subject.site_org_id.in_(cu.site_ids))
     return q
+
+
+def require_sponsor_side(cu: CurrentUser) -> None:
+    """Screens that describe the whole study, not one site's part of it."""
+    if cu.org.type != "sponsor":
+        raise HTTPException(403, f"Your role ({cu.role}) cannot do this")
+
+
+def require_site_side(cu: CurrentUser) -> None:
+    if cu.org.type != "site":
+        raise HTTPException(403, f"Your role ({cu.role}) cannot do this")

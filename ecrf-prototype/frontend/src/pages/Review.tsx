@@ -188,7 +188,7 @@ export default function Review() {
               <> · {s.llm_calls_made} call{s.llm_calls_made === 1 ? "" : "s"}{s.llm_calls_from_cache ? ` + ${s.llm_calls_from_cache} cached` : ""} · {costText(s.est_cost_usd)}{s.strategy ? ` · ${s.strategy}` : ""}</>
             )}
           </div>
-          {!locked && can("form.lock") && (
+          {!locked && can("protocol.lock") && (
             <div className="row">
               {left > 0 && (
                 <span className="small muted">
@@ -209,7 +209,7 @@ export default function Review() {
         </div>
       </div>
 
-      {!locked && can("form.lock") && (resp.lock_warnings ?? []).length > 0 && (
+      {!locked && can("protocol.lock") && (resp.lock_warnings ?? []).length > 0 && (
         <div className="card warn-card">
           <p className="strong">Before you lock</p>
           <p className="muted small">These will not stop the lock, but a site will run into them. Edit the field, or lock anyway if it is deliberate.</p>
@@ -329,7 +329,7 @@ export default function Review() {
                 field={f}
                 onChange={(c) => onChange(form.visit, original, c)}
                 onShowSection={showSection}
-                readOnly={locked}
+                readOnly={locked || !can("form.edit")}
               />
             ))}
 

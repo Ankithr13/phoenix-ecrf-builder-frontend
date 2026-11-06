@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ecrf.auth import scope
-from ecrf.auth.permissions import CurrentUser, require
+from ecrf.auth.permissions import DATA_READERS, CurrentUser, require
 from ecrf.storage import db
 from ecrf.storage.models import Observation, Organisation, Subject
 
@@ -19,8 +19,9 @@ router = APIRouter(prefix="/api/studies", tags=["studies"])
 
 
 @router.get("")
-def list_studies(cu: CurrentUser = Depends(require("study.view")),
+def list_studies(cu: CurrentUser = Depends(require("protocol.view")),
                  s: Session = Depends(db.get_session)):
+    scope.require_site_side(cu)
     out = []
     for p in s.scalars(scope.visible_protocols(cu)).all():
         v = db.locked_version(s, p.id)
@@ -82,7 +83,7 @@ def _clean(body: SubjectCreate) -> dict:
 
 
 @router.get("/{protocol_id}/subjects")
-def list_subjects(protocol_id: int, cu: CurrentUser = Depends(require("study.view", "data.view")),
+def list_subjects(protocol_id: int, cu: CurrentUser = Depends(require(*DATA_READERS)),
                   s: Session = Depends(db.get_session)):
     scope.protocol_or_404(s, cu, protocol_id)
     rows = s.scalars(scope.visible_subjects(cu, protocol_id).order_by(Subject.code)).all()

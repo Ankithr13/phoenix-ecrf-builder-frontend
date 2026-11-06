@@ -3,7 +3,7 @@ conftest.py sets the backend and a temporary database before this imports."""
 
 import os
 
-from conftest import BUILDER, login
+from conftest import APPROVER, BUILDER, login
 
 from ecrf.ingest import load
 from ecrf.verify import locate
@@ -54,8 +54,9 @@ def test_full_flow(client, demo_accounts):
         assert r.status_code == 403
 
         # Seeding needs a locked form, and seeded rows wait for approval.
-        assert c.post(f"/api/data/seed/{pid}").status_code == 409
         assert c.post(f"/api/protocols/{pid}/review", json={"changes": [], "action": "approve_all_remaining"}).status_code == 200
+        login(c, APPROVER)
+        assert c.post(f"/api/data/seed/{pid}").status_code == 409
         assert c.post(f"/api/protocols/{pid}/lock").status_code == 200
         assert c.post(f"/api/data/seed/{pid}").json()["seeded"] > 0
         assert c.get(f"/api/dashboard/{pid}").json()["data"]["readings"] == 0
@@ -65,4 +66,4 @@ def test_full_flow(client, demo_accounts):
         assert dash["stats"] and all(s["pass"] for s in dash["stats"]), "app and independent results must agree"
 
         r = c.post(f"/api/dashboard/{pid}/unsupported?name=breakdown_by_age")
-        assert r.status_code == 403
+        assert r.status_code == 403 and "not an approved calculation" in r.json()["detail"]

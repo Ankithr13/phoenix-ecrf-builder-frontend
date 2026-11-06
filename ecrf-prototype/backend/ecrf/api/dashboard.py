@@ -63,12 +63,12 @@ def _status(a, b) -> str:
 
 
 @router.get("/calculations")
-def calculations(cu: CurrentUser = Depends(require("stats.view"))):
+def calculations(cu: CurrentUser = Depends(require("dashboard.view"))):
     return registry.available()
 
 
 @router.get("/{protocol_id}")
-def dashboard(protocol_id: int, cu: CurrentUser = Depends(require("stats.view")),
+def dashboard(protocol_id: int, cu: CurrentUser = Depends(require("dashboard.view")),
               s: Session = Depends(db.get_session)):
     p = scope.protocol_or_404(s, cu, protocol_id)
 
@@ -88,7 +88,9 @@ def dashboard(protocol_id: int, cu: CurrentUser = Depends(require("stats.view"))
     # --- statistics over observation data ---
     df = registry.load_frame(s, protocol_id)
     stats = []
-    if not df.empty:
+    # Statistics describe the whole study, and a person scoped to some sites
+    # may not see those numbers. Stage 7 gives them per-site results.
+    if not df.empty and cu.site_ids is None:
         for name, meta in registry.CALCULATIONS.items():
             app_val = registry.run(name, df)
             ind_fn = getattr(independent, {"mean_change_systolic": "mean_change_systolic",
@@ -105,8 +107,14 @@ def dashboard(protocol_id: int, cu: CurrentUser = Depends(require("stats.view"))
         readings = len(df)
     else:
         subjects, readings = 0, 0
-    entered_total = s.scalar(select(func.count(Observation.id))
-                             .where(Observation.protocol_id == protocol_id)) or 0
+    if cu.site_ids is not None:
+        scoped = s.scalars(scope.visible_observations(cu, protocol_id)).all()
+        subjects = len({o.subject_id for o in scoped if o.status == "approved"})
+        readings = sum(1 for o in scoped if o.status == "approved")
+        entered_total = len(scoped)
+    else:
+        entered_total = s.scalar(select(func.count(Observation.id))
+                                 .where(Observation.protocol_id == protocol_id)) or 0
 
     return {"protocol": {"id": p.id, "name": p.name}, "extraction": extraction,
             "data": {"subjects": subjects, "readings": readings, "entered_total": entered_total},
@@ -114,7 +122,7 @@ def dashboard(protocol_id: int, cu: CurrentUser = Depends(require("stats.view"))
 
 
 @router.post("/{protocol_id}/unsupported")
-def unsupported(protocol_id: int, name: str, cu: CurrentUser = Depends(require("stats.view")),
+def unsupported(protocol_id: int, name: str, cu: CurrentUser = Depends(require("sap.edit")),
                 s: Session = Depends(db.get_session)):
     """Exists only to demonstrate the refusal. Anything not in the registry
     is refused, never approximated. A registered name is not what this route

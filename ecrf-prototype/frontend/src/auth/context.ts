@@ -7,6 +7,7 @@ export interface Auth {
   can: (perm: string) => boolean;
   signIn: (email: string, password: string) => Promise<Me>;
   signOut: () => Promise<void>;
+  changePassword: (current: string, next: string) => Promise<Me>;
 }
 
 export const AuthContext = createContext<Auth | null>(null);

@@ -3,6 +3,8 @@ import AuthProvider from "./auth/AuthProvider";
 import { useAuth } from "./auth/useAuth";
 import type { OrgType } from "./api/types";
 import Layout from "./components/Layout";
+import Admin from "./pages/Admin";
+import ChangePassword from "./pages/ChangePassword";
 import Dashboard from "./pages/Dashboard";
 import DataEntry from "./pages/DataEntry";
 import DataReview from "./pages/DataReview";
@@ -25,11 +27,15 @@ function RequireAuth() {
   const { pathname, search } = useLocation();
   if (loading) return null;
   if (!me) return <Navigate to={`/login?next=${encodeURIComponent(pathname + search)}`} replace />;
+  // A temporary password reaches nothing else until it is changed.
+  if (me.must_change_password) return <Navigate to="/change-password" replace />;
   return <Outlet />;
 }
 
-/* Each portal belongs to one organisation type. Opening the other one
-   sends you to your own home instead of showing an empty page. */
+/* Each portal belongs to one side: the sponsor roles or the site roles. Which
+   items a person sees inside it comes from their permissions, in Layout.
+   Opening the other portal sends you to your own home instead of showing an
+   empty page. */
 function Portal({ type }: { type: OrgType }) {
   const { me } = useAuth();
   if (me && me.org.type !== type) return <Navigate to={HOME[me.org.type]} replace />;
@@ -38,6 +44,7 @@ function Portal({ type }: { type: OrgType }) {
 
 function Home() {
   const { me } = useAuth();
+  if (me?.role === "admin") return <Navigate to="/admin" replace />;
   return <Navigate to={me ? HOME[me.org.type] : "/login"} replace />;
 }
 
@@ -52,9 +59,11 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/change-password" element={<ChangePassword />} />
         <Route element={<RequireAuth />}>
           <Route path="/" element={<Home />} />
           <Route path="/glossary" element={<Layout><Glossary /></Layout>} />
+          <Route path="/admin" element={<Layout><Admin /></Layout>} />
 
           <Route element={<Portal type="sponsor" />}>
             <Route path="/sponsor" element={<Protocols />} />

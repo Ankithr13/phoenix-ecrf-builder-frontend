@@ -60,16 +60,18 @@ export default function Protocols() {
             </>
           )}
         </div>
-        <p className="muted small mt-3">
-          Public protocols: run <span className="mono">backend/scripts/fetch_ctgov_protocol.py</span>
-        </p>
+        {can("protocol.upload") && (
+          <p className="muted small mt-3">
+            Public protocols: run <span className="mono">backend/scripts/fetch_ctgov_protocol.py</span>
+          </p>
+        )}
       </div>
       {error && <p className="error mt-3">{error}</p>}
 
       <div className="mt-5 stack">
         {loading && <p className="muted">Loading…</p>}
         {!loading && items.length === 0 && (
-          <div className="empty">No protocols yet. Load the sample or upload a PDF.</div>
+          <div className="empty">No protocols yet.{can("protocol.upload") ? " Load the sample or upload a PDF." : ""}</div>
         )}
         {items.map((p) => (
           <div className="card card-hover" key={p.id} style={{ marginTop: 0 }}>
@@ -104,8 +106,8 @@ export default function Protocols() {
                   )}
                   <span className="pill">v{p.latest_version}</span>
                   <Link className="btn btn-secondary btn-sm" to={`/sponsor/p/${p.id}/review`}>Review</Link>
-                  <Link className="btn btn-secondary btn-sm" to={`/sponsor/p/${p.id}/data`}>Data</Link>
-                  <Link className="btn btn-secondary btn-sm" to={`/sponsor/p/${p.id}/dashboard`}>Dashboard</Link>
+                  {can("listing.view") && <Link className="btn btn-secondary btn-sm" to={`/sponsor/p/${p.id}/data`}>Data</Link>}
+                  {can("dashboard.view") && <Link className="btn btn-secondary btn-sm" to={`/sponsor/p/${p.id}/dashboard`}>Dashboard</Link>}
                 </div>
               )}
             </div>

@@ -2,7 +2,7 @@
 
 Stage 1. Fixes from the audit: done
 Stage 2. Put it online: skipped (by Tarushi, to test locally first; all of its work was removed)
-Stage 3. Roles, admin panel, approval chain: todo
+Stage 3. Roles, admin panel, approval chain: done
 Stage 4. Foundation form, field comments, form audit trail: todo
 Stage 5. Data entry rules and edit checks: todo
 Stage 6. Query lifecycle, notifications, investigator sign-off: todo
@@ -43,3 +43,29 @@ Choices to confirm:
 Skipped on request. The Dockerfile, Railway config, deploy notes, frontend serving, `PORT` and `CORS_ORIGINS` settings, health changes, Postgres test and the verifier's move to SQLAlchemy were all removed before being committed. Stage 1's `ECRF_ENV` and `SECRET_KEY` handling stays, because it is committed Stage 1 work.
 
 For when this comes back: running the migrations on real Postgres 16 found that a `%` in `DATABASE_URL`, such as a URL-encoded password, crashes `migrate.alembic_config` through configparser interpolation. The fix is to double the `%` before `set_main_option`.
+
+## Stage 3 acceptance
+
+Tests: 203 passed, was 159 at Stage 1 (Stage 2 tests were removed with the stage).
+
+1. Roles: done. `ecrf/auth/permissions.py`, `test_matrix` asserts every cell, `test_old_roles_migrate_to_new_roles`, migration `0011_eight_roles.py`
+2. Users and `user_access_event`: done. `test_admin_creates_user_and_access_event_is_written`, `test_admin_edits_role_and_monitor_sites`
+3. Admin panel: done. `frontend/src/pages/Admin.tsx`, `ecrf/api/admin.py`, `test_deactivated_user_cannot_log_in`, `test_approval_chain_switches`
+4. First login: done. `test_must_change_password_blocks_other_routes`, `pages/ChangePassword.tsx`, redirect in `App.tsx` `RequireAuth`
+5. Protocol chain config: done. `test_approval_chain_switches`. Enforced in Stages 5 and 6
+6. Portals: done. `components/Layout.tsx` filters by permission. Browser check as `auditor@phoenix.demo`: Review shows no Approve, Reject, Flag, Edit, Lock or Save button
+7. Demo accounts: done. `ecrf/auth/demo.py`, listed on the login page only under `import.meta.env.DEV`
+8. Glossary and instructions: done. `pages/Glossary.tsx` Roles section, `instructions.md`
+9. Other tests named in the stage: done. `test_monitor_sees_only_assigned_sites`, `test_read_only_has_no_write_route`, `test_site_data_entry_cannot_create_subject`, `test_builder_cannot_lock_and_dm_cannot_edit_form`
+10. Route walk: done. `test_every_router_route_declares_a_permission`. Every router route uses `require(perm)` except login and logout; `/me` and change-password need a signed-in user and nothing more. Health is on the app itself and open
+
+Browser check on a throwaway database: admin lands on `/admin`; a new user sees the temporary password once; signing in with it lands on `/change-password` and nothing else opens until it is changed.
+
+Choices to confirm:
+
+- The matrix gives sponsor roles no `query.answer`, but queries run both ways, so a site's question would have no one to reply. Whoever holds `query.close` may reply in words to a query a site raised.
+- The matrix has no permission for reading entered values row by row. `DATA_READERS` is `listing.view`, `data.enter` or `data.approve`, so the admin, builder and read-only roles see totals only.
+- Seeding, which is not in the matrix, needs `data.approve`.
+- The `unsupported` demonstration route needs `sap.edit`, so `read_only` gets 403 on every non-GET route as `test_read_only_has_no_write_route` requires.
+- The stage says the login page lists demo accounts in dev only. That brings back the list removed for the midterm video, so a recording made under `npm run dev` will show it.
+- Until Stage 7, site and monitor roles see scoped totals on the dashboard and no statistics, because the statistics describe the whole study.

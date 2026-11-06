@@ -43,7 +43,7 @@ export default function DataEntry() {
   const { id: idParam, subject: subjectParam } = useParams();
   const id = Number(idParam);
   const subject = subjectParam ?? "";
-  const { me } = useAuth();
+  const { me, can } = useAuth();
   const [resp, setResp] = useState<DraftResponse | null>(null);
   const [visit, setVisit] = useState("");
   const [values, setValues] = useState<Values>({});
@@ -342,7 +342,7 @@ export default function DataEntry() {
                   <td className="mono">{r.value ?? "—"}</td>
                   <td><span className={`pill ${r.status === "approved" ? "chip-teal" : r.status === "queried" ? "chip-amber" : ""}`}>{r.status}</span></td>
                   <td className="num">
-                    {r.status !== "queried" && (
+                    {r.status !== "queried" && can("query.raise") && (
                       <button type="button" className="btn-link" onClick={() => setAsking({ id: r.id, text: "" })}>Ask the sponsor</button>
                     )}
                   </td>

@@ -2,7 +2,7 @@
    else. Vite proxies /api to the backend in dev, so the session cookie is
    same-origin and travels with every request. */
 
-import type { NewQuery, SubjectCreate,
+import type { AccessEvent, AdminOrg, AdminUser, ChainRow, NewQuery, Role, SubjectCreate,
   DashboardResponse, DataRow, DraftResponse, FieldChange, Health, Me, Plan,
   ProtocolListItem, QueryRow, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
 } from "./types";
@@ -46,6 +46,26 @@ export const api = {
   me: () => req<Me>("/api/auth/me", {}, { allow401: true }),
   login: (email: string, password: string) => req<Me>("/api/auth/login", post({ email, password }), { allow401: true }),
   logout: () => req<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+  changePassword: (current_password: string, new_password: string) =>
+    req<Me>("/api/auth/change-password", post({ current_password, new_password })),
+
+  adminOrgs: () => req<AdminOrg[]>("/api/admin/orgs"),
+  adminUsers: (filters: { org_id?: string; role?: string; active?: string } = {}) => {
+    const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => !!v) as [string, string][]);
+    return req<AdminUser[]>(`/api/admin/users${q.toString() ? `?${q}` : ""}`);
+  },
+  adminCreateUser: (body: { email: string; name: string; org_id: number; role: Role; monitor_site_ids: number[] }) =>
+    req<{ user: AdminUser; temporary_password: string }>("/api/admin/users", post(body)),
+  adminEditUser: (id: number, body: { role?: Role; org_id?: number; monitor_site_ids?: number[] }) =>
+    req<AdminUser>(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  adminDeactivate: (id: number) => req<AdminUser>(`/api/admin/users/${id}/deactivate`, { method: "POST" }),
+  adminReactivate: (id: number) => req<AdminUser>(`/api/admin/users/${id}/reactivate`, { method: "POST" }),
+  adminResetPassword: (id: number) =>
+    req<{ user: AdminUser; temporary_password: string }>(`/api/admin/users/${id}/reset-password`, { method: "POST" }),
+  adminAccessLog: () => req<AccessEvent[]>("/api/admin/access-log"),
+  adminChain: () => req<ChainRow[]>("/api/admin/chain"),
+  adminSetChain: (id: number, body: Partial<ChainRow>) =>
+    req<ChainRow>(`/api/admin/chain/${id}`, { method: "PUT", body: JSON.stringify(body) }),
 
   listProtocols: () => req<ProtocolListItem[]>("/api/protocols"),
   loadSample: () => req<{ id: number; name: string }>("/api/protocols/sample", { method: "POST" }),

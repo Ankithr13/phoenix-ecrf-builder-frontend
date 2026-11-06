@@ -22,12 +22,10 @@ from ecrf.storage import db, migrate  # noqa: E402
 from ecrf.storage.models import Base  # noqa: E402
 
 PASSWORD = "demo1234"
-# Two sponsor accounts with the same role. The old names are kept as
-# aliases so the tests read as "the person who built it" and "the person
-# who signed it off", which is still the story even though either could do both.
-SPONSOR, SPONSOR2 = "dana@phoenix.demo", "alex@phoenix.demo"
-BUILDER, APPROVER, BGH, MRC = (SPONSOR, SPONSOR2,
-                               "staff@bgh.demo", "staff@mrc.demo")
+# One account per role, named for what each does in a test.
+ADMIN, BUILDER, APPROVER, MONITOR, AUDITOR = (
+    "admin@phoenix.demo", "builder@phoenix.demo", "dm@phoenix.demo", "cra@phoenix.demo", "auditor@phoenix.demo")
+PI, BGH, ENTRY, MRC = "pi@bgh.demo", "crc@bgh.demo", "entry@bgh.demo", "crc@mrc.demo"
 
 
 @pytest.fixture(scope="session", autouse=True)

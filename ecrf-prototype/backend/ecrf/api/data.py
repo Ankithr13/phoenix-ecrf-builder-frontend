@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from ecrf import derive
 from ecrf.auth import scope
-from ecrf.auth.permissions import CurrentUser, require
+from ecrf.auth.permissions import DATA_READERS, CurrentUser, require
 from ecrf.schema import DraftECRF, FieldDef
 from ecrf.stats import seed as seed_mod
 from ecrf.storage import db
@@ -275,7 +275,7 @@ def enter(body: EntryRequest, cu: CurrentUser = Depends(require("data.enter")),
 
 
 @router.post("/seed/{protocol_id}")
-def seed(protocol_id: int, cu: CurrentUser = Depends(require("data.seed")),
+def seed(protocol_id: int, cu: CurrentUser = Depends(require("data.approve")),
          s: Session = Depends(db.get_session)):
     """Load synthetic observations for the dashboard demo, spread across
     the site organisations, all of them awaiting the sponsor's approval."""
@@ -296,7 +296,7 @@ def seed(protocol_id: int, cu: CurrentUser = Depends(require("data.seed")),
 
 
 @router.get("/{protocol_id}/subjects")
-def subjects(protocol_id: int, cu: CurrentUser = Depends(require("data.view")),
+def subjects(protocol_id: int, cu: CurrentUser = Depends(require(*DATA_READERS)),
              s: Session = Depends(db.get_session)):
     scope.protocol_or_404(s, cu, protocol_id)
     rows = s.execute(
@@ -329,7 +329,7 @@ def _row(s: Session, o: Observation, sites: dict[int, Organisation]) -> dict:
 
 @review_router.get("/{protocol_id}/data")
 def list_data(protocol_id: int, site: str | None = None, visit: str | None = None,
-              status: str | None = None, cu: CurrentUser = Depends(require("data.view")),
+              status: str | None = None, cu: CurrentUser = Depends(require(*DATA_READERS)),
               s: Session = Depends(db.get_session)):
     scope.protocol_or_404(s, cu, protocol_id)
     q = scope.visible_observations(cu, protocol_id)
@@ -367,7 +367,7 @@ def approve_data(protocol_id: int, body: ApproveRequest,
 
 
 @review_router.get("/{protocol_id}/data/{observation_id}/history")
-def history(protocol_id: int, observation_id: int, cu: CurrentUser = Depends(require("data.view")),
+def history(protocol_id: int, observation_id: int, cu: CurrentUser = Depends(require(*DATA_READERS)),
             s: Session = Depends(db.get_session)):
     scope.protocol_or_404(s, cu, protocol_id)
     o = s.scalars(scope.visible_observations(cu, protocol_id).where(Observation.id == observation_id)).first()

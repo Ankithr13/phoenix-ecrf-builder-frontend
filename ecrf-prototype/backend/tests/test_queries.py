@@ -1,6 +1,6 @@
 """Stage 5: queries in both directions."""
 
-from conftest import BGH, BUILDER, MRC, fresh_client, login
+from conftest import BGH, BUILDER, MONITOR, MRC, fresh_client, login
 from sqlalchemy import select
 from test_lock_sites_data import entry, lock_and_assign, site_client, sponsor_draft
 
@@ -71,13 +71,18 @@ def test_queried_value_can_be_corrected_through_data_entry_too(client, demo_acco
     assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 135)).status_code == 200, "open query reopens it"
 
 
-def test_builder_can_raise_and_close_too(client, demo_accounts):
+def test_monitor_can_raise_and_close_too(client, demo_accounts):
     _, _, _, row = _setup()
+    monitor = fresh_client()
+    monitor.__enter__()
+    login(monitor, MONITOR)
+    q = monitor.post(f"/api/data/{row['id']}/queries", json={"text": "unit?"}).json()
+    assert monitor.post(f"/api/queries/{q['id']}/close").json()["status"] == "closed"
+    # The builder has no part in queries.
     builder = fresh_client()
     builder.__enter__()
     login(builder, BUILDER)
-    q = builder.post(f"/api/data/{row['id']}/queries", json={"text": "unit?"}).json()
-    assert builder.post(f"/api/queries/{q['id']}/close").json()["status"] == "closed"
+    assert builder.get("/api/queries").status_code == 403
 
 
 def test_site_raises_sponsor_answers_sponsor_closes(client, demo_accounts):

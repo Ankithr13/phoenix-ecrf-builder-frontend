@@ -46,7 +46,7 @@ export default function Dashboard() {
     finally { setSeeding(false); }
   };
 
-  const noData = can("data.seed")
+  const noData = can("data.approve")
     ? <button type="button" className="btn btn-secondary btn-sm" onClick={seed} disabled={seeding}>{seeding ? "Seeding…" : "Seed 20 synthetic subjects"}</button>
     : <p className="muted small">No data entered yet</p>;
 

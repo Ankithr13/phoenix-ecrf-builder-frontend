@@ -21,6 +21,7 @@ class SiteRef(BaseModel):
 @router.get("/{protocol_id}/sites")
 def list_sites(protocol_id: int, cu: CurrentUser = Depends(require("protocol.view")),
                s: Session = Depends(db.get_session)):
+    scope.require_sponsor_side(cu)
     scope.protocol_or_404(s, cu, protocol_id)
     assigned = {r.site_org_id for r in s.scalars(
         select(ProtocolSite).where(ProtocolSite.protocol_id == protocol_id))}
@@ -36,7 +37,7 @@ def _locked_or_409(s: Session, protocol_id: int) -> None:
 
 
 @router.post("/{protocol_id}/sites")
-def assign(protocol_id: int, body: SiteRef, cu: CurrentUser = Depends(require("site.assign")),
+def assign(protocol_id: int, body: SiteRef, cu: CurrentUser = Depends(require("sites.assign")),
            s: Session = Depends(db.get_session)):
     scope.protocol_or_404(s, cu, protocol_id)
     _locked_or_409(s, protocol_id)
@@ -52,7 +53,7 @@ def assign(protocol_id: int, body: SiteRef, cu: CurrentUser = Depends(require("s
 
 @router.delete("/{protocol_id}/sites/{site_org_id}")
 def unassign(protocol_id: int, site_org_id: int, force: bool = False,
-             cu: CurrentUser = Depends(require("site.assign")),
+             cu: CurrentUser = Depends(require("sites.assign")),
              s: Session = Depends(db.get_session)):
     """A site with patients or data loses sight of them when unassigned, so
     that takes force=true. The rows stay either way."""

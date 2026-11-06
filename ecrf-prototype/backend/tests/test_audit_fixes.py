@@ -5,7 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from conftest import BGH, BUILDER, login
+from conftest import APPROVER, BGH, BUILDER, login
 from sqlalchemy import inspect, select
 from test_cost import _run, fake_llm  # noqa: F401
 from test_lock_sites_data import _org_id, entry, lock_and_assign, site_client, sponsor_draft
@@ -168,7 +168,7 @@ def test_null_stat_on_the_dashboard_is_grey(client, demo_accounts):
 
 def test_seed_refuses_without_locked_form(client, demo_accounts):
     pid = sponsor_draft()
-    login(client, BUILDER)
+    login(client, APPROVER)
     assert client.post(f"/api/data/seed/{pid}").status_code == 409
 
 

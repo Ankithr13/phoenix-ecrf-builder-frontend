@@ -31,6 +31,21 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    title: "Roles",
+    terms: [
+      { word: "Admin", means: "Creates accounts, assigns roles and sites, and sets the approval chain switches on each protocol. Touches no clinical data." },
+      { word: "Database builder", means: "Uploads protocols, runs extraction, and edits and decides the fields on Review." },
+      { word: "Data manager", means: "Locks the form, assigns sites, approves entered values, raises and closes queries, and owns the statistical analysis plan." },
+      { word: "Monitor", means: "Reviews data for the sites assigned to them, and raises and closes queries there. Sees no other site." },
+      { word: "Investigator", means: "At a site. Enters data, answers queries, and is the only role that gives sign-off." },
+      { word: "Site coordinator", means: "At a site. Registers patients, enters data, raises and answers queries." },
+      { word: "Site data entry", means: "At a site. Enters data and answers queries. Cannot register patients." },
+      { word: "Read only", means: "Sees dashboards and reports for the study. No write button anywhere." },
+      { word: "Access log", means: "The record of who was given what and by whom. Rows are only ever added." },
+      { word: "Approval chain", means: "The fixed order: enter, submit, monitor review if required, data manager approval, investigator sign-off if required, study lock. An admin sets the two switches per protocol." },
+    ],
+  },
+  {
     title: "Filling what the protocol left out",
     terms: [
       { word: "Found in protocol", means: "Code searched the protocol text and found the unit or range stated somewhere else (eligibility criteria, a lab table). The sentence is in the note. This is the only label that clears a flag, and only when the unit was already known.",

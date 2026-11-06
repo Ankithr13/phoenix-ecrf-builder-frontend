@@ -70,10 +70,18 @@ All demo accounts use the password `demo1234`.
 
 | Account | Organisation | Role |
 |---|---|---|
-| `dana@phoenix.demo` | Phoenix Clinical (sponsor) | sponsor |
-| `alex@phoenix.demo` | Phoenix Clinical (sponsor) | sponsor |
-| `staff@bgh.demo` | Boston General (site) | site staff |
-| `staff@mrc.demo` | Mercy Hospital (site) | site staff |
+| `admin@phoenix.demo` | Phoenix Clinical (sponsor) | admin |
+| `builder@phoenix.demo` | Phoenix Clinical (sponsor) | database builder |
+| `dm@phoenix.demo` | Phoenix Clinical (sponsor) | data manager |
+| `cra@phoenix.demo` | Phoenix Clinical (sponsor) | monitor, Boston General only |
+| `auditor@phoenix.demo` | Phoenix Clinical (sponsor) | read only |
+| `pi@bgh.demo` | Boston General (site) | investigator |
+| `crc@bgh.demo` | Boston General (site) | site coordinator |
+| `entry@bgh.demo` | Boston General (site) | site data entry |
+| `crc@mrc.demo` | Mercy Hospital (site) | site coordinator |
+
+In development the login page lists these. A production build does not.
+Who can do what is in `docs/roles-and-permissions.md` once Stage 8 writes it, and in `backend/ecrf/auth/permissions.py` today.
 
 Sponsors upload protocols, review and lock forms, assign sites, approve
 data and see statistics. Sites see only locked forms they are assigned
@@ -81,7 +89,7 @@ to, register patients and enter data. Either side can raise queries.
 
 ## 6. Walk through
 
-1. As `dana@phoenix.demo`: **Upload** a protocol (try
+1. As `builder@phoenix.demo`: **Upload** a protocol (try
    `test_protocols/test_protocol6.pdf`, 31 pages) or click **Load sample**.
 2. **Extract**: the model proposes the visit list, you confirm it, then
    one call per visit produces the fields. The cost and token count are
@@ -92,10 +100,10 @@ to, register patients and enter data. Either side can raise queries.
    accept the library suggestions, approve the rest. Lock when nothing is
    left undecided.
 4. **Sites**: assign Boston General.
-5. As `staff@bgh.demo`: open the study, register a patient, enter data.
+5. As `crc@bgh.demo`: open the study, register a patient, enter data.
    Out-of-range values are refused; BMI, eGFR and similar are computed
    from the inputs.
-6. As `dana@phoenix.demo`: **Data review** shows the entered values.
+6. As `dm@phoenix.demo`: **Data review** shows the entered values.
    Raise a query, approve a value. **Dashboard** counts approved values
    only, next to an independent recomputation.
 

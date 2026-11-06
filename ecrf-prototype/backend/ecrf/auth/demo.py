@@ -6,24 +6,32 @@ from sqlalchemy.orm import Session
 
 from ecrf.auth.passwords import hash_password
 from ecrf.config import config
-from ecrf.storage.models import Organisation, User
+from ecrf.storage.models import MonitorSite, Organisation, User
 
 ORGS = [
     ("Phoenix Clinical Demo", "sponsor", "PHX"),
     ("Boston General Demo", "site", "BGH"),
     ("Mercy Hospital Demo", "site", "MRC"),
 ]
-# Two sponsor people with the same role, so versions and approvals can be
-# seen to come from different hands.
+# One person per role. The monitor is assigned Boston General only, so the
+# scoping is visible on a demo: Mercy's data is hidden from them.
 USERS = [
-    ("dana@phoenix.demo", "Dana Patel", "PHX", "sponsor"),
-    ("alex@phoenix.demo", "Alex Morgan", "PHX", "sponsor"),
-    ("staff@bgh.demo", "Sam Site", "BGH", "site_staff"),
-    ("staff@mrc.demo", "Morgan Site", "MRC", "site_staff"),
+    ("admin@phoenix.demo", "Priya Admin", "PHX", "admin"),
+    ("builder@phoenix.demo", "Ben Builder", "PHX", "builder"),
+    ("dm@phoenix.demo", "Dana Patel", "PHX", "data_manager"),
+    ("cra@phoenix.demo", "Casey Monitor", "PHX", "monitor"),
+    ("auditor@phoenix.demo", "Alex Auditor", "PHX", "read_only"),
+    ("pi@bgh.demo", "Dr Lee", "BGH", "investigator"),
+    ("crc@bgh.demo", "Sam Coordinator", "BGH", "site_coordinator"),
+    ("entry@bgh.demo", "Jo Entry", "BGH", "site_data_entry"),
+    ("crc@mrc.demo", "Morgan Coordinator", "MRC", "site_coordinator"),
 ]
+MONITOR_SITES = {"cra@phoenix.demo": ("BGH",)}
 
 
-def seed(s: Session, password: str | None = None) -> list[User]:
+def seed(s: Session, password: str | None = None, missing_only: bool = False) -> list[User]:
+    """Create the demo accounts. Existing ones are reset to the demo role and
+    password, unless missing_only, which only adds those not there yet."""
     password = password or config.demo_password
     orgs: dict[str, Organisation] = {}
     for name, typ, code in ORGS:
@@ -40,9 +48,15 @@ def seed(s: Session, password: str | None = None) -> list[User]:
             u = User(email=email, name=name, org_id=orgs[code].id, role=role,
                      password_hash=hash_password(password), is_active=True)
             s.add(u)
-        else:
+        elif not missing_only:
             u.name, u.org_id, u.role = name, orgs[code].id, role
             u.password_hash = hash_password(password)
         users.append(u)
+    s.flush()
+    for u in users:
+        for code in MONITOR_SITES.get(u.email, ()):
+            if not s.scalars(select(MonitorSite).where(MonitorSite.user_id == u.id,
+                                                        MonitorSite.site_org_id == orgs[code].id)).first():
+                s.add(MonitorSite(user_id=u.id, site_org_id=orgs[code].id, assigned_by="seed"))
     s.flush()
     return users

@@ -29,9 +29,8 @@ fi
 # The schema is owned by Alembic. The server refuses to start if this has
 # not been run, so it runs every time.
 alembic upgrade head
-# Demo accounts, created only when the user table is empty. Prints the
-# password the first time.
-python scripts/seed_demo.py --if-empty
+# Adds any demo account that does not exist yet and leaves the rest alone.
+python scripts/seed_demo.py --missing
 
 uvicorn ecrf.api.app:app --port 8000 --reload &
 BACK=$!

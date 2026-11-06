@@ -10,6 +10,8 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
+    true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -51,8 +53,38 @@ class User(Base):
     org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
     role: Mapped[str] = mapped_column(String(30))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class MonitorSite(Base):
+    """A site a monitor may see. A monitor with no rows here sees no site data."""
+
+    __tablename__ = "monitor_site"
+    __table_args__ = (UniqueConstraint("user_id", "site_org_id", name="uq_monitor_site"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+    site_org_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
+    assigned_by: Mapped[str] = mapped_column(String(100))
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class UserAccessEvent(Base):
+    """The record of who was granted what, which the client's roles document
+    asks for: created, role_changed, deactivated, reactivated, password_reset,
+    password_changed, site_assigned, chain_configured. Append only."""
+
+    __tablename__ = "user_access_event"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+    action: Mapped[str] = mapped_column(String(40))
+    by: Mapped[str] = mapped_column(String(100))
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    detail: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class UserSession(Base):
@@ -91,6 +123,11 @@ class Protocol(Base):
     # Pass one's answer, {visits, forms, usage}, kept so a person can
     # correct the visit list before the per-visit calls are paid for.
     extraction_plan: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # The two switches on the approval chain. The order itself is fixed:
+    # enter, submit, monitor review if required, data manager approval,
+    # investigator sign-off if required, study lock.
+    monitor_review_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    investigator_signature_required: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
 
 
 class LLMCall(Base):

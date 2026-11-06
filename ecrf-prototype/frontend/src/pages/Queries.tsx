@@ -14,7 +14,7 @@ type Filter = "mine" | "open" | "answered" | "closed" | "";
    server says per row whose turn it is (can_answer / can_close / for_me), so this
    page never has to know which side it is on. */
 export default function Queries() {
-  const { me } = useAuth();
+  const { me, can } = useAuth();
   const [rows, setRows] = useState<QueryRow[] | null>(null);
   const [filter, setFilter] = useState<Filter>("mine");
   const [answers, setAnswers] = useState<Record<number, { text: string; value: string }>>({});
@@ -69,7 +69,7 @@ export default function Queries() {
               ? "Questions from the sponsor about values entered here, and questions this site has asked the sponsor"
               : "Questions raised about entered values, from either side. The sponsor closes each one once it is settled."}
           </div>
-          {!composing && <button type="button" className="btn btn-primary" onClick={() => setComposing(true)}>New query</button>}
+          {!composing && can("query.raise") && <button type="button" className="btn btn-primary" onClick={() => setComposing(true)}>New query</button>}
         </div>
       </div>
 

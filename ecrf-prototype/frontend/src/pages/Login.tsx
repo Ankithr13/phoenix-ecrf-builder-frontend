@@ -3,6 +3,20 @@ import { Navigate, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/useAuth";
 
+/* Development only: import.meta.env.DEV is false in a production build, so
+   this list and the password never reach a deployed page. */
+const DEMO = [
+  ["admin@phoenix.demo", "admin"],
+  ["builder@phoenix.demo", "database builder"],
+  ["dm@phoenix.demo", "data manager"],
+  ["cra@phoenix.demo", "monitor, Boston General"],
+  ["auditor@phoenix.demo", "read only"],
+  ["pi@bgh.demo", "investigator, Boston General"],
+  ["crc@bgh.demo", "site coordinator, Boston General"],
+  ["entry@bgh.demo", "site data entry, Boston General"],
+  ["crc@mrc.demo", "site coordinator, Mercy"],
+];
+
 export default function Login() {
   const { me, loading, signIn } = useAuth();
   const [params] = useSearchParams();
@@ -57,6 +71,16 @@ export default function Login() {
 
       <div className="login-foot">
         <div>BU Spark! × Phoenix Clinical — prototype</div>
+        {import.meta.env.DEV && (
+          <div className="login-demo">
+            {DEMO.map(([e, who]) => (
+              <button type="button" key={e} className="login-demo-row" onClick={() => { setEmail(e); setPassword("demo1234"); }}>
+                <span className="mono">{e}</span><span>{who}</span>
+              </button>
+            ))}
+            <div className="login-demo-note">password demo1234 · click a row to fill the form</div>
+          </div>
+        )}
       </div>
     </div>
   );

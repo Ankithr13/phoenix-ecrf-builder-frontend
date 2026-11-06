@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ecrf import __version__
-from ecrf.api import auth, dashboard, data, protocols, queries, sites, studies
+from ecrf.api import admin, auth, dashboard, data, protocols, queries, sites, studies
 from ecrf.config import check_production, config, docs_settings
 from ecrf.storage import db, migrate
 
@@ -35,14 +35,11 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"],
 )
 
-app.include_router(auth.router)
-app.include_router(protocols.router)
-app.include_router(studies.router)
-app.include_router(sites.router)
-app.include_router(data.review_router)
-app.include_router(queries.router)
-app.include_router(data.router)
-app.include_router(dashboard.router)
+# Named once here so the route walk in the permission tests sees all of them.
+ROUTERS = (auth.router, admin.router, protocols.router, studies.router, sites.router,
+           data.review_router, queries.router, data.router, dashboard.router)
+for router in ROUTERS:
+    app.include_router(router)
 
 
 @app.get("/api/health")

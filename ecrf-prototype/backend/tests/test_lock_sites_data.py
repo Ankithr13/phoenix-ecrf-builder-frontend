@@ -28,11 +28,16 @@ def sponsor_draft(approve_everything: bool = True) -> int:
 
 
 def lock_and_assign(pid: int, *sites: str):
+    """The builder decides the flagged field; the data manager locks and
+    assigns. Returns the data manager's client."""
+    builder = fresh_client()
+    with builder:
+        login(builder, BUILDER)
+        builder.post(f"/api/protocols/{pid}/review", json={
+            "changes": [{"visit": "Week 4", "name": SBP, "status": "approved"}]})
     c = fresh_client()
     c.__enter__()
     login(c, APPROVER)
-    c.post(f"/api/protocols/{pid}/review", json={
-        "changes": [{"visit": "Week 4", "name": SBP, "status": "approved"}]})
     assert c.post(f"/api/protocols/{pid}/lock").status_code == 200
     for code in sites:
         assert c.post(f"/api/protocols/{pid}/sites", json={"site_org_id": _org_id(code)}).status_code == 200
@@ -60,7 +65,8 @@ def test_lock_needs_every_field_decided_and_then_freezes_the_form(client, demo_a
     assert r.status_code == 409 and "1 flagged" in r.json()["detail"]
     assert client.get(f"/api/protocols/{pid}/draft").json()["lock_blockers"] == {"draft": 0, "flagged": 1}
 
-    client.post(f"/api/protocols/{pid}/review", json={
+    builder = site_client(BUILDER)
+    builder.post(f"/api/protocols/{pid}/review", json={
         "changes": [{"visit": "Week 4", "name": SBP, "status": "approved"}]})
     r = client.post(f"/api/protocols/{pid}/lock")
     assert r.status_code == 200 and r.json()["locked_by"] == APPROVER
@@ -68,21 +74,17 @@ def test_lock_needs_every_field_decided_and_then_freezes_the_form(client, demo_a
     assert d["state"] == "locked" and d["locked_at"]
 
     # Nothing changes a locked form.
-    r = client.post(f"/api/protocols/{pid}/review", json={"changes": []})
+    r = builder.post(f"/api/protocols/{pid}/review", json={"changes": []})
     assert r.status_code == 409 and "locked" in r.json()["detail"].lower()
-    assert client.post(f"/api/protocols/{pid}/extract").status_code == 409
-    assert client.post(f"/api/protocols/{pid}/extract?force=true").status_code == 409
+    assert builder.post(f"/api/protocols/{pid}/extract").status_code == 409
+    assert builder.post(f"/api/protocols/{pid}/extract?force=true").status_code == 409
     assert client.get("/api/protocols").json()[0]["state"] == "locked"
 
 
 def test_site_staff_cannot_lock(client, demo_accounts):
-    # Any sponsor account may lock (the builder/approver split was dropped);
-    # the boundary that matters is sponsor versus site.
     pid = sponsor_draft()
     login(client, BGH)
     assert client.post(f"/api/protocols/{pid}/lock").status_code == 403
-    login(client, BUILDER)
-    assert client.post(f"/api/protocols/{pid}/lock").status_code in (200, 409)
 
 
 # ----------------------------------------------------------------- sites
@@ -123,8 +125,8 @@ def test_subject_codes_are_made_by_the_server_and_owned_by_the_site(client, demo
     # MRC addressing a BGH patient: 404, not 403.
     assert mrc.post("/api/data/enter", json=entry(pid, "BGH-001", 130)).status_code == 404
     assert mrc.post("/api/data/validate", json=entry(pid, "BGH-001", 130)).status_code == 404
-    # The sponsor sees everyone.
-    login(client, BUILDER)
+    # The data manager sees everyone.
+    login(client, APPROVER)
     assert len(client.get(f"/api/studies/{pid}/subjects").json()) == 3
 
 

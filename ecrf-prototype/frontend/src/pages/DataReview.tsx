@@ -93,7 +93,7 @@ export default function DataReview() {
         <div className="card">
           <p className="strong">Nothing entered yet</p>
           <p className="muted small mt-2">Sites enter data through their own portal once the form is locked and they are assigned.</p>
-          {can("data.seed") && (
+          {can("data.approve") && (
             <button type="button" className="btn btn-secondary btn-sm mt-3" onClick={seed} disabled={busy}>
               {busy ? "Seeding…" : "Seed 20 synthetic subjects"}
             </button>

@@ -3,16 +3,13 @@ import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import type { Health } from "../api/types";
 import { useAuth } from "../auth/useAuth";
+import { ROLE_LABEL } from "../format";
 
 const ID_IN_PATH = /^\/(sponsor\/p|site\/s)\/(\d+)/;
 
-const ROLE_LABEL: Record<string, string> = {
-  sponsor: "Sponsor", site_staff: "Site staff",
-};
-
 export default function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
-  const { me, signOut } = useAuth();
+  const { me, signOut, can } = useAuth();
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState(false);
   const [openItems, setOpenItems] = useState<number>(0);
@@ -24,10 +21,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   // The badge is the alert: queries where it is this user's turn, either
   // to answer the other side or to close one they raised that has been
   // answered. The server works that out per row. Refreshed on navigation.
+  const hasQueries = can("query.raise") || can("query.answer") || can("query.close");
   useEffect(() => {
-    if (!me) return;
+    if (!me || !hasQueries) return;
     api.queries().then((q) => setOpenItems(q.filter((x) => x.for_me).length)).catch(() => setOpenItems(0));
-  }, [me, pathname]);
+  }, [me, pathname, hasQueries]);
 
   const badge = openItems > 0 ? <span className="nav-badge">{openItems}</span> : null;
   const m = pathname.match(ID_IN_PATH);
@@ -49,32 +47,36 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="identity">
             <div className="identity-org">{me.org.name}</div>
             <div className="identity-user">
-              {me.user.name} <span className="muted-2">· {ROLE_LABEL[me.role] ?? me.role}</span>
+              {me.user.name} <span className="muted-2">· {ROLE_LABEL[me.role]}</span>
             </div>
-            <button type="button" className="btn-link identity-out" onClick={signOut}>Sign out</button>
+            <div className="row">
+              <button type="button" className="btn-link identity-out" onClick={signOut}>Sign out</button>
+              <NavLink to="/change-password" className="btn-link identity-out">Change password</NavLink>
+            </div>
           </div>
         )}
 
         <nav className="nav" aria-label="Main">
           {sponsor ? (
             <>
+              {can("users.manage") && <NavLink to="/admin">Admin</NavLink>}
               <NavLink to="/sponsor" end>Protocols</NavLink>
-              <NavLink to="/sponsor/queries">Queries{badge}</NavLink>
+              {hasQueries && <NavLink to="/sponsor/queries">Queries{badge}</NavLink>}
               {id && (
                 <div className="nav-group">
                   <div className="nav-group-label">protocol {id}</div>
-                  <NavLink to={`/sponsor/p/${id}/visits`}>Visits</NavLink>
+                  {can("protocol.extract") && <NavLink to={`/sponsor/p/${id}/visits`}>Visits</NavLink>}
                   <NavLink to={`/sponsor/p/${id}/review`}>Review</NavLink>
-                  <NavLink to={`/sponsor/p/${id}/sites`}>Sites</NavLink>
-                  <NavLink to={`/sponsor/p/${id}/data`}>Data review</NavLink>
-                  <NavLink to={`/sponsor/p/${id}/dashboard`}>Dashboard</NavLink>
+                  {can("sites.assign") && <NavLink to={`/sponsor/p/${id}/sites`}>Sites</NavLink>}
+                  {can("listing.view") && <NavLink to={`/sponsor/p/${id}/data`}>Data review</NavLink>}
+                  {can("dashboard.view") && <NavLink to={`/sponsor/p/${id}/dashboard`}>Dashboard</NavLink>}
                 </div>
               )}
             </>
           ) : (
             <>
               <NavLink to="/site" end>Studies</NavLink>
-              <NavLink to="/site/queries">Queries{badge}</NavLink>
+              {hasQueries && <NavLink to="/site/queries">Queries{badge}</NavLink>}
               {id && (
                 <div className="nav-group">
                   <div className="nav-group-label">study {id}</div>

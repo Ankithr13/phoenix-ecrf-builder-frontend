@@ -43,11 +43,17 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     try { await api.logout(); } finally { setMe(null); navigate("/login", { replace: true }); }
   }, [navigate]);
 
+  const changePassword = useCallback(async (current: string, next: string) => {
+    const m = await api.changePassword(current, next);
+    setMe(m);
+    return m;
+  }, []);
+
   const value = useMemo<Auth>(() => ({
     me, loading,
     can: (perm) => !!me && me.permissions.includes(perm),
-    signIn, signOut,
-  }), [me, loading, signIn, signOut]);
+    signIn, signOut, changePassword,
+  }), [me, loading, signIn, signOut, changePassword]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

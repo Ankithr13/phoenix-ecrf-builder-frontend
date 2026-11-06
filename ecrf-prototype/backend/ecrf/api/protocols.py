@@ -68,6 +68,8 @@ def list_protocols(cu: CurrentUser = Depends(require("protocol.view")),
             "state": v.state if v else None,
             "summary": (v.content.get("summary") if v else None),
             "plan": _plan_response(p) if p.extraction_plan else None,
+            "monitor_review_required": p.monitor_review_required,
+            "investigator_signature_required": p.investigator_signature_required,
         })
     return out
 
@@ -342,7 +344,7 @@ def extract_fields(protocol_id: int, backend: str | None = None, force: bool = F
 
 @router.get("/{protocol_id}/draft")
 def get_draft(protocol_id: int,
-              cu: CurrentUser = Depends(require("protocol.view", "study.view")),
+              cu: CurrentUser = Depends(require("protocol.view")),
               s: Session = Depends(db.get_session)):
     p = scope.protocol_or_404(s, cu, protocol_id)
     v = db.latest_version(s, protocol_id)
@@ -365,7 +367,7 @@ def get_draft(protocol_id: int,
 
 @router.get("/{protocol_id}/versions")
 def versions(protocol_id: int,
-             cu: CurrentUser = Depends(require("protocol.view", "study.view")),
+             cu: CurrentUser = Depends(require("protocol.view")),
              s: Session = Depends(db.get_session)):
     scope.protocol_or_404(s, cu, protocol_id)
     rows = s.scalars(select(ECRFVersion).where(ECRFVersion.protocol_id == protocol_id)
@@ -377,7 +379,7 @@ def versions(protocol_id: int,
 
 @router.get("/{protocol_id}/section/{number}")
 def section_text(protocol_id: int, number: str,
-                 cu: CurrentUser = Depends(require("protocol.view", "study.view")),
+                 cu: CurrentUser = Depends(require("protocol.view")),
                  s: Session = Depends(db.get_session)):
     """Lets the reviewer read the cited section without opening the PDF.
 
@@ -523,7 +525,7 @@ def review(protocol_id: int, body: ReviewRequest,
 # ---------------------------------------------------------------- lock
 
 @router.post("/{protocol_id}/lock")
-def lock(protocol_id: int, cu: CurrentUser = Depends(require("form.lock")),
+def lock(protocol_id: int, cu: CurrentUser = Depends(require("protocol.lock")),
          s: Session = Depends(db.get_session)):
     """Freeze the latest version. Allowed only once every field has been
     approved or rejected; sites only ever see a locked form."""

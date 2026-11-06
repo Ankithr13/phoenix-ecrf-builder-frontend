@@ -204,13 +204,53 @@ export interface DashboardResponse {
 }
 
 export type OrgType = "sponsor" | "site";
-export type Role = "sponsor" | "site_staff";
+export type Role = "admin" | "builder" | "data_manager" | "monitor" | "read_only"
+  | "investigator" | "site_coordinator" | "site_data_entry";
 
 export interface Me {
   user: { id: number; name: string; email: string };
   org: { id: number; name: string; type: OrgType; code: string };
   role: Role;
   permissions: string[];
+  must_change_password: boolean;
+}
+
+export interface AdminOrg {
+  id: number;
+  name: string;
+  code: string;
+  type: OrgType;
+  roles: Role[];
+}
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  name: string;
+  role: Role;
+  is_active: boolean;
+  must_change_password: boolean;
+  created_by: string | null;
+  created_at: string;
+  last_login_at: string | null;
+  org: { id: number; name: string; code: string; type: OrgType };
+  monitor_site_ids: number[];
+}
+
+export interface AccessEvent {
+  id: number;
+  user: string;
+  action: string;
+  by: string;
+  at: string;
+  detail: string | null;
+}
+
+export interface ChainRow {
+  id: number;
+  name: string;
+  monitor_review_required: boolean;
+  investigator_signature_required: boolean;
 }
 
 export interface StudyListItem {

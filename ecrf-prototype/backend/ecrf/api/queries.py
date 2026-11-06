@@ -67,13 +67,21 @@ def _about(q: Query) -> str:
     return "study"
 
 
+def _may_answer(cu: CurrentUser, q: Query) -> bool:
+    """The side that did not raise it. On the site side that is query.answer.
+    The matrix gives the sponsor side no query.answer, but a site's question
+    still needs a reply, so whoever may close one may reply to it in words."""
+    if cu.org.type == q.raised_by_org:
+        return False
+    return cu.can("query.answer") if cu.org.type == "site" else cu.can("query.close")
+
+
 def _row(s: Session, q: Query, cu: CurrentUser | None = None) -> dict:
     p = s.get(Protocol, q.protocol_id)
     o = s.get(Observation, q.observation_id) if q.observation_id else None
     subj = s.get(Subject, q.subject_ref) if q.subject_ref else None
     site = s.get(Organisation, q.site_org_id) if q.site_org_id else None
-    mine = cu is not None and cu.org.type == q.raised_by_org
-    can_answer = cu is not None and q.status != "closed" and not mine
+    can_answer = cu is not None and q.status != "closed" and _may_answer(cu, q)
     can_close = cu is not None and q.status != "closed" and cu.can("query.close")
     return {
         "id": q.id, "protocol_id": q.protocol_id, "protocol_name": p.name if p else None,
@@ -97,8 +105,8 @@ def _row(s: Session, q: Query, cu: CurrentUser | None = None) -> dict:
 
 def _visible_queries(s: Session, cu: CurrentUser, protocol_id: int):
     q = select(Query).where(Query.protocol_id == protocol_id)
-    if cu.org.type == "site":
-        q = q.where(Query.site_org_id == cu.org.id)
+    if cu.site_ids is not None:
+        q = q.where(Query.site_org_id.in_(cu.site_ids))
     return q
 
 
@@ -108,7 +116,7 @@ def _visible_query(s: Session, cu: CurrentUser, query_id: int) -> Query:
         raise HTTPException(404, "query not found")
     if s.scalars(scope.visible_protocols(cu).where(Protocol.id == q.protocol_id)).first() is None:
         raise HTTPException(404, "query not found")
-    if cu.org.type == "site" and q.site_org_id != cu.org.id:
+    if cu.site_ids is not None and q.site_org_id not in cu.site_ids:
         raise HTTPException(404, "query not found")
     return q
 
@@ -144,6 +152,8 @@ def _create(s: Session, cu: CurrentUser, body: NewQueryRequest) -> Query:
     elif subj is not None:
         site_id = subj.site_org_id
     elif body.site_org_id is not None:
+        if cu.site_ids is not None and body.site_org_id not in cu.site_ids:
+            raise HTTPException(404, "site not found")
         assigned = s.scalars(select(ProtocolSite).where(ProtocolSite.protocol_id == p.id,
                                                         ProtocolSite.site_org_id == body.site_org_id)).first()
         if assigned is None:
@@ -188,7 +198,7 @@ def raise_query(observation_id: int, body: RaiseRequest,
 
 @router.post("/api/queries/{query_id}/answer")
 def answer_query(query_id: int, body: AnswerRequest,
-                 cu: CurrentUser = Depends(require("query.answer")),
+                 cu: CurrentUser = Depends(require("query.answer", "query.close")),
                  s: Session = Depends(db.get_session)):
     """The side that did not raise it answers. Out of scope is a 404. A
     corrected value may only come from a site, only when the query is
@@ -197,7 +207,7 @@ def answer_query(query_id: int, body: AnswerRequest,
     q = _visible_query(s, cu, query_id)
     if q.status == "closed":
         raise HTTPException(409, "this query is closed")
-    if cu.org.type == q.raised_by_org:
+    if not _may_answer(cu, q):
         raise HTTPException(403, "your side raised this query; the other side answers it")
     has_value = body.new_value is not None and body.new_value != ""
     if has_value and cu.org.type != "site":
@@ -239,10 +249,10 @@ def close_query(query_id: int, cu: CurrentUser = Depends(require("query.close"))
 
 @router.get("/api/queries")
 def list_queries(status: str | None = None,
-                 cu: CurrentUser = Depends(require("query.raise", "query.answer")),
+                 cu: CurrentUser = Depends(require("query.raise", "query.answer", "query.close")),
                  s: Session = Depends(db.get_session)):
     """Scoped as everything else: sponsors see queries on their protocols,
-    sites see queries that belong to their site."""
+    sites and monitors see queries that belong to their sites."""
     out = []
     for p in s.scalars(scope.visible_protocols(cu)).all():
         q = _visible_queries(s, cu, p.id)
