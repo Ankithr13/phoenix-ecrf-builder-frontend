@@ -33,7 +33,7 @@ const GROUPS: Group[] = [
   {
     title: "Roles",
     terms: [
-      { word: "Admin", means: "Creates accounts, assigns roles and sites, and sets the approval chain switches on each protocol. Touches no clinical data." },
+      { word: "Admin", means: "Creates accounts, assigns roles and sites, and sets the approval chain switches on each protocol. Touches no clinical data, so does not lock a study and gets no notifications." },
       { word: "Database builder", means: "Uploads protocols, runs extraction, and edits and decides the fields on Review." },
       { word: "Data manager", means: "Locks the form, assigns sites, approves entered values, raises and closes queries, and owns the statistical analysis plan." },
       { word: "Monitor", means: "Reviews data for the sites assigned to them, and raises and closes queries there. Sees no other site." },
@@ -61,8 +61,8 @@ const GROUPS: Group[] = [
       { word: "Monitor review", means: "When a protocol requires it, a monitor marks a submitted visit reviewed before the data manager can approve it." },
       { word: "Investigator sign-off", means: "The investigator confirms a visit's data, entering their password again. It is a recorded action with who, when and what it means. It needs every value approved and no query open on the patient." },
       { word: "Needs re-sign", means: "A value changed after the visit was signed, so that sign-off no longer stands." },
-      { word: "Study lock", means: "The last step. Once every visit is signed, or sign-off is not required, and no query is open, an admin or data manager locks the study and its data can no longer change." },
-      { word: "Notifications", means: "Messages in the app about what needs you. Nothing is emailed." },
+      { word: "Study lock", means: "The last step. Once every visit is signed, or sign-off is not required, and no query is open, the data manager locks the study and its data can no longer change. Phoenix's roles document puts database lock under data management." },
+      { word: "Notifications", means: "Messages in the app about what needs you. Nothing is emailed. The admin has none, because the admin does not handle clinical data." },
     ],
   },
   {

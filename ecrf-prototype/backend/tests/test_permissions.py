@@ -53,7 +53,8 @@ TABLE = {
     "users.manage":         "1   0   0   0   0   0   0   0",
     "roles.assign":         "1   0   0   0   0   0   0   0",
     "chain.configure":      "1   0   0   0   0   0   0   0",
-    "study.lock":           "1   0   1   0   0   0   0   0",
+    "study.lock":           "0   0   1   0   0   0   0   0",
+    "notifications.view":   "0   1   1   1   1   1   1   1",
 }
 
 

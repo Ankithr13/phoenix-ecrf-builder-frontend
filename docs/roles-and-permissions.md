@@ -32,7 +32,8 @@ cell.
 | `users.manage` | Manage users | yes |  |  |  |  |  |  |  |
 | `roles.assign` | Assign roles | yes |  |  |  |  |  |  |  |
 | `chain.configure` | Set the chain switches | yes |  |  |  |  |  |  |  |
-| `study.lock` | Lock the study | yes |  | yes |  |  |  |  |  |
+| `study.lock` | Lock the study |  |  | yes |  |  |  |  |  |
+| `notifications.view` | Have a notifications inbox |  | yes | yes | yes | yes | yes | yes | yes |
 
 Two layers decide what someone can do. `require("permission")` on each route decides
 whether their role may do this at all, and gives a 403 if not. The scope helpers in
@@ -57,7 +58,7 @@ draft → submitted → monitor reviewed → approved → signed off → study l
 3. **Monitor reviewed.** Only if switched on. A monitor assigned to the site marks the visit reviewed.
 4. **Approved.** The data manager approves values. An open query on a value blocks this.
 5. **Signed off.** Only if switched on. The investigator confirms the visit, entering their password again. This needs every value at the visit approved and no query open on the patient.
-6. **Study locked.** An admin or data manager locks the study. This needs a locked form, no open queries, every value approved and, if sign-off is on, every visit with data signed. After this, every write to the study's data is refused.
+6. **Study locked.** The data manager locks the study. This needs a locked form, no open queries, every value approved and, if sign-off is on, every visit with data signed. After this, every write to the study's data is refused.
 
 Changing a value sends it back to submitted, with a reason. If its visit was signed, the
 sign-off no longer stands, and the visit shows **Needs re-sign**. An approved value can
@@ -78,9 +79,12 @@ Set per protocol by the admin, on **Admin**, **Approval chain**. Each change is 
 
 ## Each role in plain language
 
-**Admin.** Runs the system, not the study: creates users, assigns roles and sites, sets
-the chain switches and can lock a study. Sees the dashboard's totals, but not individual
-values, and cannot approve data or edit a form.
+**Admin.** Runs the system, not the study: creates users, assigns roles and sites, and
+sets the chain switches. Sees the dashboard's totals, but not individual values, and
+cannot approve data or edit a form. Cannot lock a study and has no notifications:
+Phoenix's roles document puts database lock under data management, and the admin should
+not handle clinical data. The server refuses both with 403, and no notification is ever
+written for an admin.
 
 **Database builder.** Turns a protocol into a form: uploads it, runs extraction, and
 edits, approves or rejects fields. Cannot lock the form, so the person who builds it is

@@ -15,7 +15,7 @@ from test_lock_sites_data import (
 
 from ecrf import notify
 from ecrf.storage import db
-from ecrf.storage.models import Notification, User
+from ecrf.storage.models import Notification, Protocol, User
 
 
 def _entered(value=130, monitor=False, signature=True):
@@ -201,7 +201,31 @@ def test_study_lock_without_signature_needs_only_approval(client, demo_accounts)
     pid, dm, _, row = _entered(signature=False)
     _clear_queries(dm)
     dm.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]})
-    assert site_client(ADMIN).post(f"/api/protocols/{pid}/study-lock").status_code == 200
+    assert dm.post(f"/api/protocols/{pid}/study-lock").status_code == 200
+
+
+def _ready_to_lock():
+    """Approved, no open query, no sign-off required: nothing blocks the lock."""
+    pid, dm, _, row = _entered(signature=False)
+    _clear_queries(dm)
+    dm.post(f"/api/protocols/{pid}/data/approve", json={"observation_ids": [row["id"]]})
+    assert dm.get(f"/api/protocols/{pid}/study-lock").json()["blockers"] == []
+    return pid, dm
+
+
+def test_admin_cannot_lock_study(client, demo_accounts):
+    pid, _dm = _ready_to_lock()
+    admin = site_client(ADMIN)
+    assert admin.post(f"/api/protocols/{pid}/study-lock").status_code == 403
+    assert admin.get(f"/api/protocols/{pid}/study-lock").status_code == 403
+    with db.session() as s:
+        assert s.get(Protocol, pid).study_locked_at is None
+
+
+def test_data_manager_can_still_lock_study(client, demo_accounts):
+    pid, dm = _ready_to_lock()
+    r = dm.post(f"/api/protocols/{pid}/study-lock")
+    assert r.status_code == 200 and r.json()["locked_by"] == APPROVER
 
 
 def test_study_lock_freezes_all_writes(client, demo_accounts):
@@ -312,6 +336,22 @@ def test_notifications_fire_for_each_event(client, demo_accounts, kind):
 def test_notifications_stay_at_their_site(client, demo_accounts):
     _entered()
     assert _kinds(MRC) == [], "Mercy hears nothing about Boston General's study"
+
+
+def test_admin_has_no_notifications_route(client, demo_accounts):
+    admin = site_client(ADMIN)
+    assert admin.get("/api/notifications").status_code == 403
+    assert admin.get("/api/notifications/unread-count").status_code == 403
+    assert admin.post("/api/notifications/read-all").status_code == 403
+    assert admin.post("/api/notifications/1/read").status_code == 403
+
+
+def test_no_notifications_created_for_admin(client, demo_accounts):
+    # The admin is in the sponsor organisation, which hears about the study lock.
+    pid, dm = _ready_to_lock()
+    assert dm.post(f"/api/protocols/{pid}/study-lock").status_code == 200
+    assert "study_locked" in _kinds(APPROVER)
+    assert _kinds(ADMIN) == []
 
 
 def test_notification_badge_counts_unread_only(client, demo_accounts):

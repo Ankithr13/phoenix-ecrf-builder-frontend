@@ -28,7 +28,9 @@ def _monitors(s: Session, p: Protocol, site_id: int) -> list[User]:
 
 def _send(s: Session, users: list[User], kind: str, p: Protocol, body: str, subject: str | None = None,
           visit: str | None = None, query_id: int | None = None) -> None:
-    for user_id in {u.id for u in users}:
+    # Only roles with an inbox hear anything. The admin has none.
+    readers = {u.id for u in users if "notifications.view" in PERMISSIONS.get(u.role, frozenset())}
+    for user_id in readers:
         s.add(Notification(user_id=user_id, kind=kind, protocol_id=p.id, subject=subject, visit=visit,
                            query_id=query_id, body=body))
 

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { NotificationRow } from "../api/types";
+import { useAuth } from "../auth/useAuth";
 
 const KIND_LABEL: Record<string, string> = {
   query_raised: "Query raised", query_answered: "Query answered", system_query: "System query",
@@ -12,6 +13,13 @@ const KIND_LABEL: Record<string, string> = {
 /* Unread first. In the app only: nothing here sends an email. On a protocol's
    own page, the route's id narrows it to that protocol. */
 export default function Notifications() {
+  const { can } = useAuth();
+  // The admin runs the system and has no inbox.
+  if (!can("notifications.view")) return <Navigate to="/" replace />;
+  return <Inbox />;
+}
+
+function Inbox() {
   const params = useParams();
   const scoped = params.id ? Number(params.id) : null;
   const [rows, setRows] = useState<NotificationRow[] | null>(null);

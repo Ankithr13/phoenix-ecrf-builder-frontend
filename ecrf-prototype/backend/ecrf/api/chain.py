@@ -178,7 +178,7 @@ def _note(n: Notification, names: dict[int, str]) -> dict:
 
 @router.get("/api/notifications")
 def notifications(protocol_id: int | None = None, kind: str | None = None,
-                  cu: CurrentUser = Depends(require("protocol.view")), s: Session = Depends(db.get_session)):
+                  cu: CurrentUser = Depends(require("notifications.view")), s: Session = Depends(db.get_session)):
     """One's own, unread first."""
     q = select(Notification).where(Notification.user_id == cu.user.id)
     if protocol_id is not None:
@@ -192,14 +192,14 @@ def notifications(protocol_id: int | None = None, kind: str | None = None,
 
 
 @router.get("/api/notifications/unread-count")
-def unread_count(cu: CurrentUser = Depends(require("protocol.view")), s: Session = Depends(db.get_session)):
+def unread_count(cu: CurrentUser = Depends(require("notifications.view")), s: Session = Depends(db.get_session)):
     rows = s.scalars(select(Notification.id).where(Notification.user_id == cu.user.id,
                                                    Notification.read_at.is_(None))).all()
     return {"unread": len(rows)}
 
 
 @router.post("/api/notifications/read-all")
-def read_all(protocol_id: int | None = None, cu: CurrentUser = Depends(require("protocol.view")),
+def read_all(protocol_id: int | None = None, cu: CurrentUser = Depends(require("notifications.view")),
              s: Session = Depends(db.get_session)):
     q = select(Notification).where(Notification.user_id == cu.user.id, Notification.read_at.is_(None))
     if protocol_id is not None:
@@ -212,7 +212,7 @@ def read_all(protocol_id: int | None = None, cu: CurrentUser = Depends(require("
 
 
 @router.post("/api/notifications/{notification_id}/read")
-def read_one(notification_id: int, cu: CurrentUser = Depends(require("protocol.view")),
+def read_one(notification_id: int, cu: CurrentUser = Depends(require("notifications.view")),
              s: Session = Depends(db.get_session)):
     n = s.get(Notification, notification_id)
     if n is None or n.user_id != cu.user.id:

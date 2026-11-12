@@ -48,7 +48,10 @@ _MATRIX: dict[str, tuple[str, ...]] = {
     "users.manage": ("admin",),
     "roles.assign": ("admin",),
     "chain.configure": ("admin",),
-    "study.lock": ("admin", "data_manager"),
+    # The roles document puts database lock under data management, and the
+    # admin runs the system without handling clinical data.
+    "study.lock": ("data_manager",),
+    "notifications.view": tuple(r for r in _EVERYONE if r != "admin"),
 }
 
 PERMISSIONS: dict[str, frozenset[str]] = {
