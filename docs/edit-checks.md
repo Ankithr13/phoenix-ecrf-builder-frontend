@@ -4,6 +4,10 @@ An edit check tests entered data and either asks a question or stops a save. A
 check is a row in the `edit_check` table with a type and a little JSON, not code.
 It never changes a value. The data stays as the site entered it.
 
+**Built-in checks run automatically.** They are created when the form is locked and
+run on submit, with nothing for anyone to set up. Custom checks are not offered in this
+version, and there is no Edit checks page.
+
 The evaluators are in `backend/ecrf/checks/engine.py`, the built-in list in
 `checks/builtin.py`, and the code that raises queries in `checks/run.py`.
 
@@ -31,7 +35,7 @@ refused.
 | `temporal` | Two dates are in the wrong order. | `a`, `b`, `op`, `granularity` |
 | `conditional` | If one field has a value, something else must hold. | `if_field`, `equals`, `then_required`, `then_any`, `then_no_later_data` |
 
-There is also `manual`: a check for people to do. It is listed and never run.
+The engine also knows `manual`, a check for people to do, which is never run. No built-in check uses it.
 
 A check passes when the values it needs are not there yet. Only `required` exists
 to notice a blank.
@@ -59,8 +63,7 @@ form is simply not created.
 | REQ | `required` | A required field not already covered above is blank. |
 | FMT | `format`, hard | A date, integer or decimal field holds something else. |
 
-A built-in format check stays on, because it follows from the field's type. Other
-built-in checks can be switched off.
+Every built-in check is on. There is no way to switch one off in this version.
 
 ## When they run
 
@@ -76,14 +79,11 @@ Once raised:
 - When a person closes a system query, it stays closed until the value it is about
   changes. Otherwise every later edit on the visit would ask the same thing again.
 
-## Adding a custom check
+## Custom checks
 
-On the **Edit checks** page: pick a type, the fields and the message the site will
-see, and try it against sample values before saving.
+Not offered in this version. The API has no route to add, edit, switch off or try
+out a check. `GET /api/protocols/{id}/checks` still lists the built-in checks, read only.
 
-- Before the form is locked, the database builder manages checks.
-- After the lock, only the data manager can, because a change can affect data
-  already entered. Each change writes a row to `form_field_history`.
-
-Custom checks get the codes `CUSTOM-1`, `CUSTOM-2` and so on. There is no generic
-rules language: a custom check is one of the types above.
+The `edit_check` table is unchanged and keeps its `origin` column (`builtin` or
+`custom`), so custom checks could come back without a migration. Nothing creates a
+custom row now.

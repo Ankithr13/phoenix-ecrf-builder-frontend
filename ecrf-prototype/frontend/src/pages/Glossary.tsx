@@ -97,7 +97,7 @@ const GROUPS: Group[] = [
       { word: "Submitted", means: "The site clicked Submit for the visit. The checks have run and the sponsor can see it. It is not data yet." },
       { word: "Reason for change", means: "Changing a submitted or approved value needs a reason, kept in its history." },
       { word: "Not done / Not applicable / Unknown", means: "What a site can record instead of a value, where the form allows it, always with a reason." },
-      { word: "Edit check", means: "A rule that looks at entered values. Soft ones raise a query at submit. Hard ones block the save, and only format checks are hard. Checks never change what was entered." },
+      { word: "Edit check", means: "A rule that looks at entered values. Soft ones raise a query at submit. Hard ones block the save, and only format checks are hard. Checks never change what was entered. The built-in checks run automatically; custom checks are not offered in this version." },
       { word: "System query", means: "A query raised by an edit check. If the value is corrected and the check passes, it answers itself and waits for the sponsor to close it." },
       { word: "Approved (value)", means: "The sponsor accepted the value on Data review. It is now frozen for the site and counts in the statistics." },
       { word: "Open query (on a value)", means: "A value keeps its status while a query is open on it. It cannot be approved until the query is closed." },

@@ -4,7 +4,7 @@ import os
 
 import pytest
 import yaml
-from conftest import APPROVER, BGH, BUILDER, login
+from conftest import BGH, BUILDER, login
 from test_lock_sites_data import (
     SBP,
     entry,
@@ -66,22 +66,17 @@ def test_submit_moves_draft_to_submitted_and_runs_checks(client, demo_accounts):
     assert dm.post("/api/data/submit", json={"protocol_id": pid, "subject_id": "BGH-001", "visit": "Week 4"}).status_code == 403
 
 
-def test_hard_check_blocks_submit(client, demo_accounts):
+def test_builtin_format_check_is_hard(client, demo_accounts):
     pid, dm, bgh = _site()
-    bgh.post("/api/data/enter", json=entry(pid, "BGH-001", "v1", visit="Foundation", field="Consent version"))
-    draft = dm.get(f"/api/protocols/{pid}/draft").json()["draft"]
-    version = next(f for f in draft["forms"][0]["fields"] if f["name"] == "Consent version")
-    r = dm.post(f"/api/protocols/{pid}/checks", json={
-        "type": "format", "severity": "hard", "form": "Foundation", "field_ids": [version["field_id"]],
-        "logic": {"kind": "pattern", "pattern": r"V\d+\.\d+"}, "message": "Consent version looks like V1.0"})
-    assert r.status_code == 200, r.text
+    codes = {c["code"]: c for c in dm.get(f"/api/protocols/{pid}/checks").json()}
+    assert codes["FMT"]["severity"] == "hard" and codes["FMT"]["origin"] == "builtin"
+    # A date field holding something else is refused at the save, and nothing is stored.
+    bad = entry(pid, "BGH-001", "not a date", visit="Foundation", field="Consent date")
+    assert bgh.post("/api/data/enter", json=bad).status_code == 422
+    assert bgh.get(f"/api/protocols/{pid}/data").json() == []
+    good = entry(pid, "BGH-001", "2026-01-15", visit="Foundation", field="Consent date")
+    assert bgh.post("/api/data/enter", json=good).status_code == 200
     body = {"protocol_id": pid, "subject_id": "BGH-001", "visit": "Foundation"}
-    r = bgh.post("/api/data/submit", json=body)
-    assert r.status_code == 422 and "Consent version#1" in r.json()["detail"]["errors"]
-    assert bgh.get(f"/api/protocols/{pid}/data").json()[0]["status"] == "draft", "nothing moved"
-    # A hard check blocks the save too; a good value then submits.
-    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", "bad", visit="Foundation", field="Consent version")).status_code == 422
-    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", "V1.0", visit="Foundation", field="Consent version")).status_code == 200
     assert bgh.post("/api/data/submit", json=body).status_code == 200
 
 
@@ -273,61 +268,6 @@ def test_not_done_counts_as_answered_for_required():
     ctx = run.context_from(d, {("Day 1", "Visit date", 1): (None, "not_done")})
     spec = next(s for s in builtin.specs(d) if s.code == "EC-005")
     assert engine.evaluate(spec, ctx) is None
-
-
-def test_custom_check_crud_and_evaluation(client, demo_accounts):
-    pid = sponsor_draft()
-    b = site_client(BUILDER)
-    draft = b.get(f"/api/protocols/{pid}/draft").json()["draft"]
-    w4 = next(f for f in draft["forms"] if f["visit"] == "Week 4")
-    hr = next(f for f in w4["fields"] if f["name"] == "Fasting Plasma Glucose")["field_id"]
-    sbp = next(f for f in w4["fields"] if f["name"] == SBP)["field_id"]
-    body = {"type": "cross_field", "form": "Week 4", "field_ids": [hr, sbp], "logic": {"a": hr, "b": sbp, "op": "<"},
-            "message": "Glucose should be below systolic pressure"}
-    # Try it before saving it.
-    r = b.post(f"/api/protocols/{pid}/checks/test", json={**body, "sample": {hr: 200, sbp: 120}})
-    assert r.json() == {"passes": False}
-    assert b.post(f"/api/protocols/{pid}/checks/test", json={**body, "sample": {hr: 70, sbp: 120}}).json() == {"passes": True}
-    assert b.post(f"/api/protocols/{pid}/checks/test", json={"type": "manual", "field_ids": [hr]}).json()["passes"] is None
-
-    c = b.post(f"/api/protocols/{pid}/checks", json=body).json()
-    assert c["code"] == "CUSTOM-1" and c["severity"] == "soft" and c["enabled"] is True
-    assert b.post(f"/api/protocols/{pid}/checks", json={**body, "severity": "hard"}).status_code == 422, "only format is hard"
-    assert b.post(f"/api/protocols/{pid}/checks", json={**body, "type": "nonsense"}).status_code == 422
-    assert b.post(f"/api/protocols/{pid}/checks", json={**body, "field_ids": ["nope"]}).status_code == 422
-    assert b.patch(f"/api/protocols/{pid}/checks/{c['id']}", json={"enabled": False}).json()["enabled"] is False
-    b.patch(f"/api/protocols/{pid}/checks/{c['id']}", json={"enabled": True})
-
-    dm = lock_and_assign(pid, "BGH")
-    codes = {x["code"] for x in dm.get(f"/api/protocols/{pid}/checks").json()}
-    assert {"CUSTOM-1", "EC-001", "EC-005", "EC-006", "EC-007", "FMT"} <= codes
-
-    bgh = site_client(BGH)
-    bgh.post(f"/api/studies/{pid}/subjects")
-    for field, value in ((SBP, 120), ("Fasting Plasma Glucose", 200)):
-        bgh.post("/api/data/enter", json=entry(pid, "BGH-001", value, field=field))
-    assert any(q["code"] == "CUSTOM-1" for q in submit(bgh, pid, "BGH-001")["queries"])
-
-
-def test_check_change_after_lock_needs_dm_and_is_logged(client, demo_accounts):
-    pid = sponsor_draft()
-    b = site_client(BUILDER)
-    dm = lock_and_assign(pid)
-    rows = dm.get(f"/api/protocols/{pid}/checks").json()
-    ec6 = next(x for x in rows if x["code"] == "EC-006")
-    assert b.patch(f"/api/protocols/{pid}/checks/{ec6['id']}", json={"enabled": False}).status_code == 403
-    assert b.post(f"/api/protocols/{pid}/checks", json={"type": "manual", "field_ids": ec6["field_ids"], "message": "x"}).status_code == 403
-    r = dm.patch(f"/api/protocols/{pid}/checks/{ec6['id']}", json={"enabled": False, "reason": "per Denise"})
-    assert r.json()["enabled"] is False
-    row = dm.get(f"/api/protocols/{pid}/form-history").json()[0]
-    assert row["attribute"] == "edit_check:EC-006" and row["new_value"] == "enabled=False" and row["reason"] == "per Denise"
-    fmt = next(x for x in rows if x["code"] == "FMT")
-    assert dm.patch(f"/api/protocols/{pid}/checks/{fmt['id']}", json={"enabled": False}).status_code == 422
-    # Manual checks are stored and never fire.
-    r = dm.post(f"/api/protocols/{pid}/checks", json={"type": "manual", "field_ids": ec6["field_ids"], "message": "Look at the ECG"})
-    assert r.status_code == 200
-    login(client, APPROVER)
-    assert dm.get(f"/api/protocols/{pid}/form-history").json()[0]["new_value"].startswith("added: manual")
 
 
 def test_lab_reference_rows_all_have_source(client, demo_accounts):

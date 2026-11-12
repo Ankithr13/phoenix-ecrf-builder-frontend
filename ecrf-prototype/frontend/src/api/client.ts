@@ -111,12 +111,6 @@ export const api = {
   labRanges: () => req<LabRange[]>("/api/protocols/library/lab-ranges"),
 
   checks: (id: number) => req<EditCheck[]>(`/api/protocols/${id}/checks`),
-  addCheck: (id: number, body: { type: string; field_ids: string[]; logic: Record<string, unknown>; message: string; severity: string; form: string | null }) =>
-    req<EditCheck>(`/api/protocols/${id}/checks`, post(body)),
-  editCheck: (id: number, checkId: number, body: { enabled?: boolean; message?: string; reason?: string }) =>
-    req<EditCheck>(`/api/protocols/${id}/checks/${checkId}`, { method: "PATCH", body: JSON.stringify(body) }),
-  testCheck: (id: number, body: { type: string; field_ids: string[]; logic: Record<string, unknown>; sample: Record<string, string> }) =>
-    req<{ passes: boolean | null }>(`/api/protocols/${id}/checks/test`, post(body)),
 
   lock: (id: number) => req<{ version: number; state: string; locked_by: string }>(`/api/protocols/${id}/lock`, { method: "POST" }),
 

@@ -244,7 +244,6 @@ def test_study_lock_freezes_all_writes(client, demo_accounts):
         (dm, "post", f"/api/data/seed/{pid}", None),
         (dm, "post", f"/api/protocols/{pid}/sites", {"site_org_id": _org_id("MRC")}),
         (dm, "delete", f"/api/protocols/{pid}/sites/{_org_id('BGH')}", None),
-        (dm, "patch", f"/api/protocols/{pid}/checks/1", {"enabled": False}),
         (site_client(MONITOR), "post", f"/api/protocols/{pid}/monitor-review", {"subject_id": "BGH-001", "visit": "Week 4"}),
         (pi, "post", f"/api/protocols/{pid}/signoff", {"subject_id": "BGH-001", "visit": "Week 4", "password": PASSWORD}),
     ]
