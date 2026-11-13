@@ -40,6 +40,13 @@ whether their role may do this at all, and gives a 403 if not. The scope helpers
 `auth/scope.py` decide whether they may see this particular row, and give a 404 if not,
 so nobody can learn that a row exists.
 
+A monitor's scope is narrower than the rest of the sponsor's. A monitor sees a protocol
+only if at least one of their assigned sites (`monitor_site`) is assigned to it
+(`protocol_site`), and within it only those sites' data. This covers the protocol list,
+the Review page, the dashboard, queries, notifications and PDFs. Any other protocol
+returns 404. A study appears for the monitor once one of their sites is assigned to it,
+and disappears if that site is taken off.
+
 Reading entered values row by row has no permission of its own. It needs `listing.view`,
 `data.enter` or `data.approve`. So the admin, the builder and the read-only role see
 totals but not individual values.
@@ -94,7 +101,8 @@ not the person who freezes it. Sees no individual values.
 approves values, raises and closes queries, edits the analysis plan and locks the study.
 
 **Monitor.** Checks data at the sites assigned to them and nowhere else: reviews visits,
-raises and closes queries, reads and exports listings. Cannot approve data.
+raises and closes queries, reads and exports listings. Cannot approve data. Sees only
+studies where one of their hospitals takes part.
 
 **Read only.** Sees protocols, the dashboard and the blank eCRF, with no write button
 anywhere. For an auditor. Sees totals rather than individual values, and cannot export.

@@ -176,11 +176,21 @@ def _note(n: Notification, names: dict[int, str]) -> dict:
             "created_at": n.created_at.isoformat(), "read_at": n.read_at.isoformat() if n.read_at else None}
 
 
+def _inbox(cu: CurrentUser, *columns):
+    """One's own notifications. A monitor's are limited to the protocols they can
+    still see, so a study they no longer cover drops out of the inbox."""
+    q = select(*columns) if columns else select(Notification)
+    q = q.where(Notification.user_id == cu.user.id)
+    if cu.role == "monitor":
+        q = q.where(Notification.protocol_id.in_(scope.visible_protocols(cu).with_only_columns(Protocol.id)))
+    return q
+
+
 @router.get("/api/notifications")
 def notifications(protocol_id: int | None = None, kind: str | None = None,
                   cu: CurrentUser = Depends(require("notifications.view")), s: Session = Depends(db.get_session)):
     """One's own, unread first."""
-    q = select(Notification).where(Notification.user_id == cu.user.id)
+    q = _inbox(cu)
     if protocol_id is not None:
         q = q.where(Notification.protocol_id == protocol_id)
     if kind:
@@ -193,15 +203,14 @@ def notifications(protocol_id: int | None = None, kind: str | None = None,
 
 @router.get("/api/notifications/unread-count")
 def unread_count(cu: CurrentUser = Depends(require("notifications.view")), s: Session = Depends(db.get_session)):
-    rows = s.scalars(select(Notification.id).where(Notification.user_id == cu.user.id,
-                                                   Notification.read_at.is_(None))).all()
+    rows = s.scalars(_inbox(cu, Notification.id).where(Notification.read_at.is_(None))).all()
     return {"unread": len(rows)}
 
 
 @router.post("/api/notifications/read-all")
 def read_all(protocol_id: int | None = None, cu: CurrentUser = Depends(require("notifications.view")),
              s: Session = Depends(db.get_session)):
-    q = select(Notification).where(Notification.user_id == cu.user.id, Notification.read_at.is_(None))
+    q = _inbox(cu).where(Notification.read_at.is_(None))
     if protocol_id is not None:
         q = q.where(Notification.protocol_id == protocol_id)
     now, count = utcnow(), 0
@@ -214,8 +223,8 @@ def read_all(protocol_id: int | None = None, cu: CurrentUser = Depends(require("
 @router.post("/api/notifications/{notification_id}/read")
 def read_one(notification_id: int, cu: CurrentUser = Depends(require("notifications.view")),
              s: Session = Depends(db.get_session)):
-    n = s.get(Notification, notification_id)
-    if n is None or n.user_id != cu.user.id:
+    n = s.scalars(_inbox(cu).where(Notification.id == notification_id)).first()
+    if n is None:
         raise HTTPException(404, "notification not found")
     if n.read_at is None:
         n.read_at = utcnow()

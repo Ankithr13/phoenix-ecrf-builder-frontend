@@ -86,9 +86,9 @@ def form_locked(s: Session, p: Protocol, site_ids: list[int] | None = None) -> N
 
 
 def study_locked(s: Session, p: Protocol) -> None:
-    """Everyone on the study."""
-    site_ids = s.scalars(select(ProtocolSite.site_org_id).where(ProtocolSite.protocol_id == p.id))
-    users = _people(s, p.org_id)
+    """Everyone on the study. A monitor is on it only through one of their sites."""
+    site_ids = list(s.scalars(select(ProtocolSite.site_org_id).where(ProtocolSite.protocol_id == p.id)))
+    users = [u for u in _people(s, p.org_id) if u.role != "monitor"]
     for site_id in site_ids:
-        users += _people(s, site_id)
+        users += _people(s, site_id) + _monitors(s, p, site_id)
     _send(s, users, "study_locked", p, f"{p.name} is locked. No further data can be changed.")

@@ -2,7 +2,8 @@
 here, so the rule lives in one place:
 
   sponsor   protocols that belong to its organisation; every site's data,
-            except a monitor, who sees only the sites assigned to them
+            except a monitor, who sees only the sites assigned to them, and
+            only protocols on which at least one of those sites takes part
   site      protocols assigned to it whose form is locked; its own
             subjects and their data only
 
@@ -23,7 +24,13 @@ def _locked() -> Select:
 
 def visible_protocols(cu: CurrentUser) -> Select:
     if cu.org.type == "sponsor":
-        return select(Protocol).where(Protocol.org_id == cu.org.id)
+        q = select(Protocol).where(Protocol.org_id == cu.org.id)
+        if cu.role == "monitor":
+            # A monitor with no assigned sites sees no protocols.
+            q = q.where(exists(select(ProtocolSite.id).where(
+                ProtocolSite.protocol_id == Protocol.id,
+                ProtocolSite.site_org_id.in_(sorted(cu.site_ids or ())))))
+        return q
     return (select(Protocol)
             .join(ProtocolSite, ProtocolSite.protocol_id == Protocol.id)
             .where(ProtocolSite.site_org_id == cu.org.id, _locked()))
