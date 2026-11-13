@@ -23,7 +23,6 @@ COOKIE = "ecrf_session"
 # Login failures per email in the last window. In memory on purpose: one
 # process, one prototype. A multi-worker deployment moves this to the DB.
 _WINDOW_SECONDS = 15 * 60
-_MAX_FAILURES = 5
 _failures: dict[str, deque] = defaultdict(deque)
 
 
@@ -36,7 +35,7 @@ def too_many_failures(email: str) -> bool:
     cutoff = time.monotonic() - _WINDOW_SECONDS
     while q and q[0] < cutoff:
         q.popleft()
-    return len(q) >= _MAX_FAILURES
+    return config.login_max_failures > 0 and len(q) >= config.login_max_failures
 
 
 def record_failure(email: str) -> None:

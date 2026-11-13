@@ -34,3 +34,19 @@ def test_vercel_requirements_cover_the_backend():
     runtime = pyproject.split("dependencies = [", 1)[1].split("\n]", 1)[0].splitlines()
     wanted = names(runtime) - {"uvicorn"} | {"psycopg"}
     assert names((PROTOTYPE / "requirements.txt").read_text().splitlines()) == wanted
+
+
+def test_the_wrong_password_limit_can_be_turned_off(client, demo_accounts, monkeypatch):
+    """LOGIN_MAX_FAILURES=0 lets a demo audience mistype a shared password freely."""
+    from dataclasses import replace
+
+    from conftest import APPROVER, PASSWORD
+
+    from ecrf.auth import sessions
+
+    for _ in range(6):
+        client.post("/api/auth/login", json={"email": APPROVER, "password": "wrong"})
+    assert client.post("/api/auth/login", json={"email": APPROVER, "password": PASSWORD}).status_code != 200
+
+    monkeypatch.setattr(sessions, "config", replace(sessions.config, login_max_failures=0))
+    assert client.post("/api/auth/login", json={"email": APPROVER, "password": PASSWORD}).status_code == 200

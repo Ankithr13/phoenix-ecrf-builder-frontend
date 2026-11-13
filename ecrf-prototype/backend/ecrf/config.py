@@ -72,6 +72,9 @@ class Config:
     env: str
     secret_key: str
     seed_demo: bool
+    # Wrong passwords allowed per account in 15 minutes before sign-in is
+    # refused. 0 turns the limit off, for a demo where people share a password.
+    login_max_failures: int = 5
 
 
 def _price(name: str) -> float | None:
@@ -117,6 +120,7 @@ def load() -> Config:
         env=env,
         secret_key=os.getenv("SECRET_KEY", "" if env == "prod" else DEV_SECRET_KEY),
         seed_demo=os.getenv("SEED_DEMO", "") == "1",
+        login_max_failures=int(os.getenv("LOGIN_MAX_FAILURES", "5")),
     )
 
 
