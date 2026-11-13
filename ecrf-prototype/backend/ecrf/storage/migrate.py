@@ -21,7 +21,9 @@ BACKEND = Path(__file__).resolve().parents[2]
 def alembic_config() -> AlembicConfig:
     cfg = AlembicConfig(str(BACKEND / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND / "migrations"))
-    cfg.set_main_option("sqlalchemy.url", config.database_url)
+    # Alembic's config treats % as interpolation, and an encoded password
+    # (an @ written as %40) has one. %% is read back as %.
+    cfg.set_main_option("sqlalchemy.url", config.database_url.replace("%", "%%"))
     return cfg
 
 
