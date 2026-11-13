@@ -7,7 +7,15 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "vercel:login": "npx --yes vercel@65.8.0 login",
+    "vercel:link": "npx --yes vercel@65.8.0 link --cwd ..",
+    "vercel:env": "cp -n ../.env.vercel.example ../.env.vercel.local; echo 'Fill in ecrf-prototype/.env.vercel.local, then import it in Vercel > Settings > Environment Variables'",
+    "db:setup": "cd ../backend && .venv/bin/python scripts/load_postgres.py --env-file ../.env.vercel.local",
+    "db:migrate": "cd ../backend && .venv/bin/python scripts/load_postgres.py --env-file ../.env.vercel.local --migrate-only",
+    "vercel:preview": "npx --yes vercel@65.8.0 deploy --cwd ..",
+    "vercel:prod": "npx --yes vercel@65.8.0 deploy --prod --cwd ..",
+    "vercel:logs": "npx --yes vercel@65.8.0 logs --cwd .."
   },
   "dependencies": {
     "react": "^18.3.1",

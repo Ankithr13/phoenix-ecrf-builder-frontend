@@ -344,28 +344,53 @@ export interface PageStatus {
 
 export interface ResponderRule { on: "change" | "analysis"; op: string; value: number }
 
+/* What the Add result form sends. The server fills in the SAP item, form,
+   unit, derivation and method, and the endpoint or concept when it is blank. */
 export interface SapItemIn {
-  label: string;
-  kind: string;
   field_id: string;
+  calculation: string;
+  baseline_visit_id: string | null;
+  analysis_visit_id: string | null;
+  responder_rule: ResponderRule | null;
+  endpoint_concept: string | null;
+}
+
+export interface SapItem {
+  id: number;
+  label: string;
+  endpoint_concept: string;
+  kind: string;
+  calculation: string | null;
+  field_id: string;
+  field: string | null;
+  form: string | null;
   baseline_visit_id: string | null;
   analysis_visit_id: string | null;
   unit: string | null;
   responder_rule: ResponderRule | null;
   method: string | null;
+  analysis_derivation: string | null;
+  // each registry calculation the row gets, with its formula
+  derivation: string[];
 }
 
-export interface SapItem extends SapItemIn {
-  id: number;
-  field: string | null;
-}
+export interface SapCalculation { name: string; label: string; types: string[]; formula: string }
 
 export interface SapResponse {
   items: SapItem[];
   kinds: string[];
   operators: string[];
+  calculations: SapCalculation[];
   visits: string[];
-  fields: { field_id: string; name: string; visit: string; type: string; unit: string | null }[];
+  fields: { field_id: string; name: string; visit: string; form: string; type: string; unit: string | null }[];
+}
+
+export interface Traceability {
+  protocol: string;
+  columns: string[];
+  rows: string[][];
+  version: number;
+  locked: boolean;
 }
 
 export interface ListingResponse {

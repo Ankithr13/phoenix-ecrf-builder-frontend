@@ -2,17 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { api } from "../api/client";
-import type { DashboardResponse, PageStatus, PageStatusNumbers, Queries360, StatResult, StatValue } from "../api/types";
+import type { DashboardResponse, PageStatus, PageStatusNumbers, Queries360, SapResponse, StatResult, StatValue, Traceability } from "../api/types";
 import Badge from "../components/Badge";
+import { ResultForm, TraceabilityMatrix } from "../components/ResultsPanel";
 import Stat from "../components/Stat";
 import BarChart from "../components/charts/BarChart";
 import DonutChart from "../components/charts/DonutChart";
 import LineChart from "../components/charts/LineChart";
 
 type Tab = "queries" | "pages" | "results";
-const TABS: { key: Tab; label: string }[] = [
+const TABS: { key: Tab; label: string; needs?: string }[] = [
   { key: "queries", label: "Queries 360" },
-  { key: "pages", label: "Page status" },
+  { key: "pages", label: "Page status", needs: "dashboard.subject_level" },
   { key: "results", label: "Results" },
 ];
 
@@ -40,9 +41,10 @@ export default function Dashboard() {
           {can("report.pdf") && <button type="button" className="btn btn-secondary btn-sm" onClick={blank}>Blank eCRF PDF</button>}
         </div>
         {me?.org.type === "site" && <div className="muted small">Your site's numbers only.</div>}
+        {!can("dashboard.subject_level") && <div className="muted small">Queries about the form only. Page status is for the people who work with subjects' data.</div>}
       </div>
       <div className="tabs" role="tablist">
-        {TABS.map((t) => (
+        {TABS.filter((t) => !t.needs || can(t.needs)).map((t) => (
           <button type="button" role="tab" aria-selected={tab === t.key} key={t.key}
                   className={`tab${tab === t.key ? " active" : ""}`} onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
@@ -226,17 +228,63 @@ function pick(v: StatResult["app"], path: string[]): StatValue | undefined {
   return at as StatValue | undefined;
 }
 
+/* One row per category, registry and verifier side by side. */
+function FrequencyTable({ st }: { st: StatResult }) {
+  type Side = { n: number; missing: number; categories: Record<string, { count: number; percent: number }> } | null;
+  const app = st.app as unknown as Side;
+  const ind = st.independent as unknown as Side;
+  const names = Array.from(new Set([...Object.keys(app?.categories ?? {}), ...Object.keys(ind?.categories ?? {})])).sort();
+  const cell = (side: Side, name: string) => {
+    const c = side?.categories[name];
+    return c ? `${c.count} (${c.percent.toFixed(1)}%)` : "not available";
+  };
+  return (
+    <table className="table">
+      <thead><tr><th>Category</th><th className="num">Registry</th><th className="num">Verifier</th></tr></thead>
+      <tbody>
+        {names.map((name) => <tr key={name}><td>{name}</td><td className="num">{cell(app, name)}</td><td className="num">{cell(ind, name)}</td></tr>)}
+        <tr><td>n</td><td className="num">{app?.n ?? "not available"}</td><td className="num">{ind?.n ?? "not available"}</td></tr>
+        <tr><td>Missing, not in the percents</td><td className="num">{app?.missing ?? "not available"}</td><td className="num">{ind?.missing ?? "not available"}</td></tr>
+      </tbody>
+    </table>
+  );
+}
+
 function ResultsTab({ id }: { id: number }) {
   const { me, can } = useAuth();
   const [d, setD] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
+  // The rows behind the cards, for Add result and Edit, and the matrix when open.
+  const [plan, setPlan] = useState<SapResponse | null>(null);
+  const [editing, setEditing] = useState<number | "new" | null>(null);
+  const [matrix, setMatrix] = useState<Traceability | null>(null);
+  const manage = can("sap.edit");
 
   const load = useCallback(async () => {
-    try { setD(await api.dashboard(id)); setError(null); }
-    catch (e) { setError((e as Error).message); }
+    try {
+      const [dash, rows] = await Promise.all([api.dashboard(id), api.sap(id).catch(() => null)]);
+      setD(dash);
+      setPlan(rows);
+      setError(null);
+    } catch (e) { setError((e as Error).message); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
+
+  const saved = async () => {
+    setEditing(null);
+    setMatrix(null);
+    await load();
+  };
+  const remove = async (itemId: number, label: string) => {
+    if (!window.confirm(`Delete the result "${label}"?`)) return;
+    try { await api.sapDelete(id, itemId); await saved(); }
+    catch (e) { setError((e as Error).message); }
+  };
+  const openMatrix = async () => {
+    try { setMatrix(await api.traceability(id)); setEditing(null); }
+    catch (e) { setError((e as Error).message); }
+  };
 
   const seed = async () => {
     setSeeding(true);
@@ -264,20 +312,41 @@ function ResultsTab({ id }: { id: number }) {
         <Stat label="Approved values" value={d.data.readings.toLocaleString()} sub={`of ${d.data.entered_total.toLocaleString()} you can see`} />
       </div>
 
+      {plan && (
+        <div className="row row-wrap mt-4">
+          {manage && editing === null && <button type="button" className="btn btn-primary btn-sm" onClick={() => { setMatrix(null); setEditing("new"); }}>Add result</button>}
+          <button type="button" className="btn btn-secondary btn-sm" onClick={openMatrix}>Traceability matrix</button>
+        </div>
+      )}
+      {matrix && <TraceabilityMatrix id={id} m={matrix} onClose={() => setMatrix(null)} />}
+      {plan && editing === "new" && <ResultForm id={id} plan={plan} onDone={saved} onCancel={() => setEditing(null)} />}
+
       {items.length === 0 && (
         <div className="card mt-4">
           <p className="strong">No results yet</p>
           <p className="muted small mt-2">
-            Results come from the rows of the statistical analysis plan.
-            {sponsor && <> <Link className="inline" to={`/sponsor/p/${id}/sap`}>Open the plan</Link>.</>}
+            {manage ? "Add a result: pick a field, the visits and a calculation." : "Results appear here once the data manager adds them."}
           </p>
         </div>
       )}
-      {items.map((group) => (
+      {items.map((group) => {
+        const row = plan?.items.find((x) => x.id === group[0].item_id);
+        if (row && editing === row.id && plan) {
+          return <ResultForm key={row.id} id={id} plan={plan} item={row} onDone={saved} onCancel={() => setEditing(null)} />;
+        }
+        return (
         <div className="card mt-4" key={group[0].item_id}>
           <div className="row row-between row-wrap">
-            <p className="strong">{group[0].item_label}</p>
-            <span className="pill">{group[0].item_kind}</span>
+            <p className="strong">{group[0].item_label}{row && row.endpoint_concept !== group[0].item_label && <span className="muted"> · {row.endpoint_concept}</span>}</p>
+            <span className="row">
+              <span className="pill">{group[0].item_kind}</span>
+              {manage && row && editing === null && (
+                <>
+                  <button type="button" className="btn-link small" onClick={() => { setMatrix(null); setEditing(row.id); }}>Edit</button>
+                  <button type="button" className="btn-link small" onClick={() => remove(row.id, row.label)}>Delete</button>
+                </>
+              )}
+            </span>
           </div>
           <p className="muted small">
             {[group[0].baseline && `Baseline ${group[0].baseline}`, group[0].analysis && `Analysis ${group[0].analysis}`, group[0].unit, group[0].method].filter(Boolean).join(" · ")}
@@ -290,9 +359,9 @@ function ResultsTab({ id }: { id: number }) {
                   <span className="section-title">{st.label}</span>
                   <Badge kind={st.status} />
                 </div>
-                {rows.length === 0
-                  ? <p className="small">Not available: not enough approved data yet.</p>
-                  : (
+                {rows.length === 0 && <p className="small">Not available: not enough approved data yet.</p>}
+                {rows.length > 0 && st.name === "frequency" && <FrequencyTable st={st} />}
+                {rows.length > 0 && st.name !== "frequency" && (
                     <table className="table">
                       <thead><tr><th>Statistic</th><th className="num">Registry</th><th className="num">Verifier</th></tr></thead>
                       <tbody>
@@ -305,12 +374,13 @@ function ResultsTab({ id }: { id: number }) {
                         ))}
                       </tbody>
                     </table>
-                  )}
+                )}
               </div>
             );
           })}
         </div>
-      ))}
+        );
+      })}
 
       {sponsor && can("data.approve") && d.data.entered_total === 0 && ex && (
         <div className="card mt-4">

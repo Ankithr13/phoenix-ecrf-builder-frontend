@@ -170,7 +170,7 @@ export default function Patients() {
                     {r.needs_resign.length > 0 && <span className="pill chip-rust entry-status">needs re-sign</span>}
                   </td>
                   <td className="small muted">{new Date(r.created_at).toLocaleDateString()} · {r.created_by}</td>
-                  <td className="num"><Link className="btn btn-secondary btn-sm" to={`/site/s/${id}/patients/${encodeURIComponent(r.code)}`}>Enter data</Link></td>
+                  <td className="num"><Link className="btn btn-secondary btn-sm" to={`/site/s/${id}/patients/${encodeURIComponent(r.code)}`}>{can("data.enter") ? "Enter data" : "Open"}</Link></td>
                 </tr>
               ))}
             </tbody>

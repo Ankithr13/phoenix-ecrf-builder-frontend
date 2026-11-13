@@ -15,6 +15,7 @@ const DEMO = [
   ["crc@bgh.demo", "site coordinator, Boston General"],
   ["entry@bgh.demo", "site data entry, Boston General"],
   ["crc@mrc.demo", "site coordinator, Mercy"],
+  ["pi@mrc.demo", "investigator, Mercy"],
 ];
 
 export default function Login() {

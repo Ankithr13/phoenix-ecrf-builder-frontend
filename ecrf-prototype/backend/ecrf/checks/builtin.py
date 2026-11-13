@@ -16,6 +16,12 @@ from ecrf.schema import DraftECRF, FieldDef, VisitForm
 
 VISIT_DATE_CODE = "SVSTDTC"
 
+# The Owner column of the client's Edit Check Specification, section 4. REQ and
+# FMT are not in that table; they go to data management.
+OWNERS = {"EC-001": "DM", "EC-002": "DM", "EC-003": "DM/Monitor", "EC-004": "DM/Clinical", "EC-005": "Site",
+          "EC-006": "DM", "EC-007": "DM", "EC-008": "DM", "EC-009": "Safety/DM", "EC-010": "DM", "EC-012": "DM"}
+DEFAULT_OWNER = "DM"
+
 
 @dataclass
 class CheckSpec:
@@ -136,7 +142,7 @@ def specs(draft: DraftECRF) -> list[CheckSpec]:
     for form in visits:
         d = visit_dates[form.visit]
         if d:
-            out.append(CheckSpec("EC-005", "required", f"The visit date for {form.visit} is missing.", [d.field_id], {}, form.visit))
+            out.append(CheckSpec("EC-005", "required", "Enter visit date or document visit not performed.", [d.field_id], {}, form.visit))
             covered.add(d.field_id)
 
     for form in draft.forms:

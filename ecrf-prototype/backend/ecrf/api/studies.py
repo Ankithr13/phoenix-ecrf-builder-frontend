@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ecrf import clock
 from ecrf.auth import scope
 from ecrf.auth.permissions import DATA_READERS, CurrentUser, require
 from ecrf.storage import db
@@ -87,8 +88,8 @@ class SubjectCreate(BaseModel):
 def _clean(body: SubjectCreate) -> dict:
     out: dict = {}
     if body.birth_year is not None:
-        if not 1900 <= body.birth_year <= date.today().year:
-            raise HTTPException(422, f"Year of birth must be between 1900 and {date.today().year}")
+        if not 1900 <= body.birth_year <= clock.today().year:
+            raise HTTPException(422, f"Year of birth must be between 1900 and {clock.today().year}")
         out["birth_year"] = body.birth_year
     if body.sex:
         if body.sex not in SEXES:
@@ -99,7 +100,7 @@ def _clean(body: SubjectCreate) -> dict:
             d = date.fromisoformat(body.enrolled_on)
         except ValueError as e:
             raise HTTPException(422, "Enrolment date must be YYYY-MM-DD") from e
-        if d > date.today():
+        if d > clock.today():
             raise HTTPException(422, "Enrolment date cannot be in the future")
         out["enrolled_on"] = d.isoformat()
     if body.note and body.note.strip():

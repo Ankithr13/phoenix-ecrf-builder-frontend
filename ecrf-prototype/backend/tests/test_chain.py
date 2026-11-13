@@ -15,7 +15,7 @@ from test_lock_sites_data import (
 
 from ecrf import notify
 from ecrf.storage import db
-from ecrf.storage.models import Notification, Protocol, User
+from ecrf.storage.models import Notification, Observation, Protocol, User
 
 
 def _entered(value=130, monitor=False, signature=True):
@@ -370,3 +370,33 @@ def test_notification_badge_counts_unread_only(client, demo_accounts):
     assert dm.post(f"/api/notifications/{first}/read").status_code == 404
     bgh.post("/api/notifications/read-all")
     assert bgh.get("/api/notifications/unread-count").json()["unread"] == 0
+
+
+# ---------------------------------------------------- the investigator's role
+
+def test_investigator_cannot_enter_or_submit_data(client, demo_accounts):
+    pid, dm, bgh, row = _entered()
+    pi = site_client(PI)
+    assert pi.post("/api/data/enter", json=entry(pid, "BGH-001", 131)).status_code == 403
+    assert pi.post("/api/data/validate", json=entry(pid, "BGH-001", 131)).status_code == 403
+    assert pi.post("/api/data/submit", json={"protocol_id": pid, "subject_id": "BGH-001", "visit": "Week 4"}).status_code == 403
+    # Nor through the side door: answering a query with a corrected value.
+    q = dm.post(f"/api/data/{row['id']}/queries", json={"text": "please check"}).json()
+    r = pi.post(f"/api/queries/{q['id']}/answer", json={"text": "checked", "new_value": "131"})
+    assert r.status_code == 403
+    with db.session() as s:
+        assert s.get(Observation, row["id"]).value_num == 130
+    # An answer in words is fine, and they can still read the visit.
+    assert pi.post(f"/api/queries/{q['id']}/answer", json={"text": "checked"}).status_code == 200
+    assert pi.get(f"/api/data/{pid}/subjects").status_code == 200
+    # A coordinator still can.
+    assert bgh.post("/api/data/enter", json=entry(pid, "BGH-001", 131, reason="re-measured")).status_code == 200
+
+
+def test_investigator_can_still_sign(client, demo_accounts):
+    pid, _dm, _bgh, _row = _approved_and_clear()
+    pi = site_client(PI)
+    assert _sign(pi, pid).status_code == 200
+    assert pi.get(f"/api/protocols/{pid}/signoffs", params={"subject_id": "BGH-001"}).json()["rows"][0]["signed_by"] == PI
+    assert pi.get(f"/api/dashboard/{pid}").status_code == 200
+    assert pi.get(f"/api/studies/{pid}/subjects").status_code == 200

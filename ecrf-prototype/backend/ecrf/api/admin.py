@@ -201,6 +201,10 @@ def reactivate(user_id: int, cu: CurrentUser = Depends(require("users.manage")),
 def reset_password(user_id: int, cu: CurrentUser = Depends(require("users.manage")),
                    s: Session = Depends(db.get_session)):
     u = _user_or_404(s, cu, user_id)
+    # A reset signs the person out at once, so on your own account it locks
+    # you out before you can copy the temporary password.
+    if u.id == cu.user.id:
+        raise HTTPException(409, "Use Change password for your own account")
     temporary = _temporary_password()
     u.password_hash = passwords.hash_password(temporary)
     u.must_change_password = True

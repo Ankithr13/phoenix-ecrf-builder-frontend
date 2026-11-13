@@ -1,0 +1,25 @@
+# Never upload keys. Vercel takes its settings from the project's
+# Environment Variables, not from files.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!.env.vercel.example
+
+# Local databases and anything a person uploaded locally.
+backend/*.db
+backend/*.db.*
+backend/data/uploads
+backend/data/protocols
+
+# Built or installed again on Vercel, or not needed by the function.
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+**/node_modules
+frontend/dist
+backend/tests
+.vercel

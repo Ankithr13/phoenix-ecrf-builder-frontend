@@ -94,6 +94,7 @@ All demo accounts use the password `demo1234`.
 | `crc@bgh.demo` | Boston General (site) | site coordinator |
 | `entry@bgh.demo` | Boston General (site) | site data entry |
 | `crc@mrc.demo` | Mercy Hospital (site) | site coordinator |
+| `pi@mrc.demo` | Mercy Hospital (site) | investigator |
 
 In development the login page lists these. A production build does not.
 Who can do what is in `docs/roles-and-permissions.md`.
@@ -119,12 +120,14 @@ raise queries.
 5. As `crc@bgh.demo`: open the study, register a patient, enter data. Values save
    as you go. A value out of range saves with a note and raises a query on submit;
    only a wrong format is refused. BMI, age and similar are computed from the
-   inputs. **Submit visit** when done.
+   inputs. If a visit did not happen, mark its visit date Not done with a reason. **Submit
+   visit** when done.
 6. As `dm@phoenix.demo`: **Queries** has tabs by status and filters by site, visit,
    who raised it and check. Close what the checks raised. **Data review**: approve
    the values.
-7. As `pi@bgh.demo`: **Notifications** says what is ready. Open the patient's visit
-   and use **Sign off this visit**, which asks for your password again.
+7. As `pi@bgh.demo`: **Notifications** says what is ready. Open the patient's visit, which
+   is read only because an investigator reviews and does not enter data, and use **Sign off
+   this visit**, which asks for your password again.
 8. As `dm@phoenix.demo`: **Data review** lists whatever blocks **Lock study**.
    Once it is clear, lock the study. No data on it can change after that.
 
@@ -132,7 +135,10 @@ To see statistics, as `dm@phoenix.demo`:
 
 1. **Dashboard**, **Results**, **Seed 20 synthetic subjects**, then approve the values on
    **Data review**.
-2. **Analysis plan**: add a row, such as Systolic Blood Pressure, Day 1 to Week 12.
+2. **Dashboard**, **Results**, **Add result**: pick Systolic Blood Pressure, before visit Day 1,
+   after visit Week 12, and Change from baseline. A choice or yes/no field gets Frequency
+   instead, such as Position at Day 1. **Traceability matrix** shows every result in the
+   client's eight columns, with **Download PDF**.
 3. **Dashboard** has three tabs. **Queries 360** shows where queries stand, by week and
    site. **Page status** shows how far each subject has got, per site. **Results**
    shows each number next to an independent recalculation.
@@ -142,12 +148,13 @@ Also there: **Data listing** shows one form's values across subjects, with CSV e
 To require monitor review, as `admin@phoenix.demo` open **Admin**, **Approval chain**,
 then as `cra@phoenix.demo` use **Data review** to mark visits reviewed.
 
-Site staff have a short guide in `docs/ecrf-completion-guidelines.md`.
+Site staff have a short guide in `docs/ecrf-completion-guidelines.md`. To run a demo on a
+ready-made database, see `docs/demo-script.md`.
 
 ## 7. Tests
 
 ```bash
-./run.sh test          # backend, 280 tests, 1 skipped, uses a temporary database
+./run.sh test          # backend, 318 tests, 1 skipped, uses a temporary database
 cd frontend && npm run build && npm run lint
 ```
 

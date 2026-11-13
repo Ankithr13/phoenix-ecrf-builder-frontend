@@ -1,6 +1,10 @@
 # ---- secrets -------------------------------------------------------
 .env
+.env.*
+!.env.example
+!.env.vercel.example
 *.key
+.vercel/
 
 # ---- client material, deliberately NOT published --------------------
 # The client's CRF library and the meeting decks are internal documents.
@@ -20,7 +24,8 @@ __pycache__/
 *.egg-info/
 
 # ---- app data (regenerated on first run) ----------------------------
-ecrf-prototype/backend/ecrf.db
+ecrf-prototype/backend/*.db
+midterm-assets/demo/db/
 ecrf-prototype/backend/data/uploads/
 ecrf-prototype/backend/data/protocols/*.pdf
 

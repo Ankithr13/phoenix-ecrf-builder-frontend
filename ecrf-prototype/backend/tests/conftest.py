@@ -8,7 +8,10 @@ import os
 import tempfile
 
 _TMP = tempfile.mkdtemp(prefix="ecrf-test-")
-os.environ["DATABASE_URL"] = f"sqlite:///{_TMP}/test.db"
+# ECRF_TEST_DATABASE_URL runs the suite against an empty Postgres instead,
+# to check the app before it is pointed at Supabase. It is never DATABASE_URL,
+# so a deployment's database cannot be picked up by accident.
+os.environ["DATABASE_URL"] = os.getenv("ECRF_TEST_DATABASE_URL") or f"sqlite:///{_TMP}/test.db"
 os.environ["ECRF_BACKEND"] = "mock"
 os.environ["ECRF_CONTEXT"] = "auto"
 os.environ["ECRF_UPLOAD_DIR"] = f"{_TMP}/uploads"

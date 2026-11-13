@@ -16,8 +16,8 @@ cell.
 | `protocol.view` | See protocols in scope | yes | yes | yes | yes | yes | yes | yes | yes |
 | `sites.assign` | Assign sites | yes |  | yes |  |  |  |  |  |
 | `subject.create` | Register a patient |  |  |  |  |  |  | yes |  |
-| `data.enter` | Enter data |  |  |  |  |  | yes | yes | yes |
-| `data.submit` | Submit a visit |  |  |  |  |  | yes | yes | yes |
+| `data.enter` | Enter data |  |  |  |  |  |  | yes | yes |
+| `data.submit` | Submit a visit |  |  |  |  |  |  | yes | yes |
 | `data.approve` | Approve values |  |  | yes |  |  |  |  |  |
 | `data.monitor_review` | Mark a visit reviewed |  |  |  | yes |  |  |  |  |
 | `query.raise` | Raise a query |  |  | yes | yes |  | yes | yes |  |
@@ -25,10 +25,11 @@ cell.
 | `query.close` | Close a query |  |  | yes | yes |  |  |  |  |
 | `signoff.sign` | Investigator sign-off |  |  |  |  |  | yes |  |  |
 | `dashboard.view` | See the dashboard | yes | yes | yes | yes | yes | yes | yes |  |
+| `dashboard.subject_level` | See Page status and queries about data | yes |  | yes | yes | yes | yes | yes |  |
 | `listing.view` | Read values row by row |  |  | yes | yes |  | yes | yes |  |
 | `listing.export` | Export a listing |  |  | yes | yes |  | yes | yes |  |
 | `report.pdf` | Download PDFs |  | yes | yes | yes | yes | yes | yes |  |
-| `sap.edit` | Edit the analysis plan |  |  | yes |  |  |  |  |  |
+| `sap.edit` | Add, edit and delete results on the Dashboard |  |  | yes |  |  |  |  |  |
 | `users.manage` | Manage users | yes |  |  |  |  |  |  |  |
 | `roles.assign` | Assign roles | yes |  |  |  |  |  |  |  |
 | `chain.configure` | Set the chain switches | yes |  |  |  |  |  |  |  |
@@ -95,20 +96,27 @@ written for an admin.
 
 **Database builder.** Turns a protocol into a form: uploads it, runs extraction, and
 edits, approves or rejects fields. Cannot lock the form, so the person who builds it is
-not the person who freezes it. Sees no individual values.
+not the person who freezes it. Sees no individual values, no Page status and no listing:
+the dashboards document lists no builder for the Page Status Report, and its access
+matrix gives the builder "Build/configuration". Of the dashboard, the builder has the
+Results tab and Queries 360 limited to queries about the study as a whole.
 
 **Data manager.** Owns the data once the form is ready: locks the form, assigns sites,
-approves values, raises and closes queries, edits the analysis plan and locks the study.
+approves values, raises and closes queries, adds and edits the results on the Dashboard and locks the study.
 
 **Monitor.** Checks data at the sites assigned to them and nowhere else: reviews visits,
 raises and closes queries, reads and exports listings. Cannot approve data. Sees only
 studies where one of their hospitals takes part.
 
 **Read only.** Sees protocols, the dashboard and the blank eCRF, with no write button
-anywhere. For an auditor. Sees totals rather than individual values, and cannot export.
+anywhere. For an auditor, and standing in for the Clinical/Data Lead the dashboards
+document lists, since that role does not exist here yet. Sees totals rather than individual values, and cannot export.
 
-**Investigator.** Responsible for a site's data: enters, submits, raises and answers
-queries, and is the only role who can sign off a visit. Cannot register a patient.
+**Investigator.** Responsible for a site's data: reviews it, raises and answers queries
+in words, and is the only role who can sign off a visit. Does not enter, submit or correct
+values, or register patients. This follows the client's roles document, Principal
+Investigator row: "View subject data; electronically sign/approve eCRFs when configured
+and required." In this system that approval is the recorded investigator sign-off.
 
 **Site coordinator.** Runs the site's day to day: registers patients, enters and submits
 data, raises and answers queries, reads and exports the site's listings. Cannot sign off.

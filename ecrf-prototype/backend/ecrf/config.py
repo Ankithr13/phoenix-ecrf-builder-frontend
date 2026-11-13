@@ -79,6 +79,15 @@ def _price(name: str) -> float | None:
     return float(raw) if raw else None
 
 
+def database_url(raw: str) -> str:
+    """Supabase, Neon and Railway hand out postgres:// or postgresql:// URLs.
+    SQLAlchemy needs the driver named, and psycopg 3 is the one installed."""
+    for prefix in ("postgres://", "postgresql://"):
+        if raw.startswith(prefix):
+            return "postgresql+psycopg://" + raw.removeprefix(prefix)
+    return raw
+
+
 def load() -> Config:
     env = os.getenv("ECRF_ENV", "dev")
     return Config(
@@ -97,7 +106,7 @@ def load() -> Config:
         price_cached_input_per_m=_price("LLM_PRICE_CACHED_PER_M"),
         price_output_per_m=_price("LLM_PRICE_OUTPUT_PER_M"),
         extract_strategy=os.getenv("EXTRACT_STRATEGY", "per_visit"),
-        database_url=os.getenv("DATABASE_URL", f"sqlite:///{ROOT / 'ecrf.db'}"),
+        database_url=database_url(os.getenv("DATABASE_URL", "").strip() or f"sqlite:///{ROOT / 'ecrf.db'}"),
         data_dir=Path(os.getenv("ECRF_DATA_DIR", ROOT / "data")),
         # Separate from data_dir so tests can upload into a temporary folder
         # without losing the bundled sample and library that live in data/.

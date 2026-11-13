@@ -805,3 +805,5 @@ details.panel .panel-body { padding-top: var(--s-3); animation: fade var(--norma
 .field-label { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--text-sm); }
 .table-compact th.num { white-space: normal; }
 .table-compact td:first-child { white-space: nowrap; }
+.entry-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
+.input-readonly { background: var(--paper); color: var(--muted); }

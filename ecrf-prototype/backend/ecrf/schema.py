@@ -138,6 +138,10 @@ class DraftECRF(BaseModel):
             for f in form.fields:
                 if not f.field_id:
                     f.field_id = make_field_id(form.visit, f.name)
+                # EC-005: "Enter visit date or document visit not performed."
+                # Also holds for a form locked before this option existed.
+                if f.origin == "foundation" and f.cdash == "SVSTDTC":
+                    f.allow_not_done = True
         return self
 
 

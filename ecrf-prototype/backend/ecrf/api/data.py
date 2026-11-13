@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ecrf import derive, notify
+from ecrf import clock, derive, notify
 from ecrf.auth import scope
 from ecrf.auth.permissions import DATA_READERS, CurrentUser, require
 from ecrf.checks import run as checks
@@ -117,7 +117,7 @@ def validate(field: FieldDef, value) -> str | None:
             d = date.fromisoformat(str(value))
         except ValueError:
             return "must be a date, YYYY-MM-DD"
-        if not 1900 <= d.year <= date.today().year + 1:
+        if not 1900 <= d.year <= clock.today().year + 1:
             return "date is out of range"
     return None
 
@@ -161,7 +161,7 @@ def _recompute(fields: dict[str, FieldDef], merged: dict[tuple[str, int], object
         if number is not None and key not in inputs:
             inputs[key] = (number, f.unit)
     out = []
-    computed = derive.compute(inputs, subj.birth_year if subj else None, subj.sex if subj else None, date.today().year)
+    computed = derive.compute(inputs, subj.birth_year if subj else None, subj.sex if subj else None, clock.today().year)
     for d in computed:
         for f in fields.values():
             if f.name not in given and derive.role_of(f, derive.DERIVED) == d.key:
@@ -189,23 +189,55 @@ def _prepare(s: Session, p, subj: Subject, visit: str, fields: dict[str, FieldDe
     return rows, recomputed, standing
 
 
+VISIT_DATE_CODE = "SVSTDTC"
+VISIT_NOT_PERFORMED = "Visit not performed"
+
+
+def _visit_not_performed(s: Session, p, subj: Subject, visit: str, fields: dict[str, FieldDef],
+                         readings: list[Reading]) -> list[Reading]:
+    """A visit date marked Not done means the visit did not happen, so every
+    other field at the visit becomes Not applicable. Correcting the date back to
+    a real one lifts that again, and only from the fields this put there."""
+    visit_date = next((f for f in fields.values() if f.cdash == VISIT_DATE_CODE), None)
+    given = next((r for r in readings if visit_date and r.field_name == visit_date.name), None)
+    if given is None:
+        return []
+    taken = {(r.field_name, r.repeat_num) for r in readings}
+    if given.completion_status == "not_done":
+        return [Reading(field_name=f.name, repeat_num=n, completion_status="not_applicable",
+                        completion_reason=VISIT_NOT_PERFORMED)
+                for f in fields.values() if f is not visit_date
+                for n in range(1, max(1, f.repeats) + 1) if (f.name, n) not in taken]
+    if given.completion_status != "value":
+        return []
+    rows = s.scalars(select(Observation).where(Observation.protocol_id == p.id, Observation.subject_ref == subj.id,
+                                               Observation.visit == visit,
+                                               Observation.completion_status == "not_applicable",
+                                               Observation.completion_reason == VISIT_NOT_PERFORMED)).all()
+    return [Reading(field_name=o.field_name, repeat_num=o.repeat_num) for o in rows
+            if (o.field_name, o.repeat_num) not in taken]
+
+
 def _check(fields: dict[str, FieldDef], readings: list[Reading], subj: Subject | None = None,
-           standing: list[Reading] | None = None) -> dict:
+           standing: list[Reading] | None = None, cascaded: list[Reading] | None = None) -> dict:
     """`readings` are validated one by one; a derived value must then agree
-    with the inputs in `standing`, the values as they would be after saving."""
+    with the inputs in `standing`, the values as they would be after saving.
+    `cascaded` came from the visit date, not from a person, so a field need not
+    offer Not applicable to receive it."""
     errors = {}
+    exempt = {id(r) for r in cascaded or []}
     for r in readings:
         f = fields.get(r.field_name)
         if not f:
             errors[f"{r.field_name}#{r.repeat_num}"] = "unknown field for this visit"
             continue
-        err = _completion_error(f, r) or validate(f, r.value)
+        err = (None if id(r) in exempt else _completion_error(f, r)) or validate(f, r.value)
         if err:
             errors[f"{r.field_name}#{r.repeat_num}"] = err
     if not errors:
         errors.update(derive.check(fields, standing if standing is not None else readings,
                                    subj.birth_year if subj else None,
-                                   subj.sex if subj else None, date.today().year))
+                                   subj.sex if subj else None, clock.today().year))
     return {"ok": not errors, "errors": errors}
 
 
@@ -293,8 +325,15 @@ def save_readings(s: Session, cu: CurrentUser, p, v, subj: Subject, visit: str,
     follows its inputs whatever its status, and needs approving again too. Any
     change to a value in a signed visit undoes the sign-off."""
     scope.check_study_open(p)
+    cascaded = _visit_not_performed(s, p, subj, visit, fields, readings)
+    if cascaded:
+        # Whatever the visit date's own reason says also explains these.
+        why_date = next((r.completion_reason for r in readings if fields.get(r.field_name) is not None
+                         and fields[r.field_name].cdash == VISIT_DATE_CODE), None)
+        reason = reason or why_date
+        readings = [*readings, *cascaded]
     rows, recomputed, standing = _prepare(s, p, subj, visit, fields, readings)
-    check = _check(fields, [*readings, *recomputed], subj, standing)
+    check = _check(fields, [*readings, *recomputed], subj, standing, cascaded)
     if not check["ok"]:
         raise HTTPException(422, {"errors": check["errors"]})
 
@@ -338,12 +377,18 @@ def save_readings(s: Session, cu: CurrentUser, p, v, subj: Subject, visit: str,
         if o is None:
             if num is None and text is None and r.completion_status == "value":
                 continue    # nothing typed, nothing to keep
-            s.add(Observation(protocol_id=p.id, subject_id=subj.code, subject_ref=subj.id,
-                              ecrf_version_id=v.id, visit=visit, field_name=r.field_name,
-                              repeat_num=r.repeat_num, value_num=num, value_text=text,
-                              completion_status=r.completion_status,
-                              completion_reason=r.completion_reason if r.completion_status != "value" else None,
-                              synthetic=True, status="draft", entered_by=cu.user.email))
+            made = Observation(protocol_id=p.id, subject_id=subj.code, subject_ref=subj.id,
+                               ecrf_version_id=v.id, visit=visit, field_name=r.field_name,
+                               repeat_num=r.repeat_num, value_num=num, value_text=text,
+                               completion_status=r.completion_status,
+                               completion_reason=r.completion_reason if r.completion_status != "value" else None,
+                               synthetic=True, status="draft", entered_by=cu.user.email)
+            s.add(made)
+            if r.completion_reason == VISIT_NOT_PERFORMED and any(r is c for c in cascaded):
+                # A person did not type this one, so say where it came from.
+                s.flush()
+                s.add(ObservationHistory(observation_id=made.id, old_value=None, new_value=shown(made),
+                                         changed_by=cu.user.email, reason=VISIT_NOT_PERFORMED))
             continue
         why = "recalculated after a change to its inputs" if r.field_name in auto else reason
         changed = record_change(s, o, num, text, cu.user.email, why, r.completion_status, r.completion_reason)
@@ -384,8 +429,10 @@ def validate_only(body: EntryRequest, cu: CurrentUser = Depends(require("data.en
     """Errors would stop the save. Warnings are what would become queries at
     submit. Nothing is written."""
     p, v, subj, fields = _locked_fields(s, cu, body)
-    _, recomputed, standing = _prepare(s, p, subj, body.visit, fields, body.readings)
-    result = _check(fields, [*body.readings, *recomputed], subj, standing)
+    cascaded = _visit_not_performed(s, p, subj, body.visit, fields, body.readings)
+    readings = [*body.readings, *cascaded]
+    _, recomputed, standing = _prepare(s, p, subj, body.visit, fields, readings)
+    result = _check(fields, [*readings, *recomputed], subj, standing, cascaded)
     draft = DraftECRF.model_validate(v.content)
     checks.ensure(s, p, draft, v.version)
     s.commit()

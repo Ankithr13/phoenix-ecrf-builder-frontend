@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { NotificationRow } from "../api/types";
 import { useAuth } from "../auth/useAuth";
@@ -11,7 +11,8 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 /* Unread first. In the app only: nothing here sends an email. On a protocol's
-   own page, the route's id narrows it to that protocol. */
+   one page for every study: the protocol filter, kept in the address as
+   ?protocol=<id>, narrows it to one. */
 export default function Notifications() {
   const { can } = useAuth();
   // The admin runs the system and has no inbox.
@@ -20,26 +21,42 @@ export default function Notifications() {
 }
 
 function Inbox() {
-  const params = useParams();
-  const scoped = params.id ? Number(params.id) : null;
+  const [search, setSearch] = useSearchParams();
+  const protocol = search.get("protocol") ?? "";
+  const setProtocol = (value: string) => setSearch(value ? { protocol: value } : {}, { replace: true });
   const [rows, setRows] = useState<NotificationRow[] | null>(null);
-  const [protocol, setProtocol] = useState("");
+  // Every study seen so far, so the filter keeps its choices while one is picked.
+  const [seen, setSeen] = useState<Map<number, string>>(new Map());
   const [kind, setKind] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setRows(await api.notifications({ protocol_id: scoped ? String(scoped) : protocol, kind }));
+      const got = await api.notifications({ protocol_id: protocol, kind });
+      setRows(got);
+      setSeen((prev) => {
+        const next = new Map(prev);
+        for (const n of got) next.set(n.protocol_id, n.protocol_name ?? String(n.protocol_id));
+        return next;
+      });
       setError(null);
     } catch (e) { setError((e as Error).message); }
-  }, [scoped, protocol, kind]);
+  }, [protocol, kind]);
   useEffect(() => { load(); }, [load]);
+  // The study list for the filter comes from everything, not only the filtered rows.
+  useEffect(() => {
+    api.notifications().then((all) => setSeen((prev) => {
+      const next = new Map(prev);
+      for (const n of all) next.set(n.protocol_id, n.protocol_name ?? String(n.protocol_id));
+      return next;
+    })).catch(() => undefined);
+  }, []);
 
   const protocols = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const n of rows ?? []) m.set(n.protocol_id, n.protocol_name ?? String(n.protocol_id));
-    return Array.from(m);
-  }, [rows]);
+    const list = Array.from(seen);
+    if (protocol && !seen.has(Number(protocol))) list.push([Number(protocol), `Protocol ${protocol}`]);
+    return list;
+  }, [seen, protocol]);
   const unread = (rows ?? []).filter((n) => !n.read_at).length;
 
   const act = async (fn: () => Promise<unknown>) => {
@@ -54,19 +71,17 @@ function Inbox() {
         <div className="muted small">{unread} unread. Shown here only; nothing is emailed.</div>
       </div>
       <div className="row row-wrap filters mb-3">
-        {!scoped && (
-          <select className="input" value={protocol} onChange={(e) => setProtocol(e.target.value)} aria-label="Protocol">
-            <option value="">All protocols</option>
-            {protocols.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-          </select>
-        )}
+        <select className="input" value={protocol} onChange={(e) => setProtocol(e.target.value)} aria-label="Protocol">
+          <option value="">All protocols</option>
+          {protocols.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        </select>
         <select className="input" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">
           <option value="">All kinds</option>
           {Object.entries(KIND_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </select>
         <span className="grow" />
         <button type="button" className="btn btn-secondary btn-sm" disabled={unread === 0}
-                onClick={() => act(() => api.readAllNotifications(scoped ?? undefined))}>Mark all read</button>
+                onClick={() => act(() => api.readAllNotifications(protocol ? Number(protocol) : undefined))}>Mark all read</button>
       </div>
       {rows && rows.length === 0 && <div className="card"><p className="muted small">Nothing here.</p></div>}
       {(rows ?? []).map((n) => (

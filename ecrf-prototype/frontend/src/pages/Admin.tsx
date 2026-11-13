@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Navigate, NavLink } from "react-router-dom";
 import { api } from "../api/client";
 import type { AccessEvent, AdminOrg, AdminUser, ChainRow, Role } from "../api/types";
 import { useAuth } from "../auth/useAuth";
@@ -41,6 +41,8 @@ function Users() {
   const [editing, setEditing] = useState<number | null>(null);
   const [shown, setShown] = useState<{ email: string; password: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  const { me } = useAuth();
 
   const load = useCallback(async () => {
     try {
@@ -57,6 +59,7 @@ function Users() {
 
   const act = async (fn: () => Promise<unknown>) => {
     setError(null);
+    setSaved(null);
     try { await fn(); await load(); }
     catch (e) { setError((e as Error).message); }
   };
@@ -109,8 +112,12 @@ function Users() {
           <thead><tr><th>Person</th><th>Organisation</th><th>Role</th><th>Status</th><th>Last sign-in</th><th /></tr></thead>
           <tbody>
             {(users ?? []).map((u) => (
-              <tr key={u.id}>
-                <td><div className="strong">{u.name}</div><div className="mono xs muted">{u.email}</div></td>
+              <Fragment key={u.id}>
+              <tr>
+                <td>
+                  <div className="strong">{u.name}{u.id === me?.user.id && <span className="muted small"> (you)</span>}</div>
+                  <div className="mono xs muted">{u.email}</div>
+                </td>
                 <td>{u.org.name}</td>
                 <td>
                   {ROLE_LABEL[u.role] ?? u.role}
@@ -125,27 +132,39 @@ function Users() {
                 <td className="small muted">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "never"}</td>
                 <td className="num">
                   <span className="row row-wrap admin-actions">
-                    <button type="button" className="btn-link" onClick={() => setEditing(editing === u.id ? null : u.id)}>Edit</button>
-                    <button type="button" className="btn-link" onClick={() => reset(u)}>Reset password</button>
-                    <button type="button" className="btn-link" onClick={() => act(() => (u.is_active ? api.adminDeactivate(u.id) : api.adminReactivate(u.id)))}>
-                      {u.is_active ? "Deactivate" : "Reactivate"}
-                    </button>
+                    {u.id === me?.user.id ? (
+                      <NavLink to="/change-password" className="btn-link">Change your password</NavLink>
+                    ) : (
+                      <>
+                        <button type="button" className="btn-link" onClick={() => setEditing(editing === u.id ? null : u.id)}>
+                          {editing === u.id ? "Close" : "Edit"}
+                        </button>
+                        <button type="button" className="btn-link" onClick={() => reset(u)}>Reset password</button>
+                        <button type="button" className="btn-link" onClick={() => act(() => (u.is_active ? api.adminDeactivate(u.id) : api.adminReactivate(u.id)))}>
+                          {u.is_active ? "Deactivate" : "Reactivate"}
+                        </button>
+                      </>
+                    )}
                   </span>
                 </td>
               </tr>
+              {editing === u.id && (
+                <tr>
+                  <td colSpan={6}>
+                    <UserForm user={u} orgs={orgs} sites={sites} onCancel={() => setEditing(null)} onSave={(body) => act(async () => {
+                      await api.adminEditUser(u.id, { role: body.role, org_id: body.org_id, monitor_site_ids: body.monitor_site_ids });
+                      setEditing(null);
+                      setSaved(`${u.email} saved`);
+                    })} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
             {users && users.length === 0 && <tr><td colSpan={6} className="muted small">No users match these filters.</td></tr>}
           </tbody>
         </table>
-        {editing !== null && (() => {
-          const u = (users ?? []).find((x) => x.id === editing);
-          return u ? (
-            <UserForm key={u.id} user={u} orgs={orgs} sites={sites} onCancel={() => setEditing(null)} onSave={(body) => act(async () => {
-              await api.adminEditUser(u.id, { role: body.role, org_id: body.org_id, monitor_site_ids: body.monitor_site_ids });
-              setEditing(null);
-            })} />
-          ) : null;
-        })()}
+        {saved && <p className="ok mt-3">{saved}</p>}
       </div>
       {error && <p className="error mt-3">{error}</p>}
     </>

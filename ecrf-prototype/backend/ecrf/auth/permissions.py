@@ -32,8 +32,10 @@ _MATRIX: dict[str, tuple[str, ...]] = {
     "protocol.view": _EVERYONE,
     "sites.assign": ("admin", "data_manager"),
     "subject.create": ("site_coordinator",),
-    "data.enter": SITE_ROLES,
-    "data.submit": SITE_ROLES,
+    # The roles document's Principal Investigator row: "View subject data;
+    # electronically sign/approve eCRFs when configured and required."
+    "data.enter": ("site_coordinator", "site_data_entry"),
+    "data.submit": ("site_coordinator", "site_data_entry"),
     "data.approve": ("data_manager",),
     "data.monitor_review": ("monitor",),
     "query.raise": ("data_manager", "monitor", "investigator", "site_coordinator"),
@@ -41,6 +43,9 @@ _MATRIX: dict[str, tuple[str, ...]] = {
     "query.close": ("data_manager", "monitor"),
     "signoff.sign": ("investigator",),
     "dashboard.view": ("admin", "builder", "data_manager", "monitor", "investigator", "site_coordinator", "read_only"),
+    # Page status, and queries about data rather than the form. The dashboards
+    # document lists no Database Builder for the Page Status Report.
+    "dashboard.subject_level": ("admin", "data_manager", "monitor", "investigator", "site_coordinator", "read_only"),
     "listing.view": ("data_manager", "monitor", "investigator", "site_coordinator"),
     "listing.export": ("data_manager", "monitor", "investigator", "site_coordinator"),
     "report.pdf": ("builder", "data_manager", "monitor", "investigator", "site_coordinator", "read_only"),

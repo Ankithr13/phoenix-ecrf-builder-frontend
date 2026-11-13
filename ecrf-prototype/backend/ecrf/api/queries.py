@@ -239,8 +239,8 @@ def answer_query(query_id: int, body: AnswerRequest,
     if not _may_answer(cu, q):
         raise HTTPException(403, "your side raised this query; the other side answers it")
     has_value = body.new_value is not None and body.new_value != ""
-    if has_value and cu.org.type != "site":
-        raise HTTPException(403, "only the site may change an entered value; answer in words")
+    if has_value and not cu.can("data.enter"):
+        raise HTTPException(403, "only site staff who enter data may change a value; answer in words")
     if has_value and not q.observation_id:
         raise HTTPException(422, "this query is not about one value, so there is nothing to correct")
     if has_value:

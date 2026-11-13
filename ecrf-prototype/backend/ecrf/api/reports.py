@@ -1,4 +1,4 @@
-"""The data listing and the two PDFs."""
+"""The data listing and the PDFs."""
 
 import csv
 import io
@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ecrf import pdf
 from ecrf.api.chain import valid_signoff
 from ecrf.api.data import shown
+from ecrf.api.sap import matrix
 from ecrf.auth import scope
 from ecrf.auth.permissions import CurrentUser, require
 from ecrf.schema import DraftECRF
@@ -127,6 +128,17 @@ def blank_pdf(protocol_id: int, cu: CurrentUser = Depends(require("report.pdf"))
     v, draft = _locked(s, protocol_id)
     locked = v.locked_at.date().isoformat() if v.locked_at else "date not recorded"
     return _pdf(pdf.blank_ecrf(p.name, v.version, locked, draft), f"blank_ecrf_{protocol_id}_v{v.version}")
+
+
+@router.get("/api/protocols/{protocol_id}/pdf/traceability")
+def traceability_pdf(protocol_id: int, cu: CurrentUser = Depends(require("dashboard.view")),
+                     s: Session = Depends(db.get_session)):
+    """Scoped like the dashboard. It holds the plan, not subjects' values."""
+    p = scope.protocol_or_404(s, cu, protocol_id)
+    m = matrix(s, protocol_id)
+    generated = utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    content = pdf.traceability(p.name, m["version"], "locked" if m["locked"] else "draft", generated, m["columns"], m["rows"])
+    return _pdf(content, f"traceability_{protocol_id}_v{m['version']}")
 
 
 @router.get("/api/subjects/{subject_ref}/pdf")

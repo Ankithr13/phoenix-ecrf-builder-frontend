@@ -1,15 +1,30 @@
+import os
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import NullPool, create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ecrf.config import config
 from ecrf.storage.models import ECRFVersion, Protocol
 
-_engine = create_engine(
-    config.database_url,
-    connect_args={"check_same_thread": False} if config.database_url.startswith("sqlite") else {},
-)
+
+def _engine_options(url: str) -> dict:
+    if url.startswith("sqlite"):
+        return {"connect_args": {"check_same_thread": False}}
+    options = {
+        # Supabase's transaction pooler (port 6543) cannot keep prepared
+        # statements between transactions, so psycopg must not make any.
+        "connect_args": {"prepare_threshold": None},
+        "pool_pre_ping": True,
+    }
+    if os.getenv("VERCEL"):
+        # A serverless instance can be frozen between requests. Holding no
+        # connection open leaves the pooler to do the pooling.
+        options["poolclass"] = NullPool
+    return options
+
+
+_engine = create_engine(config.database_url, **_engine_options(config.database_url))
 SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
 
 

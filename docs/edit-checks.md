@@ -46,24 +46,28 @@ Generated when the form is locked. They find their fields by CDASH code first an
 by name second, so they work on any protocol. A check whose fields are not on the
 form is simply not created.
 
-| Code | Type | What it asks |
-|---|---|---|
-| EC-001 | `required` | Year of birth is missing. |
-| EC-002 | `temporal` | Year of birth is not before the year of consent. |
-| EC-003 | `temporal` | The consent date is after the first visit date. |
-| EC-004 | `conditional` | The patient is marked not eligible, but a later visit has data. |
-| EC-005 | `required` | A visit's date is missing. |
-| EC-006 | `range` | A number is outside the field's expected range. |
-| EC-007 | `cross_field` | Diastolic blood pressure is not below systolic. |
-| EC-008 | `temporal` | An adverse event's end date is before its start date. |
-| EC-009 | `conditional` | An adverse event is marked serious with no seriousness criterion. |
-| EC-010 | `temporal` | A medication's stop date is before its start date. |
-| EC-011 | | Not built. It needs an intervention form this system does not model. |
-| EC-012 | `conditional` | A completion status is recorded without its date or reason. |
-| REQ | `required` | A required field not already covered above is blank. |
-| FMT | `format`, hard | A date, integer or decimal field holds something else. |
+| Code | Type | Owner | What it asks |
+|---|---|---|---|
+| EC-001 | `required` | DM | Year of birth is missing. |
+| EC-002 | `temporal` | DM | Year of birth is not before the year of consent. |
+| EC-003 | `temporal` | DM/Monitor | The consent date is after the first visit date. |
+| EC-004 | `conditional` | DM/Clinical | The patient is marked not eligible, but a later visit has data. |
+| EC-005 | `required` | Site | Enter visit date or document visit not performed. |
+| EC-006 | `range` | DM | A number is outside the field's expected range. |
+| EC-007 | `cross_field` | DM | Diastolic blood pressure is not below systolic. |
+| EC-008 | `temporal` | DM | An adverse event's end date is before its start date. |
+| EC-009 | `conditional` | Safety/DM | An adverse event is marked serious with no seriousness criterion. |
+| EC-010 | `temporal` | DM | A medication's stop date is before its start date. |
+| EC-011 | | DM | Not built. It needs an intervention form this system does not model. |
+| EC-012 | `conditional` | DM | A completion status is recorded without its date or reason. |
+| REQ | `required` | DM | A required field not already covered above is blank. |
+| FMT | `format`, hard | DM | A date, integer or decimal field holds something else. |
 
 Every built-in check is on. There is no way to switch one off in this version.
+
+Owners come from the client's Edit Check Specification. REQ and FMT are not in its table,
+so they go to data management. An owner says who is responsible for the check, and does not
+change who can answer the query it raises.
 
 ## When they run
 
@@ -78,6 +82,14 @@ Once raised:
 - When the value is fixed, the system answers its own query, and the sponsor closes it.
 - When a person closes a system query, it stays closed until the value it is about
   changes. Otherwise every later edit on the visit would ask the same thing again.
+
+## A visit that did not happen
+
+Every visit's date can be answered Not done, with a reason, which satisfies EC-005. Every
+other field at that visit then becomes Not applicable with the reason "Visit not performed",
+each with a history row, so the visit raises no queries for blanks. A value already approved
+blocks this until the sponsor reopens it. Correcting the date back to a real one lifts Not
+applicable from those fields.
 
 ## Custom checks
 

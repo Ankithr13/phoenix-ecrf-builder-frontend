@@ -69,8 +69,10 @@ def test_monitor_gets_404_on_protocol_without_their_sites(client, demo_accounts)
         f"/api/dashboard/{pid}/queries",
         f"/api/dashboard/{pid}/page-status",
         f"/api/protocols/{pid}/sap",
+        f"/api/protocols/{pid}/traceability",
         f"/api/protocols/{pid}/data",            # Data review
         f"/api/protocols/{pid}/pdf/blank",       # PDFs
+        f"/api/protocols/{pid}/pdf/traceability",
         f"/api/listing/{pid}",
     ]
     for url in routes:

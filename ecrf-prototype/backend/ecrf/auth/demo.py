@@ -13,7 +13,7 @@ ORGS = [
     ("Boston General Demo", "site", "BGH"),
     ("Mercy Hospital Demo", "site", "MRC"),
 ]
-# One person per role. The monitor is assigned Boston General only, so the
+# One person per role, and an investigator at each site so both can sign. The monitor is assigned Boston General only, so the
 # scoping is visible on a demo: Mercy's data is hidden from them.
 USERS = [
     ("admin@phoenix.demo", "Priya Admin", "PHX", "admin"),
@@ -25,6 +25,7 @@ USERS = [
     ("crc@bgh.demo", "Sam Coordinator", "BGH", "site_coordinator"),
     ("entry@bgh.demo", "Jo Entry", "BGH", "site_data_entry"),
     ("crc@mrc.demo", "Morgan Coordinator", "MRC", "site_coordinator"),
+    ("pi@mrc.demo", "Dr Rivera", "MRC", "investigator"),
 ]
 MONITOR_SITES = {"cra@phoenix.demo": ("BGH",)}
 

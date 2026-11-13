@@ -97,9 +97,10 @@ def _results(s: Session, cu: CurrentUser, protocol_id: int, df) -> list[dict]:
     out = []
     for item in items:
         analysis = registry.resolve(item, draft, subjects)
-        ours = {name: registry.run(name, df, analysis) for name in registry.applicable(item.kind, item.responder_rule)} if analysis else {}
+        names = registry.applicable(item.kind, item.responder_rule, analysis.field_type if analysis else None)
+        ours = {name: registry.run(name, df, analysis) for name in names} if analysis else {}
         theirs = independent.item_results(config.database_url, protocol_id, item.id, sites)
-        for name in registry.applicable(item.kind, item.responder_rule):
+        for name in names:
             app, ind = ours.get(name), theirs.get(name)
             status = _status(app, ind)
             out.append({"item_id": item.id, "item_label": item.label, "item_kind": item.kind, "unit": item.unit,
@@ -161,9 +162,12 @@ def _as_of(q: Query, end: datetime) -> str | None:
 def queries_360(protocol_id: int, site: str | None = None, raised_by: str | None = None,
                 cu: CurrentUser = Depends(require("dashboard.view")), s: Session = Depends(db.get_session)):
     """Counts by status, where things stood at the end of each week, and by
-    site. raised_by is person or system."""
+    site. raised_by is person or system. Someone who works on the form and not
+    on subjects, the builder, sees only queries about the study as a whole."""
     scope.protocol_or_404(s, cu, protocol_id)
     q = select(Query).where(Query.protocol_id == protocol_id)
+    if not cu.can("dashboard.subject_level"):
+        q = q.where(Query.observation_id.is_(None), Query.subject_ref.is_(None))
     if cu.site_ids is not None:
         q = q.where(Query.site_org_id.in_(cu.site_ids))
     rows = list(s.scalars(q))
@@ -204,7 +208,7 @@ _STATE_ORDER = ("draft", "submitted", "monitor_reviewed", "approved")
 
 
 @router.get("/{protocol_id}/page-status")
-def page_status(protocol_id: int, cu: CurrentUser = Depends(require("dashboard.view")),
+def page_status(protocol_id: int, cu: CurrentUser = Depends(require("dashboard.subject_level")),
                 s: Session = Depends(db.get_session)):
     """Per site, then per subject. A visit counts once, at its least advanced
     value. A signed visit counts as approved and as signed. There is no overdue

@@ -1,4 +1,4 @@
-"""The two PDFs: a locked blank eCRF, and a subject casebook. Built on the server
+"""The PDFs: a locked blank eCRF, a subject casebook and the traceability matrix. Built on the server
 with reportlab, so nothing depends on a browser's print dialog.
 
 Protocol text often holds characters the standard PDF fonts cannot draw, such
@@ -11,7 +11,7 @@ from io import BytesIO
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
@@ -51,12 +51,12 @@ def _p(text, style=BODY) -> Paragraph:
     return Paragraph(escape(str(text)), style)
 
 
-def _build(title: str, header: str, story: list) -> bytes:
+def _build(title: str, header: str, story: list, pagesize=letter) -> bytes:
     def frame(canvas, doc):
         canvas.saveState()
         canvas.setFont(FONT, 7.5)
         canvas.setFillColor(MUTED)
-        width, height = letter
+        width, height = pagesize
         canvas.drawString(0.75 * inch, height - 0.5 * inch, header[:125])
         canvas.setStrokeColor(LINE)
         canvas.line(0.75 * inch, height - 0.56 * inch, width - 0.75 * inch, height - 0.56 * inch)
@@ -64,7 +64,7 @@ def _build(title: str, header: str, story: list) -> bytes:
         canvas.restoreState()
 
     out = BytesIO()
-    doc = SimpleDocTemplate(out, pagesize=letter, title=title, author="Phoenix eCRF Builder",
+    doc = SimpleDocTemplate(out, pagesize=pagesize, title=title, author="Phoenix eCRF Builder",
                             leftMargin=0.75 * inch, rightMargin=0.75 * inch, topMargin=0.8 * inch, bottomMargin=0.7 * inch)
     doc.build(story, onFirstPage=frame, onLaterPages=frame)
     return out.getvalue()
@@ -149,3 +149,24 @@ def casebook(name: str, version: int | None, subject: str, site: str, generated:
         for undone in visit.get("undone", []):
             story.append(_p(f"An earlier sign-off by {undone['who']} on {undone['when']} was undone by a later change.", META))
     return _build(f"Casebook {subject}", f"{name} · {subject} · {site}", story)
+
+
+def traceability(name: str, version: int, state: str, generated: str, columns: list[str], rows: list[list[str]]) -> bytes:
+    """The eCRF-to-SAP traceability matrix: one row per result, in the client's
+    eight columns. Landscape, so the eight fit across the page."""
+    story: list = [_p("Traceability matrix", H1),
+                   _p(f"{name}, form version {version} ({state}). Generated {generated}. "
+                      "Each row is a result on the Dashboard, computed on approved values only.", META),
+                   Spacer(1, 6)]
+    if not rows:
+        story.append(_p("No results yet.", META))
+    else:
+        widths = [1.0, 1.35, 1.0, 1.15, 1.05, 0.6, 2.0, 1.35]
+        table = Table([[_p(h, CELL_HEAD) for h in columns], *[[_p(x, CELL) for x in r] for r in rows]],
+                      colWidths=[w * inch for w in widths], repeatRows=1)
+        table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), SHADE),
+                                   ("GRID", (0, 0), (-1, -1), 0.25, LINE),
+                                   ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        story.append(table)
+    return _build(f"Traceability matrix: {name}", f"{name} · form version {version} ({state}) · traceability matrix",
+                  story, pagesize=landscape(letter))

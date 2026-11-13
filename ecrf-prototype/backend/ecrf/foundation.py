@@ -32,7 +32,7 @@ def _field(name: str, type_: str, code: str | None, **kw) -> FieldDef:
 def visit_date() -> FieldDef:
     """Put on every visit by code. The date checks and the safety window need
     it, and a protocol's schedule rarely names it as a field."""
-    return _field("Visit date", "date", "SVSTDTC")
+    return _field("Visit date", "date", "SVSTDTC", allow_not_done=True)
 
 
 def form() -> VisitForm:

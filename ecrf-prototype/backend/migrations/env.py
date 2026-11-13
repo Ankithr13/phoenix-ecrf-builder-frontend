@@ -25,7 +25,9 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    engine = create_engine(_url(), poolclass=pool.NullPool)
+    # Supabase's transaction pooler cannot keep prepared statements.
+    connect_args = {"prepare_threshold": None} if _url().startswith("postgresql") else {}
+    engine = create_engine(_url(), poolclass=pool.NullPool, connect_args=connect_args)
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata,
                           render_as_batch=True)

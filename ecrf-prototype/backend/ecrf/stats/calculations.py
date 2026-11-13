@@ -36,6 +36,8 @@ class Analysis:
     subjects: int
     # the form's visit date field, found by its code rather than by name
     visit_date: str | None = None
+    # the field's type on the form, which decides descriptive or frequency
+    field_type: str = "decimal"
 
 
 def _visit_means(df: pd.DataFrame, field: str) -> pd.DataFrame:
@@ -61,6 +63,23 @@ def descriptive(df: pd.DataFrame, a: Analysis) -> dict | None:
     if baseline is None and analysis is None:
         return None
     return {"baseline": baseline, "analysis": analysis}
+
+
+def frequency(df: pd.DataFrame, a: Analysis) -> dict | None:
+    """Count and percent per category at one visit, for a choice, yes/no or
+    status field: the baseline visit for a baseline item, otherwise the analysis
+    visit. The percent is of n, the subjects with an approved answer. Registered
+    subjects without one are reported as missing, and are not a category. A
+    field with several readings counts each subject's first."""
+    visit = a.baseline if a.kind == "baseline" else a.analysis
+    d = df[(df.field_name == a.field) & (df.visit == visit) & df.value_text.notna()]
+    d = d.sort_values("repeat_num").drop_duplicates("subject_id")
+    n = len(d)
+    if n == 0:
+        return None
+    counts = d.value_text.value_counts().to_dict()
+    return {"n": n, "missing": max(a.subjects - n, 0),
+            "categories": {str(k): {"count": int(c), "percent": 100.0 * c / n} for k, c in counts.items()}}
 
 
 def _pairs(df: pd.DataFrame, a: Analysis) -> tuple[pd.Series, pd.Series]:

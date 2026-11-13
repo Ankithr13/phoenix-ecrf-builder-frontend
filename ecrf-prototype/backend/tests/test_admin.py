@@ -99,6 +99,10 @@ def test_deactivated_user_cannot_log_in(client, demo_accounts):
     assert _actions(BUILDER) == ["deactivated", "reactivated"]
     me = next(u["id"] for u in client.get("/api/admin/users").json() if u["email"] == ADMIN)
     assert client.post(f"/api/admin/users/{me}/deactivate").status_code == 409, "no locking yourself out"
+    # A reset signs you out, so on your own account you'd never see the password.
+    assert client.post(f"/api/admin/users/{me}/reset-password").status_code == 409
+    assert client.get("/api/auth/me").status_code == 200, "still signed in"
+    assert "password_reset" not in _actions(ADMIN)
 
 
 def test_must_change_password_blocks_other_routes(client, demo_accounts):

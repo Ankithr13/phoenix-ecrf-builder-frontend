@@ -28,7 +28,8 @@ def ensure(s: Session, p: Protocol, draft: DraftECRF, version: int) -> None:
         return
     for spec in builtin.specs(draft):
         s.add(EditCheck(protocol_id=p.id, code=spec.code, form=spec.form, field_ids=spec.field_ids, type=spec.type,
-                        logic=spec.logic, message=spec.message, severity=spec.severity, owner="system",
+                        logic=spec.logic, message=spec.message, severity=spec.severity,
+                        owner=builtin.OWNERS.get(spec.code, builtin.DEFAULT_OWNER),
                         origin="builtin", form_version=version))
     s.flush()
 

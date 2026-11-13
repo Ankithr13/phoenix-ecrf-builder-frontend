@@ -1,0 +1,16 @@
+# Installed by Vercel for api/index.py. Keep in step with the dependencies in
+# backend/pyproject.toml; uvicorn is left out because Vercel serves the app.
+fastapi>=0.115
+python-multipart>=0.0.12
+pydantic>=2.9
+sqlalchemy>=2.0
+pdfplumber>=0.11
+rapidfuzz>=3.10
+pandas>=2.2
+scipy>=1.11
+reportlab>=4.0
+pyyaml>=6.0
+openai>=1.54
+python-dotenv>=1.0
+alembic>=1.13
+psycopg[binary]>=3.2

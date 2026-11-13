@@ -2,7 +2,7 @@
    else. Vite proxies /api to the backend in dev, so the session cookie is
    same-origin and travels with every request. */
 
-import type { AccessEvent, AdminOrg, AdminUser, CdashEntry, ChainRow, CheckWarning, EditCheck, FieldComment, FormHistoryRow, HistoryRow, LabRange, ListingResponse, NewQuery, NotificationRow, PageStatus, Queries360, Role, SapItem, SapItemIn, SapResponse, SignoffRow, StudyLockState, SubjectCreate,
+import type { AccessEvent, AdminOrg, AdminUser, CdashEntry, ChainRow, CheckWarning, EditCheck, FieldComment, FormHistoryRow, HistoryRow, LabRange, ListingResponse, NewQuery, NotificationRow, PageStatus, Queries360, Role, SapItem, SapItemIn, SapResponse, Traceability, SignoffRow, StudyLockState, SubjectCreate,
   DashboardResponse, DataRow, DraftResponse, FieldChange, Health, Me, Plan,
   ProtocolListItem, QueryRow, Reading, SiteRow, StudyListItem, SubjectRow, VersionRow,
 } from "./types";
@@ -156,6 +156,8 @@ export const api = {
   sapUpdate: (id: number, itemId: number, body: SapItemIn) =>
     req<SapItem>(`/api/protocols/${id}/sap/${itemId}`, { method: "PUT", body: JSON.stringify(body) }),
   sapDelete: (id: number, itemId: number) => req<{ deleted: number }>(`/api/protocols/${id}/sap/${itemId}`, { method: "DELETE" }),
+  traceability: (id: number) => req<Traceability>(`/api/protocols/${id}/traceability`),
+  traceabilityPdf: (id: number) => download(`/api/protocols/${id}/pdf/traceability`, `traceability_${id}.pdf`),
 
   listingForms: (id: number) => req<{ forms: string[] }>(`/api/listing/${id}`),
   listing: (id: number, form: string) => req<ListingResponse>(`/api/listing/${id}/${encodeURIComponent(form)}`),

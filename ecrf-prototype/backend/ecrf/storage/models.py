@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import (
     JSON,
@@ -15,12 +15,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from ecrf import clock
+
 
 def utcnow() -> datetime:
-    """Naive UTC. SQLite drops the timezone on the way in, so comparing a
-    stored value against an aware datetime raises; everything is naive UTC
-    on both sides instead."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    """Naive UTC, from the app's one clock (see ecrf/clock.py)."""
+    return clock.now()
 
 
 # The query statuses that are still waiting on someone. Closed and cancelled are not.
@@ -415,7 +415,8 @@ class SapItem(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     protocol_id: Mapped[int] = mapped_column(ForeignKey("protocol.id"))
-    label: Mapped[str] = mapped_column(String(200))
+    label: Mapped[str] = mapped_column(String(200))  # the matrix's "SAP Item"
+    endpoint_concept: Mapped[str] = mapped_column(Text)
     kind: Mapped[str] = mapped_column(String(20))  # endpoint, safety, disposition or baseline
     field_id: Mapped[str] = mapped_column(String(32))
     baseline_visit_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -424,4 +425,7 @@ class SapItem(Base):
     # {"on": "change" or "analysis", "op": "<=", "value": -10}
     responder_rule: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     method: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Filled from the chosen field and calculation; null on rows made before that.
+    form: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    derivation: Mapped[str | None] = mapped_column(Text, nullable=True)
 

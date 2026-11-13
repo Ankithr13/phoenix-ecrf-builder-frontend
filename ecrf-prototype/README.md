@@ -52,6 +52,10 @@ protocol.pdf
                                                   backend/ecrf/api/reports.py
 ```
 
+## Hosting
+
+Vercel with a Supabase database: see [DEPLOY.md](DEPLOY.md).
+
 ## Model backends
 
 The model is a config value. `ECRF_BACKEND=mock` replays a recorded run on

@@ -9,7 +9,7 @@ Stage 6. Query lifecycle, notifications, investigator sign-off: done
 Stage 7. Dashboard metrics, SAP mapping, biostatistics, PDF: done
 Stage 8. Documentation and the regression run: done
 
-Client documents: `docs/client/` is not present, so the summaries inside SPRINT3.md are the source.
+Client documents: not read during Stages 1 to 8, which used the summaries inside SPRINT3.md. Compared with the build afterwards, see "Fixes against the client documents".
 Starting test count: 143.
 
 ## Stage 1 acceptance
@@ -196,7 +196,7 @@ Browser checks added at this stage, for what the Stage 6 walk had not clicked, a
 - Mark read took the data manager from 1 unread to 0. Mark all read took the site coordinator from 6 to 0, and the sidebar badge went with it.
 - The admin locked the study from the chain tab.
 
-Migration on a copy of the real `backend/ecrf.db`: revision 0009 to 0015, with 14 protocols, 58 form versions, 2,246 values, 8 subjects and 7 queries all kept. The 4 accounts on the old `sponsor` role became data managers. The original file was left unchanged.
+Migration on a copy of the real `backend/ecrf.db`: revision 0009 to 0015, with 14 protocols, 58 form versions, 2,246 values, 8 subjects and 7 queries all kept. Of the 4 existing accounts, the 2 sponsor staff became data managers and the 2 site staff became site coordinators, confirmed on the real database after `./run.sh` migrated it. The original file was left unchanged.
 
 ## Fixes against the client documents
 
@@ -212,3 +212,115 @@ Choices to confirm:
 - Each `start` still copies `clean.db` to `demo.db`, so every retake starts fresh, as it did before. `clean.db` is rebuilt only when the schema is behind. The old files move to `db/stale-<date>`, so the midterm `demo.db` is kept, not deleted.
 - The demo database is built with the mock extractor. The server still follows `.env`, so with a paid model set, extracting an uploaded PDF is still a live paid call, as it was for the recording. `ECRF_BACKEND=mock ./demo.sh start` avoids that.
 - `demo.sh` was untracked. It is committed on its own, without the rest of `midterm-assets/`.
+
+### Fix 2. Investigator views and signs, does not enter data: done, not committed
+
+Everything from this fix on is uncommitted, because Tarushi asked for no commits for now.
+
+- `test_matrix` updated: done. `data.enter` and `data.submit` are now coordinator and data entry only.
+- Cannot enter or submit: done. `test_investigator_cannot_enter_or_submit_data`, which also covers correcting a value through a query answer.
+- Can still sign: done. `test_investigator_can_still_sign`
+- `docs/roles-and-permissions.md` updated with the quoted sentence: done.
+- Site portal: done. Browser check as `pi@bgh.demo`: the page reads "Visit review", all 12 inputs are disabled, and there is no Submit or Register button. The patient row says "Open". As `crc@bgh.demo` the page reads "Data entry" with no input disabled.
+
+Choice to confirm: the fix's keep list does not name `listing.export`. Only `data.enter` and `data.submit` were to be removed, so the investigator keeps it.
+
+### Fix 3. Builder does not see subject-level status: done, not committed
+
+- Builder has no Page status or listing, as a route-level 403: done. `test_builder_has_no_page_status_or_listing`. New permission `dashboard.subject_level`, asserted cell by cell in `test_matrix`. The Page status tab is hidden too.
+- Admin and read only keep Page status: done. `test_admin_and_read_only_keep_page_status`
+- Queries 360 for the builder shows only queries about the form: done, in the same test.
+
+Choice to confirm: the system has no query type for "about the form". The nearest is a query about the study as a whole, with no value, visit or patient attached, so that is what the builder sees.
+
+### Fix 4. Visit date can be "not done": done, not committed
+
+- EC-005 satisfied by a visit not done, with the spec's message: done. `test_ec_005_is_satisfied_by_visit_not_done`
+- Every other field becomes Not applicable with history rows: done. `test_visit_not_done_cascades_with_history`
+- Needs a reason: done. `test_visit_date_not_done_requires_reason`
+- Browser check as `crc@bgh.demo` on a new patient: marking Week 4's visit date Not done with a reason turned every other field to "Not applicable: visit not performed". Correcting the date brought the inputs back.
+
+Choices to confirm:
+
+- **Correcting the date lifts Not applicable** from the fields the cascade set, because many fields offer no other way back. The sprint fix did not ask for this, but without it those fields would be stuck.
+- **An approved value blocks the cascade** until the sponsor reopens it with a query, like any other change to an approved value. `test_visit_not_done_needs_sponsor_query_on_approved_values`
+- **A field newly created by the cascade also gets a history row**, though a first entry normally has none, because the spec asks for them and no person typed it.
+- A form locked before this change also gets the option, set when the form is read, so its stored version is not rewritten.
+
+### Fix 5. Edit check owners from the spec: done, not committed
+
+- Owners match the spec for the eleven codes: done. `test_builtin_check_owners_match_spec`, parametrised over the eleven.
+- Generated checks carry them, and custom checks default to DM: done. `test_generated_checks_carry_their_owner_and_custom_defaults_to_dm`
+- Shown on the Edit checks page and in `docs/edit-checks.md`: done.
+- Forms locked earlier: done. Migration `0016_edit_check_owners.py` updates their built-in checks, and EC-005's message. It was applied to `backend/ecrf.db`, so the running app keeps working.
+
+Choices to confirm:
+
+- REQ and FMT are not in the spec's table, so their owner is DM.
+- An owner is a label for now. It says who is responsible for a check, and does not change who can answer its queries.
+- Custom checks made earlier keep the email of whoever made them, since that is the only record of it.
+
+### Fix 6. Frequency statistic for categorical fields: done, not committed
+
+- Counts and percents match the verifier: done. `test_frequency_counts_and_percents_match_verifier`. The verifier counts from raw SQL rows with `collections.Counter`.
+- Numeric refused: done. `test_frequency_rejects_numeric_field`
+- Categorical refused by descriptive: done. `test_descriptive_rejects_categorical_field`
+- Missing reported separately: done. `test_frequency_reports_missing_separately`
+- `docs/sap-mapping.md` lists six statistics: done. The Results tab has a small table per category, and the plan page says which one a row gets.
+
+Choices to confirm:
+
+- "Categorical" means field types choice, yes/no and text, because a model may type a status field as text. A free-text field would then list each distinct answer as a category.
+- A baseline or disposition row on a date field is refused, since neither statistic fits it.
+- A field with several readings counts each subject's first.
+
+### Fix 7. SAP page columns match the client's matrix: done, not committed
+
+- `endpoint_concept` is required, and the form is derived and read only: done. `test_sap_item_has_endpoint_concept`, migration `0017_sap_endpoint_concept.py`, which starts existing rows from their label.
+- The eight headers in order: done. `test_sap_page_headers_are_the_eight_in_order` pins the list, and the rendered headers were read from the page in a browser. **The frontend has no test runner, so there is no snapshot or DOM test in the repo.** Adding one means a new dev dependency, so that was left out.
+- `docs/sap-mapping.md` updated: done.
+
+Choices to confirm:
+
+- Exactly eight columns leaves nowhere for the row's kind or its Edit and Remove links, so they sit under the SAP Item.
+- The Visit / Window column shows visits, because windows are not in this round.
+- A safety row with no visits set shows "All visits with this field".
+
+### Fix 8. Site completion guide follows the client's template: done, not committed
+
+- Each of the eight section headings, in order: done. `test_completion_guide_follows_the_client_template`, which also checks the header block, the field and form rows, the seven checklist boxes, and that section 6 never says "signature".
+- Manual read for accuracy: done. Each rule was checked against the code: date and yes/no handling in `pages/DataEntry.tsx`, completion rules and approved values in `api/data.py`, Foundation fields in `foundation.py`, checks in `checks/builtin.py`, sign-off in `api/chain.py`.
+- Length: it fits on two US Letter pages at 10 pt in a rough render. The fix says "under two pages", so this is at the limit, not under it.
+
+Choices to confirm:
+
+- The fix's form list leaves out the template's Device/Intervention row, because EC-011 is not in this round, so the guide does too.
+- "Signature" appears once, as the column in the client's Training Acknowledgment table. That is a person signing a paper record, and the fix only rules the word out of section 6.
+- Medical History, Concomitant Medications and Study Completion say "not collected in this system as a standard form", because they appear only if a protocol's generated form includes them.
+
+### Fix 9. Demo script matches the build: done, not committed
+
+The script is `docs/demo-script.md`, which is new. `Demo script.pdf` is the older recording script and was not changed.
+
+Every step names a button or route that exists, each used in a browser run on a fresh demo database, except where noted:
+
+1. `/sponsor/p/1/review`, "Dropped by verification"
+2. `/site/s/1/patients`, Patients, Register patient, Register, Enter data
+3. Foundation form fields, `/site/s/1/patients/BGH-011`
+4. Submit visit, twice: "12 values submitted for Foundation. 1 query raised."
+5. `/sponsor/p/1/dashboard`, Queries 360 (Open 1), `/sponsor/queries`, the open tab, Close query
+6. `/sponsor/p/1/data?subject=BGH-011`, Approve selected: "12 values approved"
+7. `/notifications`, Sign off this visit, Sign
+8. `/sponsor/p/1/dashboard`, Blank eCRF PDF. The button is there and its route returned a 54 KB PDF to a fetch in the browser. The click through to a saved file was not followed.
+
+**Not as the fix was written:** it says a BMI of 52 raises EC-006. It does not. The client library's BMI range is 10 to 80, so the browser run at 52 reported "Every check passes". The script uses height 150 and weight 190, which give 84.4 and do raise EC-006, and says why.
+
+### Fix 10. Sprint report tells the truth: done, not committed
+
+- `docs/sprint3-report.md` has the comparison result, these fixes and the open items that went to the client (roles G, SAP populations J, drill-down K, EC-011 L): done.
+- Test count matches `pytest`: done. 317 passed and 1 skipped, the same `test_ec_011`.
+
+Final gate after all ten fixes: `ruff` and `eslint` clean, 317 passed and 1 skipped, `npm run build` passes, `alembic check` clean on a temp DB, the verifier grep returns nothing.
+
+Fix 1 is commit `a175da1`. Fixes 2 to 10 are uncommitted, at Tarushi's request. Nothing is pushed.
+

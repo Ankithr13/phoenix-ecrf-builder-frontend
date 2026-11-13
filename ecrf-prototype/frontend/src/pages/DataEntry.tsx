@@ -49,6 +49,9 @@ function serverErrors(e: unknown): Record<string, string> | null {
   return detail && typeof detail === "object" && detail.errors ? detail.errors : null;
 }
 
+const VISIT_DATE_CODE = "SVSTDTC";
+const VISIT_NOT_PERFORMED = "Visit not performed";
+
 /* One patient's visit form. Values are drafts and save as you go, until the
    site submits the visit. After that a change needs a reason. */
 export default function DataEntry() {
@@ -56,6 +59,8 @@ export default function DataEntry() {
   const id = Number(idParam);
   const subject = subjectParam ?? "";
   const { me, can } = useAuth();
+  // An investigator reviews and signs. They do not enter data.
+  const readOnly = !can("data.enter");
   const [resp, setResp] = useState<DraftResponse | null>(null);
   const [visit, setVisit] = useState("");
   const [values, setValues] = useState<Values>({});
@@ -191,6 +196,7 @@ export default function DataEntry() {
   /* A draft saves straight away. A submitted or approved value waits in `dirty`
      until it has a reason. */
   const persist = async (f: FieldDef, rep: number, raw: string, c?: { status: CompletionStatus; reason: string }) => {
+    if (readOnly) return;
     const k = slot(f.name, rep);
     const row = rowAt[k];
     const unchanged = row
@@ -205,7 +211,9 @@ export default function DataEntry() {
         await api.enter(id, subject, visit, [reading(f, rep, raw, c)]);
         setErrors((e) => { const n = { ...e }; delete n[k]; return n; });
         setMessage(null);
-        await loadRows();
+        const all = await loadRows();
+        // The visit date can change every other field at the visit.
+        if (f.cdash === VISIT_DATE_CODE) fill(all, visit, new Set());
       } catch (e) {
         const errs = serverErrors(e);
         if (errs) setErrors((prev) => ({ ...prev, ...errs }));
@@ -318,8 +326,10 @@ export default function DataEntry() {
   return (
     <div className="page">
       <div className="page-head">
-        <h1 className="page-title">Data entry</h1>
-        <p className="muted small">Synthetic data only. No real patient information is entered into this prototype.</p>
+        <h1 className="page-title">{readOnly ? "Visit review" : "Data entry"}</h1>
+        <p className="muted small">
+          {readOnly ? "Read only: site staff enter the data, and you review and sign it." : "Synthetic data only. No real patient information is entered into this prototype."}
+        </p>
       </div>
       {resp.study_locked_at && <div className="lock-banner"><span className="strong">Study locked.</span> <span>No data on this study can change.</span></div>}
 
@@ -354,6 +364,7 @@ export default function DataEntry() {
       <div className="card mt-4">
         <div className="section-title">{visit} · {resp.protocol.name}</div>
         {fields.length === 0 && <p className="muted small">No fields for this visit.</p>}
+        <fieldset className="entry-fields" disabled={readOnly}>
         <div className="entry-grid">
           {fields.filter(shownField).flatMap((f) =>
             Array.from({ length: Math.max(1, f.repeats) }, (_, i) => {
@@ -363,6 +374,7 @@ export default function DataEntry() {
               const raw = values[k] ?? "";
               const c = completion[k];
               const notValue = !!c && c.status !== "value";
+              const cascaded = notValue && c.status === "not_applicable" && c.reason === VISIT_NOT_PERFORMED;
               const err = errors[k] ?? (notValue ? null : formatError(f, raw));
               const note = notValue ? null : rangeNote(f, raw);
               const label = f.repeats > 1 ? `${f.name} · Reading ${rep}` : f.name;
@@ -414,7 +426,8 @@ export default function DataEntry() {
                     {(row?.open_query_count ?? 0) > 0 && <span className="pill chip-rust entry-status">{row.open_query_count} open query</span>}
                     {dirty.has(k) && <span className="pill chip-amber entry-status">changed</span>}
                   </label>
-                  {allowed.length > 0 && (
+                  {cascaded && <span className="hint">Not applicable: visit not performed</span>}
+                  {allowed.length > 0 && !cascaded && (
                     <select className="input input-sm completion" value={c?.status ?? "value"} aria-label={`How ${label} was completed`}
                             onChange={(e) => {
                               const status = e.target.value as CompletionStatus;
@@ -427,7 +440,7 @@ export default function DataEntry() {
                     </select>
                   )}
                   {control}
-                  {notValue && (
+                  {notValue && !cascaded && (
                     <input className="input input-sm completion-reason" placeholder={`Why ${COMPLETION_LABEL[c.status].toLowerCase()}?`} value={c.reason} aria-label={`Reason for ${label}`}
                            onChange={(e) => setCompletion((p) => ({ ...p, [k]: { ...c, reason: e.target.value } }))}
                            onBlur={() => persist(f, rep, "", c)} />
@@ -441,6 +454,7 @@ export default function DataEntry() {
             }),
           )}
         </div>
+        </fieldset>
 
         {derived.length > 0 && (
           <div className="calc-panel mt-4">
@@ -487,7 +501,7 @@ export default function DataEntry() {
           {can("data.submit") && hasDraft && !confirming && !resp.study_locked_at && (
             <button type="button" className="btn btn-primary" onClick={askSubmit} disabled={saving || dirty.size > 0}>Submit visit</button>
           )}
-          <span className="small muted">{hasDraft ? "Drafts save as you go. The sponsor sees nothing until you submit." : ""}</span>
+          <span className="small muted">{hasDraft && !readOnly ? "Drafts save as you go. The sponsor sees nothing until you submit." : ""}</span>
           {message && <span className={message.kind === "ok" ? "ok" : "error"}>{message.text}</span>}
         </div>
       </div>

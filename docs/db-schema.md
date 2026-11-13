@@ -261,6 +261,7 @@ One row of the statistical analysis plan: which field and visits the fixed calcu
 | `id` | INTEGER | no | primary key |
 | `protocol_id` | INTEGER | no | → `protocol.id` |
 | `label` | String(200) | no |  |
+| `endpoint_concept` | TEXT | no |  |
 | `kind` | String(20) | no |  |
 | `field_id` | String(32) | no |  |
 | `baseline_visit_id` | String(100) | yes |  |
@@ -268,6 +269,8 @@ One row of the statistical analysis plan: which field and visits the fixed calcu
 | `unit` | String(50) | yes |  |
 | `responder_rule` | JSON | yes |  |
 | `method` | TEXT | yes |  |
+| `form` | String(200) | yes |  |
+| `derivation` | TEXT | yes |  |
 
 ## `session`
 

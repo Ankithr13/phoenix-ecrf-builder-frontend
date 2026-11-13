@@ -81,9 +81,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   {can("sites.assign") && <NavLink to={`/sponsor/p/${id}/sites`}>Sites</NavLink>}
                   {can("listing.view") && <NavLink to={`/sponsor/p/${id}/data`}>Data review</NavLink>}
                   {can("listing.view") && <NavLink to={`/listing/${id}`}>Data listing</NavLink>}
-                  {can("dashboard.view") && <NavLink to={`/sponsor/p/${id}/sap`}>Analysis plan</NavLink>}
                   {can("dashboard.view") && <NavLink to={`/sponsor/p/${id}/dashboard`}>Dashboard</NavLink>}
-                  {hasInbox && <NavLink to={`/sponsor/p/${id}/notifications`}>Study notifications</NavLink>}
                 </div>
               )}
             </>
@@ -98,7 +96,6 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <NavLink to={`/site/s/${id}/patients`}>Patients</NavLink>
                   {can("listing.view") && <NavLink to={`/listing/${id}`}>Data listing</NavLink>}
                   {can("dashboard.view") && <NavLink to={`/site/s/${id}/dashboard`}>Dashboard</NavLink>}
-                  {hasInbox && <NavLink to={`/site/s/${id}/notifications`}>Study notifications</NavLink>}
                 </div>
               )}
             </>

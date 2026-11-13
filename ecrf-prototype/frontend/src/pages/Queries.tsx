@@ -52,7 +52,7 @@ export default function Queries() {
     if (!d.text.trim()) return;
     setBusy(q.id); setError(null);
     try {
-      await api.answerQuery(q.id, d.text.trim(), isSite && d.value.trim() ? d.value.trim() : undefined);
+      await api.answerQuery(q.id, d.text.trim(), can("data.enter") && d.value.trim() ? d.value.trim() : undefined);
       setAnswers((a) => { const n = { ...a }; delete n[q.id]; return n; });
       await load();
     } catch (e) { setError((e as Error).message); }
@@ -172,7 +172,7 @@ export default function Queries() {
           {q.can_answer && (
             <div className="row row-wrap mt-3 query-reply">
               <input className="input grow" placeholder="Your answer" value={draft(q.id).text} onChange={(e) => setDraft(q.id, { text: e.target.value })} />
-              {isSite && q.about === "value" && (
+              {can("data.enter") && q.about === "value" && (
                 <input className="input input-mono query-value" placeholder="Corrected value (optional)" value={draft(q.id).value} onChange={(e) => setDraft(q.id, { value: e.target.value })} />
               )}
               <button type="button" className="btn btn-primary btn-sm" onClick={() => answer(q)} disabled={busy === q.id || !draft(q.id).text.trim()}>

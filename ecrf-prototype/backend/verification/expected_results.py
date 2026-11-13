@@ -2,8 +2,8 @@
 
 This file imports nothing from the application package. Different code path on
 purpose. It reads the tables with raw SQL, works out what a SAP row means from
-the stored form JSON itself, and computes with the statistics module and
-scipy.stats. Only rows the sponsor has approved count, the same rule the app
+the stored form JSON itself, and computes with the statistics module,
+scipy.stats and collections. Only rows the sponsor has approved count, the same rule the app
 applies.
 
 Run directly:  python verification/expected_results.py [protocol_id]
@@ -12,21 +12,44 @@ Imported by:   ecrf/api/dashboard.py, which compares these against the app.
 
 import json
 import math
+import os
 import sqlite3
 import statistics
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 
 from scipy import stats as scipy_stats
 
 
+class _Postgres:
+    """psycopg behind sqlite3's interface, so every query below is written once
+    with ? placeholders. Opened directly, not through the app's engine."""
+
+    def __init__(self, url: str):
+        import psycopg
+
+        self._con = psycopg.connect(url, prepare_threshold=None)
+
+    def execute(self, sql, args=()):
+        return self._con.execute(sql.replace("?", "%s"), args)
+
+    def close(self):
+        self._con.close()
+
+
 def _connect(database_url: str):
-    if not database_url.startswith("sqlite"):
-        raise RuntimeError("verification script supports sqlite only for now")
-    path = database_url.replace("sqlite:///", "")
-    return sqlite3.connect(path)
+    if database_url.startswith("sqlite"):
+        return sqlite3.connect(database_url.replace("sqlite:///", ""))
+    if database_url.startswith(("postgresql", "postgres:")):
+        return _Postgres("postgresql://" + database_url.split("://", 1)[1])
+    raise RuntimeError(f"verification script supports SQLite and Postgres, not {database_url.split(':', 1)[0]}")
+
+
+def _json(value):
+    """SQLite hands JSON columns back as text, Postgres as parsed values."""
+    return json.loads(value) if isinstance(value, str) else value
 
 
 def _placeholders(values) -> str:
@@ -57,7 +80,7 @@ def _subject_count(con, protocol_id, site_ids) -> int:
 def _locked_form(con, protocol_id):
     row = con.execute("SELECT content FROM ecrf_version WHERE protocol_id=? AND state='locked' "
                       "ORDER BY version DESC LIMIT 1", (protocol_id,)).fetchone()
-    return json.loads(row[0]) if row else None
+    return _json(row[0]) if row else None
 
 
 def _subject_visit_means(rows, field):
@@ -157,6 +180,19 @@ def _teae(rows, field, date_field, baseline):
     return {"subjects": count, "denominator": len(started), "percent": 100.0 * count / len(started)}
 
 
+def _frequency(rows, field, visit, subjects):
+    first = {}
+    for subject, seen, name, repeat, _num, text in rows:
+        if name == field and seen == visit and text is not None and (subject not in first or repeat < first[subject][0]):
+            first[subject] = (repeat, text)
+    if not first:
+        return None
+    tally = Counter(text for _, text in first.values())
+    n = sum(tally.values())
+    return {"n": n, "missing": max(subjects - n, 0),
+            "categories": {k: {"count": c, "percent": c * 100.0 / n} for k, c in tally.items()}}
+
+
 def _missing(rows, field, slots, subjects):
     expected = subjects * sum(slots.values())
     if not expected:
@@ -178,18 +214,18 @@ def item_results(database_url: str, protocol_id: int, item_id: int, site_ids=Non
         if found is None or form is None:
             return {}
         kind, field_id, baseline, analysis, rule_json = found
-        rule = json.loads(rule_json) if rule_json else None
+        rule = _json(rule_json) if rule_json else None
         rows = _approved(con, protocol_id, site_ids)
         subjects = _subject_count(con, protocol_id, site_ids)
     finally:
         con.close()
 
-    field, date_field = None, None
+    field, date_field, field_type = None, None, None
     per_visit = {}
     all_fields = [(f["visit"], x) for f in form["forms"] for x in f["fields"]]
     for _, x in all_fields:
         if x.get("field_id") == field_id:
-            field = x["name"]
+            field, field_type = x["name"], x["type"]
         if x.get("cdash") == "SVSTDTC" and date_field is None:
             date_field = x["name"]
     if field is None:
@@ -201,8 +237,11 @@ def item_results(database_url: str, protocol_id: int, item_id: int, site_ids=Non
 
     means = _subject_visit_means(rows, field)
     out = {"percent_missing": _missing(rows, field, slots, subjects)}
-    if kind in ("endpoint", "baseline", "disposition"):
+    numeric = field_type in ("integer", "decimal")
+    if kind in ("endpoint", "baseline", "disposition") and numeric:
         out["descriptive"] = _descriptive(means, baseline, analysis)
+    if kind in ("baseline", "disposition") and field_type in ("choice", "boolean", "text"):
+        out["frequency"] = _frequency(rows, field, baseline if kind == "baseline" else analysis, subjects)
     if kind == "endpoint":
         out["change_from_baseline"] = _change(means, baseline, analysis)
         if rule:
@@ -214,7 +253,7 @@ def item_results(database_url: str, protocol_id: int, item_id: int, site_ids=Non
 
 if __name__ == "__main__":
     pid = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    url = f"sqlite:///{Path(__file__).resolve().parent.parent / 'ecrf.db'}"
+    url = os.getenv("DATABASE_URL") or f"sqlite:///{Path(__file__).resolve().parent.parent / 'ecrf.db'}"
     connection = _connect(url)
     items = connection.execute("SELECT id, label FROM sap_item WHERE protocol_id=?", (pid,)).fetchall()
     connection.close()
