@@ -17,6 +17,9 @@ interface Props {
   // Set for a second after a decision, then the card moves to its new group.
   flash?: Status | null;
   moved?: boolean;
+  editorId?: string;
+  onEditingChange?: (id: string, editing: boolean) => void;
+  onPendingRequestChange?: (id: string, pending: boolean) => void;
 }
 
 const FLASH_LABEL: Partial<Record<Status, string>> = { approved: "Approved", flagged: "Flagged", rejected: "Rejected" };
@@ -72,7 +75,7 @@ function formFrom(f: FieldDef): Form {
   };
 }
 
-export default function FieldCard({ field, onChange, onShowSection, readOnly = false, comments = [], onComment, onResolve, onHistory, library, labRanges = [], flash = null, moved = false }: Props) {
+export default function FieldCard({ field, onChange, onShowSection, readOnly = false, comments = [], onComment, onResolve, onHistory, library, labRanges = [], flash = null, moved = false, editorId, onEditingChange, onPendingRequestChange }: Props) {
   const [editing, setEditing] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [draftComment, setDraftComment] = useState("");
@@ -91,6 +94,19 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
   };
   const [form, setForm] = useState<Form>(() => formFrom(field));
   const [problem, setProblem] = useState<string | null>(null);
+  const [commenting, setCommenting] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const hasPendingEditor = editing || draftComment.length > 0 || commenting;
+  useEffect(() => {
+    if (editorId === undefined || !onEditingChange) return;
+    onEditingChange(editorId, hasPendingEditor);
+    return () => onEditingChange(editorId, false);
+  }, [editorId, hasPendingEditor, onEditingChange]);
+  useEffect(() => {
+    if (editorId === undefined || !onPendingRequestChange) return;
+    onPendingRequestChange(editorId, commenting);
+    return () => onPendingRequestChange(editorId, false);
+  }, [editorId, commenting, onPendingRequestChange]);
 
   // Resync when the draft is reloaded (e.g. after a save) and the editor is closed.
   useEffect(() => { if (!editing) setForm(formFrom(field)); }, [field, editing]);
@@ -225,9 +241,11 @@ export default function FieldCard({ field, onChange, onShowSection, readOnly = f
           ))}
           {onComment && (
             <div className="row mt-2">
-              <input className="input input-sm grow" value={draftComment} onChange={(e) => setDraftComment(e.target.value)} placeholder="Add a comment" aria-label={`Comment on ${field.name}`} />
-              <button type="button" className="btn btn-secondary btn-sm" disabled={!draftComment.trim()}
-                      onClick={async () => { await onComment(draftComment.trim()); setDraftComment(""); }}>Add</button>
+              <input className="input input-sm grow" value={draftComment} onChange={(e) => setDraftComment(e.target.value)} placeholder="Add a comment" aria-label={`Comment on ${field.name}`} disabled={commenting} />
+              <button type="button" className="btn btn-secondary btn-sm" disabled={!draftComment.trim() || commenting}
+                      onClick={async () => { setCommenting(true); setCommentError(null); try { await onComment(draftComment.trim()); setDraftComment(""); } catch { setCommentError("Could not save your comment. Your text is kept here; check the comment history before retrying."); } finally { setCommenting(false); } }}>{commenting ? "Saving…" : "Add"}</button>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={commenting || !draftComment} onClick={() => { setDraftComment(""); setCommentError(null); }}>Discard comment</button>
+              {commentError && <span className="error" role="alert">{commentError}</span>}
             </div>
           )}
         </div>
