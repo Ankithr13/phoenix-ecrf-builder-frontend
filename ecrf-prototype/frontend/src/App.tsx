@@ -13,7 +13,12 @@ import Listing from "./pages/Listing";
 import Login from "./pages/Login";
 import Notifications from "./pages/Notifications";
 import Patients from "./pages/Patients";
-import Protocols from "./pages/Protocols";
+import ProtocolWorkspace from "./pages/ProtocolWorkspace";
+import ProtocolUpload from "./workspace/features/upload";
+import WorkspaceDashboard from "./workspace/features/dashboard";
+import EcrfStatus from "./workspace/features/status";
+import StudyWorkspace from "./workspace/features/studies";
+import WorkspaceFeature from "./components/WorkspaceFeature";
 import Queries from "./pages/Queries";
 import Review from "./pages/Review";
 import Sites from "./pages/Sites";
@@ -34,10 +39,7 @@ function RequireAuth() {
   return <Outlet />;
 }
 
-/* Each portal belongs to one side: the sponsor roles or the site roles. Which
-   items a person sees inside it comes from their permissions, in Layout.
-   Opening the other portal sends you to your own home instead of showing an
-   empty page. */
+/* Each portal belongs to one side. Opening the other portal sends you home. */
 function Portal({ type }: { type: OrgType }) {
   const { me } = useAuth();
   if (me && me.org.type !== type) return <Navigate to={HOME[me.org.type]} replace />;
@@ -70,12 +72,20 @@ export default function App() {
           <Route path="/listing/:id/:form?" element={<Layout><Listing /></Layout>} />
 
           <Route element={<Portal type="sponsor" />}>
-            <Route path="/sponsor" element={<Protocols />} />
-            <Route path="/sponsor/queries" element={<Queries />} />
+            <Route path="/sponsor" element={<WorkspaceDashboard />} />
+            <Route path="/sponsor/protocols" element={<ProtocolWorkspace />} />
+            <Route path="/sponsor/studies" element={<StudyWorkspace />} />
+            <Route path="/sponsor/upload" element={<ProtocolUpload />} />
+            <Route path="/sponsor/ecrfs" element={<ProtocolWorkspace destination="review" />} />
+            <Route path="/sponsor/data" element={<WorkspaceFeature feature="clinical"><ProtocolWorkspace destination="data" /></WorkspaceFeature>} />
+            <Route path="/sponsor/reports" element={<WorkspaceFeature feature="reports"><ProtocolWorkspace destination="dashboard" /></WorkspaceFeature>} />
+            <Route path="/sponsor/ecrf-status" element={<EcrfStatus />} />
+            <Route path="/sponsor/notifications" element={<Navigate to="/notifications" replace />} />
+            <Route path="/sponsor/queries" element={<WorkspaceFeature feature="queries"><Queries /></WorkspaceFeature>} />
             <Route path="/sponsor/p/:id/visits" element={<Visits />} />
             <Route path="/sponsor/p/:id/review" element={<Review />} />
             <Route path="/sponsor/p/:id/sites" element={<Sites />} />
-            <Route path="/sponsor/p/:id/data" element={<DataReview />} />
+            <Route path="/sponsor/p/:id/data" element={<WorkspaceFeature feature="clinical"><DataReview /></WorkspaceFeature>} />
             <Route path="/sponsor/p/:id/dashboard" element={<Dashboard />} />
           </Route>
 
