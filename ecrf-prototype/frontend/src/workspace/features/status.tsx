@@ -1,5 +1,6 @@
-import FeatureUnavailable from "../../components/FeatureUnavailable";
+import WorkspaceFeature from "../../components/WorkspaceFeature";
+import EcrfStatus from "../../pages/EcrfStatus";
 
-export default function FeatureEntry() {
-  return <FeatureUnavailable title="eCRF Status" />;
+export default function StatusFeature() {
+  return <WorkspaceFeature feature="status" preview={<EcrfStatus previewOnly />}><EcrfStatus /></WorkspaceFeature>;
 }
